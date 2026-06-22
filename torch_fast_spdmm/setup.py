@@ -41,4 +41,4 @@ setup(name='torch_fast_spdmm_core',
       version='0.0.1',
       ext_modules=[extension],
       cmdclass={'build_ext': BuildExtension},
-      packages=['.'])
+      packages=['torch_fast_spdmm'])
