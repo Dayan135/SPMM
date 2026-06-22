@@ -9,3 +9,7 @@ dist/
 .pytest_cache/
 *.egg
 wandb/
+
+# Slurm
+jobs/logs/
+jobs/.slurm-remote
