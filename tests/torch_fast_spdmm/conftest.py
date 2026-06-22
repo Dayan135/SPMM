@@ -127,6 +127,11 @@ def sparse_data_mat(request):
 
 
 @fixture
+def system_size():
+    raise ValueError('system_size not set. Override or parametrize this fixture.')
+
+
+@fixture
 def batch_size():
     return None
 
