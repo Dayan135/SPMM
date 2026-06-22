@@ -1,7 +1,7 @@
 import pytest
 from pytest_benchmark.plugin import BenchmarkSession, NameWrapper
 
-from tests.cuda_benchmark import CUDABenchmarkFixture
+from cuda_benchmark import CUDABenchmarkFixture
 
 
 @pytest.fixture
