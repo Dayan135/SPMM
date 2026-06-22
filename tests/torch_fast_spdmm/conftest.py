@@ -179,7 +179,11 @@ def sparse_mat_factory(sparse_data_mat, sparse_format, batch_size,
 
 
 @fixture
-def sparse_mat(sparse_data_mat, sparse_format, batch_size, index_dtype, data_dtype, device):
+def sparse_mat(sparse_data_mat, sparse_format, batch_size, index_dtype, data_dtype, device,
+               system_size):
+    # system_size is unused here but kept in the signature so it enters the
+    # static fixture closure, letting class-level parametrize('system_size')
+    # bind even on tests that don't take it as a direct argument (e.g. test_csc).
     return sparse_mat_factory(sparse_data_mat, sparse_format, batch_size,
                               data_dtype, index_dtype, device)
 
