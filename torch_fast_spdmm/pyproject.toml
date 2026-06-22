@@ -1,0 +1,23 @@
+[build-system]
+requires = [
+    'setuptools>=64',
+    'pybind11',
+    'torch',
+    'numpy',
+    'scipy',
+]
+build-backend = 'setuptools.build_meta'
+
+[project]
+name = 'torch_fast_spdmm'
+version = '0.0.1'
+description = 'PyTorch extension torch_fast_spdmm'
+dependencies = [
+    'numpy',
+    'scipy',
+    'torch',
+]
+requires-python = '>=3.12'
+
+[project.optional-dependencies]
+test = ['pytest', 'coverage', 'pytest-cov']
