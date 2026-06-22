@@ -33,8 +33,7 @@ echo "[job] building editable install"
 pip install -e torch_fast_spdmm --no-build-isolation
 
 echo "[job] running pytest"
-pytest tests/torch_fast_spdmm/test_csc.py \
-       tests/torch_fast_spdmm/test_csr.py \
-       tests/torch_fast_spdmm/test_pbr.py -v
+pytest tests/torch_fast_spdmm/test_pbr.py \
+       tests/torch_fast_spdmm/test_csr.py -v
 
 echo "[job] done $(date)"

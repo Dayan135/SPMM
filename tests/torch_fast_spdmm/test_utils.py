@@ -1,5 +1,49 @@
+import numpy as np
 import torch
 from scipy import sparse as sp
+
+
+def numpy_dtype_to_torch_dtype(dtype):
+    mapping = {
+        np.float64: torch.float64, np.float32: torch.float32, np.float16: torch.float16,
+        np.int64: torch.int64, np.int32: torch.int32, np.int16: torch.int16,
+        np.int8: torch.int8, np.uint8: torch.uint8, bool: torch.bool,
+    }
+    return mapping[np.dtype(dtype).type]
+
+
+def torch_dtype_to_numpy_dtype(dtype):
+    mapping = {
+        torch.float64: np.float64, torch.float32: np.float32, torch.float16: np.float16,
+        torch.int64: np.int64, torch.int32: np.int32, torch.int16: np.int16,
+        torch.int8: np.int8, torch.uint8: np.uint8, torch.bool: bool,
+    }
+    if isinstance(dtype, torch.dtype):
+        return mapping[dtype]
+    # numpy dtype passthrough (some tests parametrize with numpy dtypes)
+    return np.dtype(dtype).type
+
+
+def scipy_csr_to_torch_csr(mat):
+    mat = mat.tocsr()
+    mat.sort_indices()
+    return torch.sparse_csr_tensor(torch.tensor(mat.indptr), torch.tensor(mat.indices),
+                                   torch.tensor(mat.data), mat.shape,
+                                   dtype=numpy_dtype_to_torch_dtype(mat.dtype))
+
+
+def scipy_csc_to_torch_csc(mat):
+    mat = mat.tocsc()
+    return torch.sparse_csc_tensor(torch.tensor(mat.indptr), torch.tensor(mat.indices),
+                                   torch.tensor(mat.data), mat.shape,
+                                   dtype=numpy_dtype_to_torch_dtype(mat.dtype))
+
+
+def scipy_coo_to_torch_coo(mat):
+    mat = mat.tocoo()
+    return torch.sparse_coo_tensor(torch.tensor(np.array([mat.row, mat.col])),
+                                   torch.tensor(mat.data), mat.shape,
+                                   dtype=numpy_dtype_to_torch_dtype(mat.dtype))
 
 
 class TestTorchNoGrad:

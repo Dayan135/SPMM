@@ -25,7 +25,7 @@ from benchmark.matrices import (
     generate_random_sparse,
     generate_scattered_block_matrix,
 )
-from integration.conversions import scipy_csr_to_torch_csr
+from test_utils import scipy_csr_to_torch_csr
 from torch_fast_spdmm import csr_to_pbr, pbr_matmul, spdmm_csr_naive
 
 

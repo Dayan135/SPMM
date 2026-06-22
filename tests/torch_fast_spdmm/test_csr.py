@@ -1,7 +1,7 @@
 import torch
 from pytest import fixture, mark
 from torch.testing import assert_close
-from torch_fast_spdmm import spdmm_csr_naive, spdmm_csr_shared_mem
+from torch_fast_spdmm import spdmm_csr_naive
 
 from test_utils import TestTorchNoGrad, rel_abs_error
 
@@ -31,13 +31,6 @@ class TestCSR(TestTorchNoGrad):
     def test_csr_naive(self, sparse_mat, dense_mat, system_size):
         expected = torch.sparse.mm(sparse_mat, dense_mat)
         actual = spdmm_csr_naive(sparse_mat, dense_mat)
-
-        assert_close(actual, expected)
-        assert rel_abs_error(actual, expected)
-
-    def test_csr_shared_mem(self, sparse_mat, dense_mat, system_size):
-        expected = torch.sparse.mm(sparse_mat, dense_mat)
-        actual = spdmm_csr_shared_mem(sparse_mat, dense_mat)
 
         assert_close(actual, expected)
         assert rel_abs_error(actual, expected)

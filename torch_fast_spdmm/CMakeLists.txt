@@ -27,7 +27,7 @@ find_package(CUDAToolkit REQUIRED)
 
 set(CPP_SOURCES bindings/bindings.cpp pbr_matrix/pbr_matrix.cpp)
 
-set(CU_SOURCES bindings/bindings.cu kernels/csc_kernels.cu kernels/csr_kernels.cu)
+set(CU_SOURCES bindings/bindings_kernels.cu kernels/csr_kernels.cu kernels/pbr_kernel.cu)
 add_definitions(-DCUDA_ENABLED=1)
 
 add_library(torch_fast_spdmm_core MODULE

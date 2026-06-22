@@ -1,6 +1,6 @@
 # torch_fast_spdmm
 
-CUDA library for sparse-dense matrix multiplication (SpMM). Implements three storage formats — PBR, CSR, CSC — exposed as a PyTorch extension via pybind11.
+CUDA library for sparse-dense matrix multiplication (SpMM), built around the PBR (Packed Block Representation) format and exposed as a PyTorch extension via pybind11. A naive CSR SpMM kernel is also included as a benchmark baseline.
 
 The main focus is **PBR (Packed Block Representation)**: a block-compressed sparse format that exploits repeated sparsity patterns across rows to enable coalesced memory access and vectorized loads on GPU. Benchmark results on graph matrices (e.g. enwiki-2018 PPR) show ~1.75× throughput vs. cuSPARSE at typical block configurations.
 
@@ -49,9 +49,8 @@ out = pbr_matmul(A_pbr, X)
 
 | Format | Description |
 |--------|-------------|
-| **PBR** | Block-compressed: encodes sparsity patterns as 64-bit bitsets; CSR fallback for low-density blocks |
-| **CSR** | Standard compressed sparse row |
-| **CSC** | Compressed sparse column |
+| **PBR** | Block-compressed: encodes sparsity patterns as 64-bit bitsets; CSR remainder for low-density blocks |
+| **CSR** | Standard compressed sparse row — naive kernel kept as a benchmark baseline |
 
 ## Tests
 
@@ -70,7 +69,7 @@ pytest tests/torch_fast_spdmm/test_benchmark.py -v
 ```
 torch_fast_spdmm/          # C++/CUDA extension + Python package
   bindings/                # pybind11 entry points
-  kernels/                 # CUDA kernels (PBR, CSR, CSC)
+  kernels/                 # CUDA kernels (PBR + naive CSR baseline)
   pbr_matrix/              # PBR format data structures and CPU ops
   torch_fast_spdmm/        # Python API (__init__.py)
   setup.py / pyproject.toml

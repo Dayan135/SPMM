@@ -1,6 +1,6 @@
 # SPMM — torch_fast_spdmm
 
-Custom CUDA SpMM kernels for sparse-dense matrix multiplication using PBR (Packed Block Representation), CSR, and CSC formats.
+Custom CUDA SpMM kernels for sparse-dense matrix multiplication using PBR (Packed Block Representation). A naive CSR SpMM kernel is also kept as a benchmark baseline.
 
 ## Remote machine requirement
 
@@ -59,13 +59,13 @@ pytest tests/torch_fast_spdmm/ -v
 | `torch_fast_spdmm/bindings/bindings.cpp` | pybind11 module entry point |
 | `torch_fast_spdmm/torch_fast_spdmm/__init__.py` | Python API |
 | `tests/torch_fast_spdmm/test_pbr.py` | PBR correctness tests |
-| `tests/torch_fast_spdmm/test_csr.py` | CSR correctness tests |
-| `tests/torch_fast_spdmm/test_csc.py` | CSC correctness tests |
+| `tests/torch_fast_spdmm/test_csr.py` | CSR-naive correctness tests |
+| `tests/torch_fast_spdmm/conftest.py` | Self-contained pytest fixtures |
 | `tests/torch_fast_spdmm/test_benchmark.py` | GPU benchmark suite (W&B) |
 
 ## Commit scopes
 
-- `kernel` — CUDA kernels (`pbr_kernel.cu`, `csr_kernels.cu`, `csc_kernels.cu`)
+- `kernel` — CUDA kernels (`pbr_kernel.cu`, `csr_kernels.cu`)
 - `bindings` — pybind11 wrappers
 - `pbr` — PBR format construction (`pbr_matrix/`)
 - `tests` — test suite

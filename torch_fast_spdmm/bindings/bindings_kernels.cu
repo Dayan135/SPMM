@@ -4,7 +4,6 @@
 #include <ATen/SparseCsrTensorUtils.h>
 #include <ATen/cuda/CUDAContext.h>
 
-#include "../kernels/csc_kernels.hpp"
 #include "../kernels/csr_kernels.hpp"
 #include "../kernels/pbr_kernels.hpp"
 
@@ -83,11 +82,7 @@ at::Tensor pbr_spmm_cuda_dispatch(
 }
 
 void bind_cuda_functions(py::module_& m) {
-    m.def("spdmm_csc_naive", &spdmm_csc_naive);
-    m.def("spdmm_csc_shared_mem", &spdmm_csc_shared_mem);
-
     m.def("spdmm_csr_naive", &spdmm_csr_naive);
-    m.def("spdmm_csr_shared_mem", &spdmm_csr_shared_mem);
 
     // csr_mode is passed positionally by the Python wrapper (pbr_batched_matmul_cuda),
     // so no py::arg defaults are needed; pybind requires all-or-none annotations.

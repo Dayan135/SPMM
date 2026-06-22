@@ -4,11 +4,7 @@ import scipy.sparse as sp
 import torch
 import torch_fast_spdmm_core as core
 
-spdmm_csc_naive = core.spdmm_csc_naive
-spdmm_csc_shared_mem = core.spdmm_csc_shared_mem
-
 spdmm_csr_naive = core.spdmm_csr_naive
-spdmm_csr_shared_mem = core.spdmm_csr_shared_mem
 
 pbr_batched_matmul_cpu = core.pbr_batched_matmul_cpu
 
@@ -172,10 +168,7 @@ def pbr_analyze_csr(mat: sp.csr_matrix | torch.Tensor,
 
 
 __all__ = [
-    'spdmm_csc_naive',
-    'spdmm_csc_shared_mem',
     'spdmm_csr_naive',
-    'spdmm_csr_shared_mem',
 
     'csr_to_pbr',
     'pbr_to_csr',

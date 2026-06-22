@@ -13,3 +13,9 @@ wandb/
 # Slurm
 jobs/logs/
 jobs/.slurm-remote
+
+# Stray LaTeX build artifacts
+.aux
+.fdb_latexmk
+.fls
+.log
