@@ -26,6 +26,11 @@ export CUDA_HOME="$CONDA_PREFIX"
 export CC=$(which x86_64-conda-linux-gnu-cc)
 export CXX=$(which x86_64-conda-linux-gnu-c++)
 export CUDAHOSTCXX=$CXX
+
+# Runtime: the compiled .so links the conda libstdc++ (newer than the
+# system /lib64 one). Without this, importing fails with
+# `CXXABI_1.3.15 not found`.
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 ```
 
 > **CUDA_HOME on the BGU Slurm cluster (`slurm.bgu.ac.il`):** the GPU nodes have
