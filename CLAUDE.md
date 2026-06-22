@@ -10,7 +10,7 @@ Do not attempt to build CUDA extensions or run tests locally — they will fail 
 ## Build
 
 Full copy-paste recipe (BGU Slurm). Build **on a GPU node** — clone lives at
-`/home/dayanb/research1/SPMM`:
+`/home/dayanb/research/SPMM`:
 
 ```bash
 # 1. Get onto an rtx3090 GPU node (build needs nvcc from the env)
@@ -28,7 +28,7 @@ export CUDAHOSTCXX=$CXX
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
 # 3. Build the editable install
-cd /home/dayanb/research1/SPMM
+cd /home/dayanb/research/SPMM
 pip install -e torch_fast_spdmm --no-build-isolation
 ```
 
