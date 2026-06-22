@@ -9,29 +9,31 @@ Do not attempt to build CUDA extensions or run tests locally — they will fail 
 
 ## Build
 
+Full copy-paste recipe (BGU Slurm). Build **on a GPU node** — clone lives at
+`/home/dayanb/research1/SPMM`:
+
 ```bash
-# CUDA-capable Linux machine, conda env activated
+# 1. Get onto an rtx3090 GPU node (build needs nvcc from the env)
+srun --partition=rtx3090 --account=erant --qos=erant \
+     --gres=gpu:rtx_3090:1 --time=00:30:00 --pty bash -l
+
+# 2. Activate env and set toolchain (CUDA_HOME MUST be set after activate)
 conda activate fem
-
-# Install CUDA extension
-pip install -e torch_fast_spdmm --no-build-isolation
-```
-
-After any change to `.cu` or `.cpp` files, reinstall before running tests.
-
-## Environment
-
-```bash
 export CUDA_HOME="$CONDA_PREFIX"
 export CC=$(which x86_64-conda-linux-gnu-cc)
 export CXX=$(which x86_64-conda-linux-gnu-c++)
 export CUDAHOSTCXX=$CXX
-
-# Runtime: the compiled .so links the conda libstdc++ (newer than the
-# system /lib64 one). Without this, importing fails with
-# `CXXABI_1.3.15 not found`.
+# Runtime/import: .so links the conda libstdc++ (newer than system /lib64);
+# without this, `import torch_fast_spdmm` fails with `CXXABI_1.3.15 not found`.
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+
+# 3. Build the editable install
+cd /home/dayanb/research1/SPMM
+pip install -e torch_fast_spdmm --no-build-isolation
 ```
+
+After any change to `.cu` or `.cpp` files, reinstall before running tests.
+`LD_LIBRARY_PATH` is needed at **import/run time** too, not just for the build.
 
 > **CUDA_HOME on the BGU Slurm cluster (`slurm.bgu.ac.il`):** the GPU nodes have
 > **no `/usr/local/cuda`** — `nvcc` (12.9) ships *inside* the `fem` conda env.
