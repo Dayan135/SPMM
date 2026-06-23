@@ -3,7 +3,6 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-#include <numeric>
 
 #include <torch/extension.h>
 
@@ -444,40 +443,6 @@ pbr_matrix_t<index_t, scalar_t> csr_to_pbr(const py::array_t<index_t, py::array:
             remainder_col_ind.push_back(c);
             remainder_vals.push_back(v);
         }
-
-    // Sort blocks by column origin so adjacent CTAs in the grid share X-column
-    // data in L2 — blocks with the same col_origin reference the same columns
-    // of X, and grouping them consecutively improves cache reuse across CTAs.
-    const size_t nb = block_codes.size();
-    if (nb > 1) {
-        vector<size_t> perm(nb);
-        std::iota(perm.begin(), perm.end(), 0);
-        std::sort(perm.begin(), perm.end(), [&](size_t a, size_t b) {
-            return block_coords[a].col < block_coords[b].col;
-        });
-
-        vector<block_code_t>     sorted_codes(nb);
-        vector<coord_t<index_t>> sorted_coords(nb);
-        vector<scalar_t>         sorted_data;
-        vector<index_t>          sorted_offsets(nb + 1);
-        sorted_data.reserve(block_data.size());
-
-        sorted_offsets[0] = 0;
-        for (size_t i = 0; i < nb; ++i) {
-            const size_t src = perm[i];
-            sorted_codes[i]  = block_codes[src];
-            sorted_coords[i] = block_coords[src];
-            const index_t s = block_offsets[src];
-            const index_t e = block_offsets[src + 1];
-            sorted_data.insert(sorted_data.end(), block_data.begin() + s, block_data.begin() + e);
-            sorted_offsets[i + 1] = sorted_offsets[i] + (e - s);
-        }
-
-        block_codes   = std::move(sorted_codes);
-        block_coords  = std::move(sorted_coords);
-        block_data    = std::move(sorted_data);
-        block_offsets = std::move(sorted_offsets);
-    }
 
     return pbr_matrix_t<index_t, scalar_t>(rows, cols, block_rows, block_cols, total_nnz,
                                            std::move(block_codes), std::move(block_coords),
