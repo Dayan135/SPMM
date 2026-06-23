@@ -120,15 +120,41 @@ def _prepare(mat_config, features, dtype):
 _COMMIT = os.environ.get("SPDMM_COMMIT", "unknown")
 
 
-def _log_wandb(request, config: dict, time_ms: float):
+# One row per benchmarked case; column order for the W&B table.
+_RESULT_COLUMNS = [
+    "commit", "profile", "system_size", "features", "dtype",
+    "algorithm", "block_rows", "block_cols", "min_nnz", "time_ms",
+]
+
+
+@pytest.fixture(scope="session")
+def bench_results():
+    """Accumulate every case into one W&B run as a single table.
+
+    Each test appends a row; at session teardown the rows become one
+    wandb.Table logged to a single run. Run split by size (the Slurm array)
+    this yields one run per size instead of 768 micro-runs, so the
+    offline→server sync is near-instant and the UI is one sortable table.
+    """
+    rows: list[dict] = []
+    yield rows
+
+    if not rows:
+        return
+
+    table = wandb.Table(columns=_RESULT_COLUMNS)
+    for r in rows:
+        table.add_data(*(r.get(c) for c in _RESULT_COLUMNS))
+
+    sizes = sorted({r["system_size"] for r in rows})
     run = wandb.init(
         project="torch-fast-spdmm",
-        group=config.get("profile", ""),
-        name=request.node.name,
-        config={**config, "commit": _COMMIT},
+        group=_COMMIT,
+        name=f"{_COMMIT}_" + "_".join(str(s) for s in sizes),
+        config={"commit": _COMMIT, "sizes": sizes},
         reinit=True,
     )
-    run.log({"time_ms": time_ms})
+    run.log({"benchmarks": table})
     run.finish()
 
 
@@ -144,7 +170,7 @@ def _cleanup():
 @mark.parametrize("dtype",      DTYPES)
 @mark.parametrize("features",   FEATURES)
 @mark.parametrize("mat_config", MATRIX_CONFIGS)
-def test_baseline_spmm(benchmark, request, mat_config, features, dtype, algo):
+def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, algo):
     algo_name, algo_fn = algo
     _, sparse_torch, x, size, profile = _prepare(mat_config, features, dtype)
 
@@ -156,13 +182,15 @@ def test_baseline_spmm(benchmark, request, mat_config, features, dtype, algo):
     finally:
         _cleanup()
 
-    _log_wandb(request, {
+    bench_results.append({
+        "commit":      _COMMIT,
         "algorithm":   algo_name,
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),
         "profile":     profile,
-    }, benchmark.stats['mean'] * 1000)
+        "time_ms":     benchmark.stats['mean'] * 1000,
+    })
 
 
 # ── PBR benchmarks ─────────────────────────────────────────────────
@@ -172,7 +200,7 @@ def test_baseline_spmm(benchmark, request, mat_config, features, dtype, algo):
 @mark.parametrize("dtype",      DTYPES)
 @mark.parametrize("features",   FEATURES)
 @mark.parametrize("mat_config", MATRIX_CONFIGS)
-def test_pbr_spmm(benchmark, request, mat_config, features, dtype, pbr_cfg):
+def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg):
     scipy_mat, _, x, size, profile = _prepare(mat_config, features, dtype)
 
     pbr_mat = csr_to_pbr(
@@ -192,11 +220,13 @@ def test_pbr_spmm(benchmark, request, mat_config, features, dtype, pbr_cfg):
         _cleanup()
 
     algo_name = f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}_min{pbr_cfg['min_nnz']}"
-    _log_wandb(request, {
+    bench_results.append({
+        "commit":      _COMMIT,
         "algorithm":   algo_name,
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),
         "profile":     profile,
+        "time_ms":     benchmark.stats['mean'] * 1000,
         **pbr_cfg,
-    }, benchmark.stats['mean'] * 1000)
+    })
