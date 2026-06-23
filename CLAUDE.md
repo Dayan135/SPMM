@@ -47,6 +47,21 @@ After any change to `.cu` or `.cpp` files, reinstall before running tests.
 pytest tests/torch_fast_spdmm/ -v
 ```
 
+## Plotting (local)
+
+Benchmark plots are generated locally from W&B using the `fem` conda env,
+which has `wandb`, `pandas`, and `matplotlib` installed.
+
+```bash
+conda run -n fem python -m benchmark.plot_benchmarks \
+    --project private-dayan/torch-fast-spdmm \
+    --outdir plots/<experiment> \
+    --runs <commit>_16384 <commit>_65536 <commit>_262144
+```
+
+Run from `tests/torch_fast_spdmm/`. If `wandb`, `pandas`, or `matplotlib`
+are missing in the local `fem` env: `conda run -n fem pip install wandb pandas matplotlib`.
+
 ## Key files
 
 | Path | Purpose |
