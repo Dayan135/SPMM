@@ -330,51 +330,52 @@ void launch_pbr_spmm(
     const scalar_t* block_data,
     const scalar_t* X,
     scalar_t* Y,
-    cudaStream_t stream
+    cudaStream_t stream,
+    int smem_size
 ) {
     if (num_pbr_blocks == 0) {
         return;
     }
 
-    constexpr int TOTAL_SHARED     = 2048;
     constexpr int THREADS_PER_BLOCK = 128;
-    constexpr int FEAT_BLOCK_SIZE  = 512;
+    constexpr int FEAT_BLOCK_SIZE   = 512;
     constexpr int L = PbrVec<scalar_t>::lanes;
 
     const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
     const dim3 grid(num_pbr_blocks, batch_size, feat_blocks);
     const dim3 block(THREADS_PER_BLOCK);
 
-    // Use the vectorized kernel when the feature count divides the vector width
-    // (it always does for the tested 8/32/512); otherwise fall back to scalar.
     const bool use_vec = (features % L == 0);
 
-    #define PBR_LAUNCH(BR, BC)                                                                      \
-        do {                                                                                       \
-            if (use_vec)                                                                           \
-                pbr_spmm_vec_kernel<index_t, scalar_t, BR, BC, TOTAL_SHARED, THREADS_PER_BLOCK,     \
+    #define PBR_LAUNCH(BR, BC, TS)                                                                  \
+        do {                                                                                        \
+            if (use_vec)                                                                            \
+                pbr_spmm_vec_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK,              \
                                     FEAT_BLOCK_SIZE><<<grid, block, 0, stream>>>(                   \
                     num_pbr_blocks, features, batch_size, cols, rows,                               \
                     block_codes, block_coords, block_offsets, block_data, X, Y);                    \
-            else                                                                                   \
-                pbr_spmm_zero_idle_kernel<index_t, scalar_t, BR, BC, TOTAL_SHARED,                  \
-                                          THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,      \
+            else                                                                                    \
+                pbr_spmm_zero_idle_kernel<index_t, scalar_t, BR, BC, TS,                            \
+                                          THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,     \
                                           stream>>>(                                                \
                     num_pbr_blocks, features, batch_size, cols, rows,                               \
                     block_codes, block_coords, block_offsets, block_data, X, Y);                    \
         } while (0)
 
-    if (runtime_block_rows == 2 && runtime_block_cols == 2) {
-        PBR_LAUNCH(2, 2);
-    } else if (runtime_block_rows == 4 && runtime_block_cols == 4) {
-        PBR_LAUNCH(4, 4);
-    } else if (runtime_block_rows == 8 && runtime_block_cols == 8) {
-        PBR_LAUNCH(8, 8);
-    } else {
-        throw std::invalid_argument("Unsupported block size for PBR SpMM. Only 2x2, 4x4, and 8x8 are supported.");
-    }
+    #define DISPATCH_SMEM(BR, BC)                   \
+        do {                                        \
+            if      (smem_size <= 512)  PBR_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) PBR_LAUNCH(BR, BC, 1024); \
+            else                        PBR_LAUNCH(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM(2, 2);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM(4, 4);
+    else if (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM(8, 8);
+    else throw std::invalid_argument("Unsupported block size for PBR SpMM. Only 2x2, 4x4, and 8x8 are supported.");
 
     #undef PBR_LAUNCH
+    #undef DISPATCH_SMEM
 }
 
 template void launch_pbr_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t);

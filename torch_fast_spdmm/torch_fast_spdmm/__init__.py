@@ -57,10 +57,13 @@ def _build_cuda_dispatch():
 _CUDA_KERNEL_DISPATCH = None
 
 
-def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0) -> torch.Tensor:
+def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
     Python wrapper that routes the GPU tensors to the correct PyBind11 CUDA function.
-    csr_mode: 0=auto, 1=force_fast, 2=force_fallback
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback
+    smem_size: shared-memory tile size (floats) for the PBR block kernel; must be
+               one of 512, 1024, 2048.  Smaller values leave more L1 cache for X
+               column loads at the cost of a narrower feature tile per iteration.
     """
     meta = getattr(pbr_mat, '_gpu_meta', None)
     if meta is None:
@@ -85,14 +88,16 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0) -> torc
         meta.rem_vals,
         x,
         csr_mode,
+        smem_size,
     )
     
 
-def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0) -> torch.Tensor:
+def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
-    csr_mode: 0=auto, 1=force_fast, 2=force_fallback (GPU only)
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (GPU only)
+    smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -101,7 +106,7 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0) -> torch.Tensor:
         meta = getattr(pbr_mat, '_gpu_meta', None)
         if meta is None:
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
-        y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode)
+        y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
         y = core.pbr_batched_matmul_cpu(pbr_mat, x)
 

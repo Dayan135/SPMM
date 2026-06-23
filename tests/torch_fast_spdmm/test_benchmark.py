@@ -75,21 +75,21 @@ MATRIX_CONFIGS = [
     for (gen, make_kwargs, name) in MATRIX_FAMILIES
 ]
 
-# PBR variants. min_nnz_per_block sets the block-vs-COO split: min_nnz=1 keeps
-# every populated block in the fast block kernel; raising it pushes more
-# nonzeros into the COO-remainder kernel.
+# PBR variants: (block_size, min_nnz, smem_size).
+# smem_size controls the shared-memory tile (floats) per CTA; smaller values
+# leave more of the 128 KB L1/smem pool as true L1 for X-column caching.
 PBR_VARIANTS = [
-    (2, 2), (2, 3),
-    (4, 2), (4, 4),
-    (8, 2), (8, 4),
+    (bs, mn, sm)
+    for bs, mn in [(2, 2), (2, 3), (4, 2), (4, 4), (8, 2), (8, 4)]
+    for sm in [512, 1024, 2048]
 ]
 
 PBR_CONFIGS = [
     pytest.param(
-        {"block_rows": bs, "block_cols": bs, "min_nnz": mn},
-        id=f"pbr_{bs}x{bs}_min{mn}",
+        {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": sm},
+        id=f"pbr_{bs}x{bs}_min{mn}_sm{sm}",
     )
-    for bs, mn in PBR_VARIANTS
+    for bs, mn, sm in PBR_VARIANTS
 ]
 
 # Adding a new baseline algorithm = one line here.
@@ -123,7 +123,7 @@ _COMMIT = os.environ.get("SPDMM_COMMIT", "unknown")
 # One row per benchmarked case; column order for the W&B table.
 _RESULT_COLUMNS = [
     "commit", "profile", "system_size", "features", "dtype",
-    "algorithm", "block_rows", "block_cols", "min_nnz", "time_ms",
+    "algorithm", "block_rows", "block_cols", "min_nnz", "smem_size", "time_ms",
 ]
 
 
@@ -212,14 +212,17 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg
     pbr_mat = pbr_mat.to("cuda")
 
     try:
-        benchmark(pbr_matmul, pbr_mat, x)
+        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"])
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
     finally:
         _cleanup()
 
-    algo_name = f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}_min{pbr_cfg['min_nnz']}"
+    algo_name = (
+        f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
+        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}"
+    )
     bench_results.append({
         "commit":      _COMMIT,
         "algorithm":   algo_name,

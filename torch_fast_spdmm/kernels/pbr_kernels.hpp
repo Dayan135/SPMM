@@ -17,7 +17,8 @@ void launch_pbr_spmm(
     const scalar_t* block_data,
     const scalar_t* X,
     scalar_t* Y,
-    cudaStream_t stream = 0
+    cudaStream_t stream = 0,
+    int smem_size = 2048
 );
 
 template <typename index_t, typename scalar_t>

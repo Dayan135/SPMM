@@ -19,7 +19,8 @@ at::Tensor pbr_spmm_cuda_dispatch(
     const at::Tensor rem_col_ind,
     const at::Tensor rem_vals,
     const at::Tensor X,
-    int csr_mode = 0
+    int csr_mode = 0,
+    int smem_size = 2048
 ) {
     const int num_pbr_blocks = (int)block_codes.size(0);
     const int csr_nnz        = (int)rem_col_ind.size(0);
@@ -50,7 +51,8 @@ at::Tensor pbr_spmm_cuda_dispatch(
             block_data.data_ptr<scalar_t>(),
             X3.data_ptr<scalar_t>(),
             Y.data_ptr<scalar_t>(),
-            block_stream.stream()
+            block_stream.stream(),
+            smem_size
         );
     }
 
