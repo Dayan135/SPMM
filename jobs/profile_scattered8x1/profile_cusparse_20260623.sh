@@ -8,8 +8,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --time=0:20:00
-#SBATCH --output=jobs/logs/%j.out
-#SBATCH --error=jobs/logs/%j.err
+#SBATCH --output=jobs/profile_scattered8x1/logs/%j.out
+#SBATCH --error=jobs/profile_scattered8x1/logs/%j.err
 
 # Profile cusparse SpMM at sizes 16384 and 262144 (scattered_8x1, features=64)
 # to confirm that fixed launch overhead dominates at small size and explains

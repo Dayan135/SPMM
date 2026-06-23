@@ -8,8 +8,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --time=0:30:00
-#SBATCH --output=jobs/logs/%j.out
-#SBATCH --error=jobs/logs/%j.err
+#SBATCH --output=jobs/profile_scattered8x1/logs/%j.out
+#SBATCH --error=jobs/profile_scattered8x1/logs/%j.err
 
 # Nsight Compute profiling of the PBR SpMM kernel on scattered_8x1, to explain
 # why the cusparse speedup collapses from 3.91x (16384) to 1.28x (262144).

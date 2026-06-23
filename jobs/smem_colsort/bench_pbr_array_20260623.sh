@@ -9,8 +9,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=8:00:00
 #SBATCH --array=0-2
-#SBATCH --output=jobs/logs/%A_%a.out
-#SBATCH --error=jobs/logs/%A_%a.err
+#SBATCH --output=jobs/smem_colsort/logs/%A_%a.out
+#SBATCH --error=jobs/smem_colsort/logs/%A_%a.err
 
 # Benchmark sweep split one array task per system size. The full sweep is
 # ~10h on a single GPU; running the three sizes in parallel brings wall-clock
