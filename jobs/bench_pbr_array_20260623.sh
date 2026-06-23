@@ -37,6 +37,9 @@ set -euo pipefail
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 # W&B offline so the batch run never blocks on auth; sync afterward.
 export WANDB_MODE=offline
+# Stamp every run with the kernel version so batches are orderable in W&B.
+export SPDMM_COMMIT=$(git rev-parse --short HEAD)
+echo "[job] benchmarking commit=$SPDMM_COMMIT"
 
 echo "[job] benchmarking size=$SYS_SIZE"
 # Test ids embed the size as `<family>_<size>`, so -k filters this task's slice.

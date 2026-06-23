@@ -13,6 +13,7 @@ All results are logged to the "torch-fast-spdmm" W&B project.
 """
 
 import gc
+import os
 
 import numpy as np
 import pytest
@@ -113,12 +114,18 @@ def _prepare(mat_config, features, dtype):
     return scipy_mat, sparse_torch, x, system_size, profile_name
 
 
+# Identifies which kernel version produced a run, so successive benchmark
+# batches are orderable in W&B (group/filter by commit). The job script exports
+# the short git SHA; falls back to "unknown" for ad-hoc local runs.
+_COMMIT = os.environ.get("SPDMM_COMMIT", "unknown")
+
+
 def _log_wandb(request, config: dict, time_ms: float):
     run = wandb.init(
         project="torch-fast-spdmm",
         group=config.get("profile", ""),
         name=request.node.name,
-        config=config,
+        config={**config, "commit": _COMMIT},
         reinit=True,
     )
     run.log({"time_ms": time_ms})
