@@ -18,11 +18,13 @@
 # build_spdmm gate job (afterok dependency) — array tasks only run pytest, so
 # there is no concurrent in-place build race.
 
-# SIZES must match SIZES in tests/torch_fast_spdmm/test_benchmark.py.
-SIZES=(16384 65536 262144)
-SIZE=${SIZES[$SLURM_ARRAY_TASK_ID]}
+# SYS_SIZES must match SIZES in tests/torch_fast_spdmm/test_benchmark.py.
+# Note: do NOT name this SIZE — `conda activate` exports SIZE as the binutils
+# `size` tool (like CC/CXX/AR), which would clobber our value.
+SYS_SIZES=(16384 65536 262144)
+SYS_SIZE=${SYS_SIZES[$SLURM_ARRAY_TASK_ID]}
 
-echo "[job] started $(date)  job_id=$SLURM_JOB_ID  task=$SLURM_ARRAY_TASK_ID  size=$SIZE  node=$SLURMD_NODENAME"
+echo "[job] started $(date)  job_id=$SLURM_JOB_ID  task=$SLURM_ARRAY_TASK_ID  size=$SYS_SIZE  node=$SLURMD_NODENAME"
 
 cd "$SLURM_SUBMIT_DIR"
 
@@ -36,8 +38,8 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 # W&B offline so the batch run never blocks on auth; sync afterward.
 export WANDB_MODE=offline
 
-echo "[job] benchmarking size=$SIZE"
+echo "[job] benchmarking size=$SYS_SIZE"
 # Test ids embed the size as `<family>_<size>`, so -k filters this task's slice.
-pytest tests/torch_fast_spdmm/test_benchmark.py -v --benchmark-only -k "_${SIZE}"
+pytest tests/torch_fast_spdmm/test_benchmark.py -v --benchmark-only -k "_${SYS_SIZE}"
 
 echo "[job] done $(date)"
