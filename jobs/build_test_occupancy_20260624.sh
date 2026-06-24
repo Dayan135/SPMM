@@ -42,6 +42,7 @@ pip install -e torch_fast_spdmm --no-build-isolation -q
 
 echo "[job] smoke-check: query bps on RTX 3090"
 python - <<'EOF'
+import torch  # loads libtorch/libc10 so the extension can dlopen them
 import torch_fast_spdmm_core as core
 for br in [2, 4, 8]:
     for sm in [512, 1024, 2048]:
