@@ -31,6 +31,7 @@ import numpy as np
 import torch
 import torch.cuda.profiler as profiler
 
+import torch_fast_spdmm_core as _core
 from benchmark.matrices import generate_scattered_block_matrix
 from torch_fast_spdmm import csr_to_pbr, pbr_info, pbr_matmul
 
@@ -68,6 +69,15 @@ def build(size: int, features: int, block: int, min_nnz: int,
     print()
 
     pbr_mat = pbr_mat.to("cuda")
+
+    if kernel == "rowgroup":
+        bps = _core.pbr_rowgroup_blocks_per_sm(block, smem_size)
+        num_groups = int(pbr_mat._gpu_meta.group_row_starts.shape[0]) - 1
+        print(f"  {'blocks_per_sm':26s} = {bps}")
+        print(f"  {'target_groups':26s} = {sm_count * bps}")
+        print(f"  {'num_groups':26s} = {num_groups}")
+        print()
+
     x = torch.randn((size, features), dtype=torch.float32, device="cuda")
     return pbr_mat, x
 

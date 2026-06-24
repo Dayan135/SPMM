@@ -614,6 +614,53 @@ template void launch_pbr_rowgroup_spmm<int32_t, double>(const int, const int, co
 template void launch_pbr_rowgroup_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int*, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
 
 
+// ---------------------------------------------------------------------------
+// Occupancy query
+// ---------------------------------------------------------------------------
+//
+// Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the rowgroup
+// kernel at the given block_rows / smem_size combination.  Called from the
+// Python grouper (_build_group_row_starts) so it can set
+//   target_groups = sm_count × bps
+// using the kernel's actual compiled register / smem footprint instead of the
+// old hardcoded estimate (_BLOCKS_PER_SM_EST × _PIPELINE_DEPTH = 8).
+//
+// float32 is the representative type; the smem per block is
+//   SMEM_SIZE × sizeof(float) = SMEM_SIZE × 4 bytes
+// which is the same regardless of index_t, so a single dtype suffices.
+
+template <int BR, int BC, int SMEM>
+static int _rowgroup_bps() {
+    constexpr int TPB = 128;
+    int bps = 8;  // safe fallback if the query fails
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &bps,
+        pbr_spmm_rowgroup_kernel<int32_t, float, BR, BC, SMEM, TPB>,
+        TPB,
+        static_cast<size_t>(SMEM) * sizeof(float));
+    return bps;
+}
+
+int get_pbr_rowgroup_blocks_per_sm(int block_rows, int smem_size) {
+    if (block_rows == 2) {
+        if (smem_size <= 512)  return _rowgroup_bps<2, 2,  512>();
+        if (smem_size <= 1024) return _rowgroup_bps<2, 2, 1024>();
+        return                        _rowgroup_bps<2, 2, 2048>();
+    }
+    if (block_rows == 4) {
+        if (smem_size <= 512)  return _rowgroup_bps<4, 4,  512>();
+        if (smem_size <= 1024) return _rowgroup_bps<4, 4, 1024>();
+        return                        _rowgroup_bps<4, 4, 2048>();
+    }
+    if (block_rows == 8) {
+        if (smem_size <= 512)  return _rowgroup_bps<8, 8,  512>();
+        if (smem_size <= 1024) return _rowgroup_bps<8, 8, 1024>();
+        return                        _rowgroup_bps<8, 8, 2048>();
+    }
+    return 8;
+}
+
+
 // --- CSR remainder kernel (warp-per-row / CSR-Vector) ---
 //
 // One warp (32 lanes) owns one output row for ALL features.

@@ -14,13 +14,7 @@ def _pin_to_device(arr, device, dtype=None):
     return torch.from_numpy(np.asarray(arr, dtype=dtype)).pin_memory().to(device, non_blocking=True)
 
 
-# Conservative blocks-per-SM estimate used until the kernel is written and we can
-# query cudaOccupancyMaxActiveBlocksPerMultiprocessor directly.
-_BLOCKS_PER_SM_EST = 4
-_PIPELINE_DEPTH    = 2
-
-
-def _build_group_row_starts(block_coords, block_offsets, rows, block_rows, device):
+def _build_group_row_starts(block_coords, block_offsets, rows, block_rows, device, smem_size=2048):
     """
     Compute occupancy-aware row-index boundaries for the row-group fusion kernel.
 
@@ -28,11 +22,15 @@ def _build_group_row_starts(block_coords, block_offsets, rows, block_rows, devic
     share at least one PBR block) into CUDA-block-sized work units, always cutting
     at row-strip boundaries so each CUDA block exclusively owns its output rows.
 
+    target_groups = sm_count × blocks_per_SM, where blocks_per_SM comes from
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor on the compiled kernel.
+
     Returns int32 numpy array of shape (num_groups + 1,) where entry g is the
     first row index handled by CUDA block g; the last entry is `rows`.
     """
-    sm_count     = torch.cuda.get_device_properties(device).multi_processor_count
-    target_groups = sm_count * _BLOCKS_PER_SM_EST * _PIPELINE_DEPTH
+    sm_count      = torch.cuda.get_device_properties(device).multi_processor_count
+    bps           = core.pbr_rowgroup_blocks_per_sm(block_rows, smem_size)
+    target_groups = sm_count * bps
 
     row_origins = np.asarray(block_coords[::2], dtype=np.int64)  # sorted, non-decreasing
     blk_offsets = np.asarray(block_offsets,     dtype=np.int64)  # nnz prefix sum

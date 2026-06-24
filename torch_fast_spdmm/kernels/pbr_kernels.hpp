@@ -42,6 +42,10 @@ void launch_pbr_rowgroup_spmm(
     int smem_size = 2048
 );
 
+// Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the rowgroup kernel.
+// Used by the Python grouper to replace the hardcoded blocks-per-SM estimate.
+int get_pbr_rowgroup_blocks_per_sm(int block_rows, int smem_size);
+
 template <typename index_t, typename scalar_t>
 void launch_csr_spmm(
     const int rows,

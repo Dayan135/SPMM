@@ -148,6 +148,9 @@ at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
 void bind_cuda_functions(py::module_& m) {
     m.def("spdmm_csr_naive", &spdmm_csr_naive);
 
+    m.def("pbr_rowgroup_blocks_per_sm", &get_pbr_rowgroup_blocks_per_sm,
+          py::arg("block_rows"), py::arg("smem_size"));
+
     // csr_mode is passed positionally by the Python wrapper (pbr_batched_matmul_cuda),
     // so no py::arg defaults are needed; pybind requires all-or-none annotations.
     m.def("pbr_spmm_cuda_i32_f32", &pbr_spmm_cuda_dispatch<int32_t, float>);
