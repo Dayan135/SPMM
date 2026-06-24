@@ -180,6 +180,94 @@ def speedup_heatmap(df: pd.DataFrame, out_path: Path, baseline: str = "cusparse"
     return out_path
 
 
+def _best_pbr_by_kernel(df: pd.DataFrame, kernel: str) -> pd.Series:
+    """Best (min time_ms) PBR time per (system_size, profile, features) for one kernel.
+
+    Selects across all block-config / smem variants for the given kernel
+    ('block' or 'rowgroup'), so each cell reports the best that kernel can do.
+    """
+    pbr = df[df["algorithm"].str.startswith("pbr_") & (df["kernel"] == kernel)]
+    return pbr.groupby(["system_size", "profile", "features"])["time_ms"].min()
+
+
+def _annotated_heatmap(ax, piv, fmt="{:.2f}", center=1.0):
+    """Render a log-norm RdYlGn heatmap with per-cell text labels."""
+    vals = piv.values.astype(float)
+    finite = vals[np.isfinite(vals)]
+    vmin = max(float(np.nanmin(finite)), 1e-2) if finite.size else 1e-2
+    vmax = max(float(np.nanmax(finite)), 1.0) if finite.size else 1.0
+    im = ax.imshow(vals, cmap="RdYlGn",
+                   norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax))
+    ax.set_xticks(range(len(piv.columns)))
+    ax.set_xticklabels(piv.columns)
+    ax.set_yticks(range(len(piv.index)))
+    ax.set_yticklabels(piv.index, fontsize=8)
+    for r in range(piv.shape[0]):
+        for c in range(piv.shape[1]):
+            v = vals[r, c]
+            if np.isfinite(v):
+                ax.text(c, r, fmt.format(v), ha="center", va="center", fontsize=7)
+    return im
+
+
+def kernel_speedup_heatmap(df: pd.DataFrame, out_path: Path) -> Path:
+    """Heatmap of best-rowgroup speedup over best-block per (profile, features), per size.
+
+    speedup = best_block_time / best_rowgroup_time  (>1 = rowgroup faster).
+    Both kernels are best-of across all block-config/smem variants, so this
+    answers "is the row-group fusion kernel worth using?" independent of tuning.
+    """
+    block = _best_pbr_by_kernel(df, "block")
+    rowgroup = _best_pbr_by_kernel(df, "rowgroup")
+    speedup = (block / rowgroup).rename("speedup").reset_index().dropna()
+
+    if speedup.empty:
+        return out_path
+
+    sizes = sorted(speedup["system_size"].unique())
+    fig, axes = plt.subplots(1, len(sizes), figsize=(5.5 * len(sizes), 4.5), squeeze=False)
+    for k, size in enumerate(sizes):
+        ax = axes[0][k]
+        piv = speedup[speedup["system_size"] == size].pivot(
+            index="profile", columns="features", values="speedup")
+        im = _annotated_heatmap(ax, piv)
+        ax.set_title(f"size={size}", fontsize=10)
+        ax.set_xlabel("features")
+        fig.colorbar(im, ax=ax, fraction=0.046)
+    fig.suptitle("rowgroup speedup over block kernel (>1 = rowgroup faster)", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    return out_path
+
+
+def kernel_vs_cusparse_heatmap(df: pd.DataFrame, kernel: str, out_path: Path) -> Path:
+    """Heatmap of best-PBR(kernel) speedup over cusparse per (profile, features), per size."""
+    pbr = _best_pbr_by_kernel(df, kernel)
+    base = (df[df["algorithm"] == "cusparse"]
+            .set_index(["system_size", "profile", "features"])["time_ms"])
+    speedup = (base / pbr).rename("speedup").reset_index().dropna()
+
+    if speedup.empty:
+        return out_path
+
+    sizes = sorted(speedup["system_size"].unique())
+    fig, axes = plt.subplots(1, len(sizes), figsize=(5.5 * len(sizes), 4.5), squeeze=False)
+    for k, size in enumerate(sizes):
+        ax = axes[0][k]
+        piv = speedup[speedup["system_size"] == size].pivot(
+            index="profile", columns="features", values="speedup")
+        im = _annotated_heatmap(ax, piv)
+        ax.set_title(f"size={size}", fontsize=10)
+        ax.set_xlabel("features")
+        fig.colorbar(im, ax=ax, fraction=0.046)
+    fig.suptitle(f"best-PBR ({kernel}) speedup over cusparse (>1 = PBR faster)", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    return out_path
+
+
 def smem_sweep(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
     """Line plot of time_ms vs smem_size per block config, for one system_size.
 
@@ -273,6 +361,13 @@ def main() -> None:
         written.append(facet_grid(df, size, outdir / f"facet_size{size}.png"))
 
     written.append(speedup_heatmap(df, outdir / "speedup.png"))
+
+    # Kernel comparison (only meaningful when the sweep carries a `kernel` column
+    # with both 'block' and 'rowgroup' rows).
+    if "kernel" in df.columns and {"block", "rowgroup"} <= set(df["kernel"].unique()):
+        written.append(kernel_speedup_heatmap(df, outdir / "rowgroup_vs_block.png"))
+        written.append(kernel_vs_cusparse_heatmap(df, "block", outdir / "block_vs_cusparse.png"))
+        written.append(kernel_vs_cusparse_heatmap(df, "rowgroup", outdir / "rowgroup_vs_cusparse.png"))
 
     if _has_smem_sweep(df):
         for size in sizes:
