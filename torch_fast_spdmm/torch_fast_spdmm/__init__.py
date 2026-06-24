@@ -1,4 +1,5 @@
 import types
+from dataclasses import dataclass
 import numpy as np
 import scipy.sparse as sp
 import torch
@@ -39,11 +40,22 @@ def _pbr_to_method(self, device='cuda'):
     return self
 
 
+def _pbr_repr(self):
+    return (
+        f"PBRMatrix({self.rows}x{self.cols}, "
+        f"blocks={self.accounted_blocks()}, "
+        f"compressed_nnz={self.compressed_nnz()}, "
+        f"remainder_nnz={self.remainder_nnz()}, "
+        f"total_nnz={self.total_nnz})"
+    )
+
+
 # --- Inject the method into the C++ classes ---
-for cls_name in ["PBRMatrixInt64Float", "PBRMatrixInt32Float", 
+for cls_name in ["PBRMatrixInt64Float", "PBRMatrixInt32Float",
                  "PBRMatrixInt64Double", "PBRMatrixInt32Double"]:
     if hasattr(core, cls_name):
         setattr(getattr(core, cls_name), "to", _pbr_to_method)
+        setattr(getattr(core, cls_name), "__repr__", _pbr_repr)
         
     
 def _build_cuda_dispatch():
@@ -172,12 +184,102 @@ def pbr_analyze_csr(mat: sp.csr_matrix | torch.Tensor,
         raise TypeError(f'Unsupported type {type(mat)}')
 
 
+@dataclass(frozen=True)
+class BlockFillStats:  # nnz count per compressed block (popcount of its 64-bit code)
+    min: int
+    max: int
+    mean: float
+    max_possible: int
+
+
+@dataclass(frozen=True)
+class BlockStripeStats:  # number of compressed blocks per horizontal row-stripe
+    min: int
+    max: int
+    mean: float
+
+
+@dataclass(frozen=True)
+class PBRInfo:  # full structural summary of a built PBRMatrix
+    shape: tuple
+    block_size: tuple
+    total_nnz: int
+    compressed_nnz: int
+    remainder_nnz: int
+    compressed_fraction: float
+    num_blocks: int
+    num_unique_patterns: int
+    avg_reuse: float
+    block_fill: BlockFillStats
+    blocks_per_stripe: BlockStripeStats
+
+
+def pbr_info(pbr_mat) -> PBRInfo:
+    """
+    Returns a PBRInfo dataclass summarising a built PBRMatrix.
+
+    Derived entirely from the already-exposed fields on pbr_mat — no rebuild
+    or C++ call needed.  Useful for quick debugging and comparing the effect
+    of different block sizes / min_nnz_per_block thresholds.
+    Use dataclasses.asdict(info) to convert to a plain dict.
+    """
+    codes = np.asarray(pbr_mat.block_codes, dtype=np.uint64)
+    num_blocks      = len(codes)
+    total_nnz       = int(pbr_mat.total_nnz)
+    compressed_nnz  = int(pbr_mat.compressed_nnz())
+    remainder_nnz   = int(pbr_mat.remainder_nnz())
+
+    if num_blocks > 0:
+        popcounts = np.array([bin(int(c)).count('1') for c in codes], dtype=np.int32)
+        unique_codes, _ = np.unique(codes, return_counts=True)
+        num_unique = int(len(unique_codes))
+
+        coords_flat = np.asarray(pbr_mat.block_coords)
+        block_rows_abs = coords_flat.reshape(-1, 2)[:, 0]
+        _, stripe_counts = np.unique(block_rows_abs // pbr_mat.block_rows, return_counts=True)
+
+        block_fill = BlockFillStats(
+            min=int(popcounts.min()),
+            max=int(popcounts.max()),
+            mean=float(popcounts.mean()),
+            max_possible=pbr_mat.block_rows * pbr_mat.block_cols,
+        )
+        blocks_per_stripe = BlockStripeStats(
+            min=int(stripe_counts.min()),
+            max=int(stripe_counts.max()),
+            mean=float(stripe_counts.mean()),
+        )
+    else:
+        num_unique        = 0
+        block_fill        = BlockFillStats(min=0, max=0, mean=0.0,
+                                           max_possible=pbr_mat.block_rows * pbr_mat.block_cols)
+        blocks_per_stripe = BlockStripeStats(min=0, max=0, mean=0.0)
+
+    return PBRInfo(
+        shape=(pbr_mat.rows, pbr_mat.cols),
+        block_size=(pbr_mat.block_rows, pbr_mat.block_cols),
+        total_nnz=total_nnz,
+        compressed_nnz=compressed_nnz,
+        remainder_nnz=remainder_nnz,
+        compressed_fraction=compressed_nnz / total_nnz if total_nnz > 0 else 0.0,
+        num_blocks=num_blocks,
+        num_unique_patterns=num_unique,
+        avg_reuse=num_blocks / num_unique if num_unique > 0 else 0.0,
+        block_fill=block_fill,
+        blocks_per_stripe=blocks_per_stripe,
+    )
+
+
 __all__ = [
     'spdmm_csr_naive',
 
     'csr_to_pbr',
     'pbr_to_csr',
     'pbr_analyze_csr',
+    'pbr_info',
+    'PBRInfo',
+    'BlockFillStats',
+    'BlockStripeStats',
     'pbr_matmul',
     'pbr_batched_matmul_cpu',
     'pbr_batched_matmul_cuda',

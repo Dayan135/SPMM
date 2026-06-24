@@ -6,6 +6,46 @@
 void bind_cuda_functions(py::module_& m);
 #endif
 
+#define BIND_PBR_STATS_CLASS(T, S, py_name) \
+        py::class_<pbr_stats_t<T, S>>(m, py_name) \
+            .def_readonly("rows",                 &pbr_stats_t<T, S>::rows) \
+            .def_readonly("cols",                 &pbr_stats_t<T, S>::cols) \
+            .def_readonly("nnz",                  &pbr_stats_t<T, S>::nnz) \
+            .def_readonly("block_rows",           &pbr_stats_t<T, S>::block_rows) \
+            .def_readonly("block_cols",           &pbr_stats_t<T, S>::block_cols) \
+            .def_readonly("min_nnz_coverage",     &pbr_stats_t<T, S>::min_nnz_coverage) \
+            .def_readonly("accounted_nnz",        &pbr_stats_t<T, S>::accounted_nnz) \
+            .def_readonly("remainder_nnz",        &pbr_stats_t<T, S>::remainder_nnz) \
+            .def_readonly("accounted_patterns",   &pbr_stats_t<T, S>::accounted_patterns) \
+            .def_readonly("accounted_blocks",     &pbr_stats_t<T, S>::accounted_blocks) \
+            .def_readonly("remainder_coo_overhead", &pbr_stats_t<T, S>::remainder_coo_overhead) \
+            .def_readonly("csr_index_size",       &pbr_stats_t<T, S>::csr_index_size) \
+            .def_readonly("pbr_index_size",       &pbr_stats_t<T, S>::pbr_index_size) \
+            .def_property_readonly("block_stats", [](const pbr_stats_t<T, S>& self) { \
+                py::list result; \
+                for (const auto& [code_key, desc] : self.block_stats) { \
+                    py::dict entry; \
+                    entry["code"]       = (uint64_t)code_key; \
+                    entry["occurrence"] = (int64_t)desc.occurrence; \
+                    entry["compress"]   = desc.compress; \
+                    py::list coords; \
+                    for (const auto& c : desc.block_coords) \
+                        coords.append(py::make_tuple((int64_t)c.row, (int64_t)c.col)); \
+                    entry["block_coords"] = coords; \
+                    result.append(entry); \
+                } \
+                return result; \
+            }) \
+            .def("__repr__", [](const pbr_stats_t<T, S>& self) { \
+                return std::string("<PBRStats ") \
+                     + std::to_string(self.rows) + "x" + std::to_string(self.cols) \
+                     + " nnz=" + std::to_string(self.nnz) \
+                     + " accounted=" + std::to_string(self.accounted_nnz) \
+                     + " remainder=" + std::to_string(self.remainder_nnz) \
+                     + " patterns=" + std::to_string(self.accounted_patterns) \
+                     + ">"; \
+            });
+
 #define BIND_PBR_MATRIX_CLASS(T, S, py_name) \
         py::class_<pbr_matrix_t<T,S>>(m, (py_name), py::dynamic_attr()) \
             .def_readonly("rows", &pbr_matrix_t<T, S>::rows) \
@@ -55,6 +95,11 @@ PYBIND11_MODULE(torch_fast_spdmm_core, m) {
         .value("BLOCK_COLUMN_MAJOR", data_order_t::BLOCK_COLUMN_MAJOR)
         .value("INTERLEAVED_ROW_MAJOR", data_order_t::INTERLEAVED_ROW_MAJOR)
         .value("INTERLEAVED_COLUMN_MAJOR", data_order_t::INTERLEAVED_COLUMN_MAJOR);
+
+    BIND_PBR_STATS_CLASS(uint64_t, float,  "PBRStatsUInt64Float");
+    BIND_PBR_STATS_CLASS(uint32_t, float,  "PBRStatsUInt32Float");
+    BIND_PBR_STATS_CLASS(uint64_t, double, "PBRStatsUInt64Double");
+    BIND_PBR_STATS_CLASS(uint32_t, double, "PBRStatsUInt32Double");
 
     BIND_PBR_MATRIX_CLASS(int64_t, float, "PBRMatrixInt64Float");
     BIND_PBR_MATRIX_CLASS(int32_t, float, "PBRMatrixInt32Float");

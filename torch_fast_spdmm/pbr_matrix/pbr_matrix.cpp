@@ -79,7 +79,6 @@ void analyze_csr_blocks(const index_t block_rows, const index_t block_cols,
     // essentially a row of blocks.
     index_t last_stripe_index = 0;
     typename pbr_stats_t<index_t, scalar_t>::block_code_map stripe_block_codes;
-    vector<index_t> stripe_block_indices;
     for (index_t row = 0; row < rows; ++row) {
         const index_t block_row_offset = row / block_rows;
         const index_t row_offset = row % block_rows;
@@ -91,12 +90,7 @@ void analyze_csr_blocks(const index_t block_rows, const index_t block_cols,
             const index_t block_index = block_row_offset * num_col_blocks + block_col_offset;
             const index_t bit_index = row_offset * block_cols + col_offset;
 
-            const auto& code = stripe_block_codes.find(block_index);
-            if (code == stripe_block_codes.end()) {
-                stripe_block_codes[block_index].set(bit_index);
-            } else {
-                code->second.set(bit_index);
-            }
+            stripe_block_codes[block_index].set(bit_index);
         }
 
         auto& block_stats = pbr_stats.block_stats;
@@ -104,21 +98,17 @@ void analyze_csr_blocks(const index_t block_rows, const index_t block_cols,
         // Process the stripe if we are about to move to a new stripe
         const index_t next_stripe_index = (row + 1) / block_rows;
         if (next_stripe_index != last_stripe_index) {
-            for (const auto& block_index : stripe_block_indices) {
+            for (const auto& [block_index, code] : stripe_block_codes) {
                 const index_t block_coord_row = block_index / num_col_blocks * block_rows;
                 const index_t block_coord_col = block_index % num_col_blocks * block_cols;
-                
-                const index_t block_code_key = (index_t)stripe_block_codes.find(block_index)->second.to_ulong();
 
-                // Record this block code as having been seen once more
-                // and store the coordinates of the block
+                const index_t block_code_key = (index_t)code.to_ulong();
+
                 block_stats[block_code_key].occurrence++;
                 block_stats[block_code_key].block_coords.push_back({block_coord_row, block_coord_col});
             }
 
             stripe_block_codes.clear();
-            stripe_block_indices.clear();
-
             last_stripe_index = next_stripe_index;
         }
     }
