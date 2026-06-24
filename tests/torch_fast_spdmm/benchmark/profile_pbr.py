@@ -10,6 +10,9 @@ Matrix profiles (--matrix-profile):
   scattered_1x8    — 1-row × 8-col scattered blocks
   scattered_2x4    — 2-row × 4-col scattered blocks
   scattered_dense2 — dense 2×2 block scatter (block_size=2)
+  diag_dd0.001     — diagonal blocks + noise (diag_density=0.001)
+  diag_dd0.002     — diagonal blocks + noise (diag_density=0.002)
+  diag_dd0.003     — diagonal blocks + noise (diag_density=0.003)
 
 Kernels (--kernel):
   block    — original one-CUDA-block-per-PBR-block (default)
@@ -18,8 +21,8 @@ Kernels (--kernel):
 Usage (under ncu):
     ncu --profile-from-start off --metrics <...> --csv \
         python -m benchmark.profile_pbr --size 262144 --features 512 \
-            --block 2 --min-nnz 2 --smem-size 2048 \
-            --matrix-profile scattered_dense2 --kernel rowgroup
+            --block 8 --min-nnz 2 --smem-size 2048 \
+            --matrix-profile diag_dd0.001 --kernel block
 """
 
 from __future__ import annotations
@@ -32,25 +35,39 @@ import torch
 import torch.cuda.profiler as profiler
 
 import torch_fast_spdmm_core as _core
-from benchmark.matrices import generate_scattered_block_matrix
+from benchmark.matrices import generate_scattered_block_matrix, generate_diag_blocks_plus_noise
 from torch_fast_spdmm import csr_to_pbr, pbr_info, pbr_matmul
 
+# Each entry: (kind, cfg)
+#   kind="scattered" → generate_scattered_block_matrix
+#   kind="diag"      → generate_diag_blocks_plus_noise
 _MATRIX_PROFILES = {
-    "scattered_8x1":    {"block_size": 8, "rows_per_block": 8, "cols_per_block": 1},
-    "scattered_1x8":    {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8},
-    "scattered_2x4":    {"block_size": 8, "rows_per_block": 2, "cols_per_block": 4},
-    "scattered_dense2": {"block_size": 2, "rows_per_block": 2, "cols_per_block": 2},
+    "scattered_8x1":    ("scattered", {"block_size": 8, "rows_per_block": 8, "cols_per_block": 1}),
+    "scattered_1x8":    ("scattered", {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8}),
+    "scattered_2x4":    ("scattered", {"block_size": 8, "rows_per_block": 2, "cols_per_block": 4}),
+    "scattered_dense2": ("scattered", {"block_size": 2, "rows_per_block": 2, "cols_per_block": 2}),
+    "diag_dd0.001":     ("diag",      {"block_size": 8, "diag_density": 0.001, "off_diag_density": 0.000001}),
+    "diag_dd0.002":     ("diag",      {"block_size": 8, "diag_density": 0.002, "off_diag_density": 0.000001}),
+    "diag_dd0.003":     ("diag",      {"block_size": 8, "diag_density": 0.003, "off_diag_density": 0.000001}),
 }
 
 
 def build(size: int, features: int, block: int, min_nnz: int,
           matrix_profile: str, smem_size: int, kernel: str):
-    cfg = _MATRIX_PROFILES[matrix_profile]
-    mat = generate_scattered_block_matrix(
-        system_size=size,
-        block_size=cfg["block_size"],
-        profiles=[(cfg["rows_per_block"], cfg["cols_per_block"], 0.00001)],
-    ).astype(np.float32)
+    kind, cfg = _MATRIX_PROFILES[matrix_profile]
+    if kind == "scattered":
+        mat = generate_scattered_block_matrix(
+            system_size=size,
+            block_size=cfg["block_size"],
+            profiles=[(cfg["rows_per_block"], cfg["cols_per_block"], 0.00001)],
+        ).astype(np.float32)
+    else:  # diag
+        mat = generate_diag_blocks_plus_noise(
+            system_size=size,
+            block_size=cfg["block_size"],
+            diag_density=cfg["diag_density"],
+            off_diag_density=cfg["off_diag_density"],
+        ).astype(np.float32)
 
     pbr_mat = csr_to_pbr(mat, block_rows=block, block_cols=block,
                          min_nnz_per_block=min_nnz)
