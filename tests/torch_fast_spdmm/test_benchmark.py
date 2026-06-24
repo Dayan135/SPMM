@@ -92,6 +92,14 @@ PBR_CONFIGS = [
     for bs, mn, sm in PBR_VARIANTS
 ]
 
+# Kernel variants swept per PBR config:
+#   block    — one CUDA block per PBR block, atomicAdd commit (original)
+#   rowgroup — one CUDA block per nnz-balanced group of row strips, plain store
+PBR_KERNELS = [
+    pytest.param("block",    id="block"),
+    pytest.param("rowgroup", id="rowgroup"),
+]
+
 # Adding a new baseline algorithm = one line here.
 BASELINE_ALGOS = [
     pytest.param(("cusparse",  torch.sparse.mm),  id="cusparse"),
@@ -123,7 +131,7 @@ _COMMIT = os.environ.get("SPDMM_COMMIT", "unknown")
 # One row per benchmarked case; column order for the W&B table.
 _RESULT_COLUMNS = [
     "commit", "profile", "system_size", "features", "dtype",
-    "algorithm", "block_rows", "block_cols", "min_nnz", "smem_size", "time_ms",
+    "algorithm", "kernel", "block_rows", "block_cols", "min_nnz", "smem_size", "time_ms",
 ]
 
 
@@ -185,6 +193,7 @@ def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, al
     bench_results.append({
         "commit":      _COMMIT,
         "algorithm":   algo_name,
+        "kernel":      "baseline",
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),
@@ -196,11 +205,12 @@ def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, al
 # ── PBR benchmarks ─────────────────────────────────────────────────
 
 @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@mark.parametrize("kernel",     PBR_KERNELS)
 @mark.parametrize("pbr_cfg",    PBR_CONFIGS)
 @mark.parametrize("dtype",      DTYPES)
 @mark.parametrize("features",   FEATURES)
 @mark.parametrize("mat_config", MATRIX_CONFIGS)
-def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg):
+def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg, kernel):
     scipy_mat, _, x, size, profile = _prepare(mat_config, features, dtype)
 
     pbr_mat = csr_to_pbr(
@@ -212,7 +222,7 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg
     pbr_mat = pbr_mat.to("cuda")
 
     try:
-        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"])
+        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], kernel=kernel)
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
@@ -221,11 +231,12 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg
 
     algo_name = (
         f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
-        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}"
+        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{kernel}"
     )
     bench_results.append({
         "commit":      _COMMIT,
         "algorithm":   algo_name,
+        "kernel":      kernel,
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),
