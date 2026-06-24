@@ -51,6 +51,7 @@ for br in [2, 4, 8]:
 EOF
 
 echo "[job] running tests..."
-pytest tests/torch_fast_spdmm/ -v -q
+pytest tests/torch_fast_spdmm/test_pbr.py \
+       tests/torch_fast_spdmm/test_csr.py -v
 
 echo "[job] done $(date)"

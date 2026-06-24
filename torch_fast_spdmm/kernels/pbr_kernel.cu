@@ -633,11 +633,14 @@ template <int BR, int BC, int SMEM>
 static int _rowgroup_bps() {
     constexpr int TPB = 128;
     int bps = 8;  // safe fallback if the query fails
+    // dynamicSMemSize = 0: the kernel uses only static __shared__ arrays whose
+    // size is known to the driver from the compiled binary.  Passing SMEM*4 here
+    // would double-count the static footprint and return ~5 instead of ~10-12.
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(
         &bps,
         pbr_spmm_rowgroup_kernel<int32_t, float, BR, BC, SMEM, TPB>,
         TPB,
-        static_cast<size_t>(SMEM) * sizeof(float));
+        0);
     return bps;
 }
 
