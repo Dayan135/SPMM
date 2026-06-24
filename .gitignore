@@ -9,6 +9,7 @@ dist/
 .pytest_cache/
 *.egg
 wandb/
+.vscode
 
 # Slurm
 jobs/logs/

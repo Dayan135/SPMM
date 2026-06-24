@@ -83,6 +83,68 @@ at::Tensor pbr_spmm_cuda_dispatch(
     return Y;
 }
 
+template <typename index_t, typename scalar_t>
+at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
+    int cols, int rows,
+    int BLOCK_ROWS, int BLOCK_COLS,
+    const at::Tensor group_row_starts,
+    const at::Tensor block_codes,
+    const at::Tensor block_coords,
+    const at::Tensor block_offsets,
+    const at::Tensor block_data,
+    const at::Tensor rem_indptr,
+    const at::Tensor rem_col_ind,
+    const at::Tensor rem_vals,
+    const at::Tensor X,
+    int csr_mode  = 0,
+    int smem_size = 2048
+) {
+    const int num_groups     = (int)group_row_starts.size(0) - 1;
+    const int num_pbr_blocks = (int)block_codes.size(0);
+    const int csr_nnz        = (int)rem_col_ind.size(0);
+    const int batch_size     = (X.dim() == 3) ? (int)X.size(0) : 1;
+    const int features       = (int)X.size(-1);
+
+    at::Tensor X3 = (X.dim() == 2) ? X.unsqueeze(0) : X;
+    at::Tensor Y  = at::zeros({batch_size, rows, features}, X.options());
+
+    auto stream = at::cuda::getCurrentCUDAStream();
+
+    // PBR row-group kernel: plain store to Y (each row owned by exactly one CUDA block).
+    // Must complete before CSR so that atomicAdd accumulates on top of the stored values.
+    if (num_groups > 0 && num_pbr_blocks > 0) {
+        launch_pbr_rowgroup_spmm<index_t, scalar_t>(
+            num_groups, num_pbr_blocks, features, batch_size, cols, rows,
+            BLOCK_ROWS, BLOCK_COLS,
+            group_row_starts.data_ptr<int>(),
+            block_codes.data_ptr<int64_t>(),
+            block_coords.data_ptr<index_t>(),
+            block_offsets.data_ptr<index_t>(),
+            block_data.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            stream.stream(),
+            smem_size
+        );
+    }
+
+    // CSR remainder: atomicAdd accumulates on top of PBR's stored values.
+    if (csr_nnz > 0) {
+        launch_csr_spmm<index_t, scalar_t>(
+            rows, features, batch_size, cols, csr_nnz,
+            rem_indptr.data_ptr<index_t>(),
+            rem_col_ind.data_ptr<index_t>(),
+            rem_vals.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            stream.stream(),
+            csr_mode
+        );
+    }
+
+    return Y;
+}
+
 void bind_cuda_functions(py::module_& m) {
     m.def("spdmm_csr_naive", &spdmm_csr_naive);
 
@@ -92,4 +154,9 @@ void bind_cuda_functions(py::module_& m) {
     m.def("pbr_spmm_cuda_i64_f32", &pbr_spmm_cuda_dispatch<int64_t, float>);
     m.def("pbr_spmm_cuda_i32_f64", &pbr_spmm_cuda_dispatch<int32_t, double>);
     m.def("pbr_spmm_cuda_i64_f64", &pbr_spmm_cuda_dispatch<int64_t, double>);
+
+    m.def("pbr_rowgroup_spmm_cuda_i32_f32", &pbr_rowgroup_spmm_cuda_dispatch<int32_t, float>);
+    m.def("pbr_rowgroup_spmm_cuda_i64_f32", &pbr_rowgroup_spmm_cuda_dispatch<int64_t, float>);
+    m.def("pbr_rowgroup_spmm_cuda_i32_f64", &pbr_rowgroup_spmm_cuda_dispatch<int32_t, double>);
+    m.def("pbr_rowgroup_spmm_cuda_i64_f64", &pbr_rowgroup_spmm_cuda_dispatch<int64_t, double>);
 }

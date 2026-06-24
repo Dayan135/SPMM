@@ -14,6 +14,61 @@ def _pin_to_device(arr, device, dtype=None):
     return torch.from_numpy(np.asarray(arr, dtype=dtype)).pin_memory().to(device, non_blocking=True)
 
 
+# Conservative blocks-per-SM estimate used until the kernel is written and we can
+# query cudaOccupancyMaxActiveBlocksPerMultiprocessor directly.
+_BLOCKS_PER_SM_EST = 4
+_PIPELINE_DEPTH    = 2
+
+
+def _build_group_row_starts(block_coords, block_offsets, rows, block_rows, device):
+    """
+    Compute occupancy-aware row-index boundaries for the row-group fusion kernel.
+
+    Greedily merges consecutive row strips (groups of BLOCK_ROWS output rows that
+    share at least one PBR block) into CUDA-block-sized work units, always cutting
+    at row-strip boundaries so each CUDA block exclusively owns its output rows.
+
+    Returns int32 numpy array of shape (num_groups + 1,) where entry g is the
+    first row index handled by CUDA block g; the last entry is `rows`.
+    """
+    sm_count     = torch.cuda.get_device_properties(device).multi_processor_count
+    target_groups = sm_count * _BLOCKS_PER_SM_EST * _PIPELINE_DEPTH
+
+    row_origins = np.asarray(block_coords[::2], dtype=np.int64)  # sorted, non-decreasing
+    blk_offsets = np.asarray(block_offsets,     dtype=np.int64)  # nnz prefix sum
+    num_blocks  = len(row_origins)
+
+    if num_blocks == 0 or blk_offsets[-1] == 0:
+        return np.array([0, rows], dtype=np.int32)
+
+    target_nnz = max(1, int(blk_offsets[-1]) // target_groups)
+
+    group_row_starts = [0]
+    current_nnz = 0
+    b = 0
+
+    while b < num_blocks:
+        strip_row = int(row_origins[b])
+
+        # advance to end of this row strip (all blocks in a stripe share row_origin)
+        b_end = b
+        while b_end < num_blocks and row_origins[b_end] == strip_row:
+            b_end += 1
+
+        current_nnz += int(blk_offsets[b_end]) - int(blk_offsets[b])
+
+        # close the current group after this strip if threshold reached,
+        # but only if there is more work left (avoid a trailing empty group)
+        if current_nnz >= target_nnz and b_end < num_blocks:
+            group_row_starts.append(strip_row + block_rows)
+            current_nnz = 0
+
+        b = b_end
+
+    group_row_starts.append(rows)  # sentinel: last group ends at the matrix boundary
+    return np.array(group_row_starts, dtype=np.int32)
+
+
 def _pbr_to_method(self, device='cuda'):
     target_device = 'cpu' if device is None else str(torch.device(device))
 
@@ -24,14 +79,19 @@ def _pbr_to_method(self, device='cuda'):
         return self
 
     if target_device != 'cpu':
+        group_row_starts = _build_group_row_starts(
+            self.block_coords, self.block_offsets,
+            self.rows, self.block_rows, device,
+        )
         self._gpu_meta = types.SimpleNamespace(
-            codes       = _pin_to_device(self.block_codes,     device, dtype=np.int64),
-            coords      = _pin_to_device(self.block_coords,    device),
-            offsets     = _pin_to_device(self.block_offsets,   device),
-            data        = _pin_to_device(self.block_data,      device),
-            rem_indptr  = _pin_to_device(self.remainder_indptr,  device),
-            rem_col_ind = _pin_to_device(self.remainder_col_ind, device),
-            rem_vals    = _pin_to_device(self.remainder_data,    device),
+            codes            = _pin_to_device(self.block_codes,      device, dtype=np.int64),
+            coords           = _pin_to_device(self.block_coords,     device),
+            offsets          = _pin_to_device(self.block_offsets,    device),
+            data             = _pin_to_device(self.block_data,       device),
+            rem_indptr       = _pin_to_device(self.remainder_indptr,   device),
+            rem_col_ind      = _pin_to_device(self.remainder_col_ind,  device),
+            rem_vals         = _pin_to_device(self.remainder_data,     device),
+            group_row_starts = _pin_to_device(group_row_starts,       device),
         )
         torch.cuda.synchronize(device)
     else:
@@ -66,7 +126,16 @@ def _build_cuda_dispatch():
         (torch.int64, torch.float64): core.pbr_spmm_cuda_i64_f64,
     }
 
+def _build_rowgroup_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_rowgroup_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_rowgroup_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_rowgroup_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_rowgroup_spmm_cuda_i64_f64,
+    }
+
 _CUDA_KERNEL_DISPATCH = None
+_ROWGROUP_CUDA_KERNEL_DISPATCH = None
 
 
 def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
@@ -102,14 +171,52 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
         csr_mode,
         smem_size,
     )
+
+
+def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+    """
+    Row-group fusion variant: one CUDA block per nnz-balanced group of row strips.
+    Eliminates atomicAdd on Y; requires group_row_starts from .to('cuda').
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
+    smem_size: 512 / 1024 / 2048 floats; determines p = smem_size / (block_rows + block_cols)
+    """
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+
+    global _ROWGROUP_CUDA_KERNEL_DISPATCH
+    if _ROWGROUP_CUDA_KERNEL_DISPATCH is None:
+        _ROWGROUP_CUDA_KERNEL_DISPATCH = _build_rowgroup_cuda_dispatch()
+
+    kernel = _ROWGROUP_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
+        meta.group_row_starts,
+        meta.codes,
+        meta.coords,
+        meta.offsets,
+        meta.data,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
     
 
-def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
+               kernel: str = 'block') -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (GPU only)
     smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
+    kernel:    'block'    — original one-CUDA-block-per-PBR-block kernel
+               'rowgroup' — fused kernel that groups row strips per CUDA block
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -118,7 +225,10 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         meta = getattr(pbr_mat, '_gpu_meta', None)
         if meta is None:
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
-        y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        if kernel == 'rowgroup':
+            y = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        else:
+            y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
         y = core.pbr_batched_matmul_cpu(pbr_mat, x)
 
@@ -283,4 +393,5 @@ __all__ = [
     'pbr_matmul',
     'pbr_batched_matmul_cpu',
     'pbr_batched_matmul_cuda',
+    'pbr_batched_matmul_rowgroup_cuda',
 ]

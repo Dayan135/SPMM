@@ -22,6 +22,27 @@ void launch_pbr_spmm(
 );
 
 template <typename index_t, typename scalar_t>
+void launch_pbr_rowgroup_spmm(
+    const int  num_groups,
+    const int  num_pbr_blocks,
+    const int  features,
+    const int  batch_size,
+    const int  cols,
+    const int  rows,
+    const int  BLOCK_ROWS,
+    const int  BLOCK_COLS,
+    const int* group_row_starts,   // shape (num_groups + 1,), row index boundaries
+    const int64_t* block_codes,
+    const index_t* block_coords,
+    const index_t* block_offsets,
+    const scalar_t* block_data,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream = 0,
+    int smem_size = 2048
+);
+
+template <typename index_t, typename scalar_t>
 void launch_csr_spmm(
     const int rows,
     const int features,
