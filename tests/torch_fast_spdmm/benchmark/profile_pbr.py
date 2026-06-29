@@ -15,8 +15,8 @@ Matrix profiles (--matrix-profile):
   diag_dd0.05      — diagonal blocks + noise (64×64 blocks, diag_density=0.05)
 
 Kernels (--kernel):
-  block    — original one-CUDA-block-per-PBR-block (default)
-  rowgroup — row-group fusion kernel
+  block      — original one-CUDA-block-per-PBR-block (default)
+  blockgroup — block-count-balanced fusion kernel
 
 Usage (under ncu):
     ncu --profile-from-start off --metrics <...> --csv \
@@ -87,11 +87,15 @@ def build(size: int, features: int, block: int, min_nnz: int,
 
     pbr_mat = pbr_mat.to("cuda")
 
-    if kernel == "rowgroup":
-        bps = _core.pbr_rowgroup_blocks_per_sm(block, smem_size)
-        num_groups = int(pbr_mat._gpu_meta.group_row_starts.shape[0]) - 1
+    if kernel == "blockgroup":
+        num_pbr_blocks = int(pbr_mat.accounted_blocks())
+        bps = _core.pbr_blockgroup_blocks_per_sm(block, smem_size)
+        target_groups = sm_count * bps
+        group_size = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
+        num_groups = (num_pbr_blocks + group_size - 1) // group_size
         print(f"  {'blocks_per_sm':26s} = {bps}")
-        print(f"  {'target_groups':26s} = {sm_count * bps}")
+        print(f"  {'target_groups':26s} = {target_groups}")
+        print(f"  {'group_size':26s} = {group_size}")
         print(f"  {'num_groups':26s} = {num_groups}")
         print()
 
@@ -110,7 +114,7 @@ def main() -> None:
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
     p.add_argument("--kernel",         type=str, default="block",
-                   choices=["block", "rowgroup"],
+                   choices=["block", "blockgroup"],
                    help="which PBR kernel to profile")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()

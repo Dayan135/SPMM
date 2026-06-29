@@ -80,21 +80,21 @@ are missing in the local `fem` env: `conda run -n fem pip install wandb pandas m
 | `tests/torch_fast_spdmm/benchmark/profile_pbr.py` | ncu profiling driver (scattered + diag) |
 | `LAST_EXPERIMENTS.md` | Detailed log of recent experiments and findings |
 
-## Current kernel state (as of 2026-06-24, commit `a1dbf5b`)
+## Current kernel state (as of 2026-06-29, branch `feat/pbr-blockgroup`)
 
 Two PBR kernels exist. Choose via `kernel=` arg in `pbr_matmul`:
 
-- **`block`** — one CUDA block per PBR block; uses `atomicAdd` for Y accumulation.
-- **`rowgroup`** — one CUDA block per nnz-balanced row-group; plain store to Y (no atomicAdd).
-  `target_groups = sm_count × get_pbr_rowgroup_blocks_per_sm(block_rows, smem_size)` — the
-  occupancy query uses `dynamicSMemSize=0` because the kernel uses only static `__shared__`.
+- **`block`** — one CUDA block per PBR block; `atomicAdd` to Y; concurrent with CSR on a separate stream.
+- **`blockgroup`** — one CUDA block per block-count-balanced group; `atomicAdd` to Y; concurrent with CSR.
+  `group_size = ceil(num_pbr_blocks / target_groups)` — computed at call time (no CPU scan or GPU array).
+  `target_groups = sm_count × get_pbr_blockgroup_blocks_per_sm(block_rows, smem_size)` — occupancy query
+  uses `dynamicSMemSize=0` (static `__shared__` only). smem_Y accumulates an entire strip before
+  atomicAdd, reducing atomic pressure vs the block kernel.
 
-`rowgroup` wins significantly for `scattered_dense2` at large sizes and high feature counts
-(up to 1.83× over `block`). It is neutral or slightly worse for narrow-feature or
-lightly-loaded cases. Diagonal benchmark matrices at large sizes are CSR-dominated (>99%
-of nnz falls to the CSR remainder); block vs rowgroup is irrelevant there.
+`blockgroup` solves the wide-row scalability problem: it always launches `target_groups` CUDA blocks
+regardless of strip count, unlike the old `rowgroup` which was capped at `num_strips`.
 
-See `LAST_EXPERIMENTS.md` for profiling data and benchmark plots.
+See `LAST_EXPERIMENTS.md` for rowgroup/block profiling data that motivated this design.
 
 ## Commit scopes
 

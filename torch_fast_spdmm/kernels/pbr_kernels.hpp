@@ -22,8 +22,9 @@ void launch_pbr_spmm(
 );
 
 template <typename index_t, typename scalar_t>
-void launch_pbr_rowgroup_spmm(
+void launch_pbr_blockgroup_spmm(
     const int  num_groups,
+    const int  group_size,
     const int  num_pbr_blocks,
     const int  features,
     const int  batch_size,
@@ -31,7 +32,6 @@ void launch_pbr_rowgroup_spmm(
     const int  rows,
     const int  BLOCK_ROWS,
     const int  BLOCK_COLS,
-    const int* group_row_starts,   // shape (num_groups + 1,), row index boundaries
     const int64_t* block_codes,
     const index_t* block_coords,
     const index_t* block_offsets,
@@ -42,9 +42,8 @@ void launch_pbr_rowgroup_spmm(
     int smem_size = 2048
 );
 
-// Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the rowgroup kernel.
-// Used by the Python grouper to replace the hardcoded blocks-per-SM estimate.
-int get_pbr_rowgroup_blocks_per_sm(int block_rows, int smem_size);
+// Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the blockgroup kernel.
+int get_pbr_blockgroup_blocks_per_sm(int block_rows, int smem_size);
 
 template <typename index_t, typename scalar_t>
 void launch_csr_spmm(

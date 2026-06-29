@@ -84,10 +84,10 @@ at::Tensor pbr_spmm_cuda_dispatch(
 }
 
 template <typename index_t, typename scalar_t>
-at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
+at::Tensor pbr_blockgroup_spmm_cuda_dispatch(
     int cols, int rows,
     int BLOCK_ROWS, int BLOCK_COLS,
-    const at::Tensor group_row_starts,
+    int num_groups, int group_size,
     const at::Tensor block_codes,
     const at::Tensor block_coords,
     const at::Tensor block_offsets,
@@ -99,7 +99,6 @@ at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
     int csr_mode  = 0,
     int smem_size = 2048
 ) {
-    const int num_groups     = (int)group_row_starts.size(0) - 1;
     const int num_pbr_blocks = (int)block_codes.size(0);
     const int csr_nnz        = (int)rem_col_ind.size(0);
     const int batch_size     = (X.dim() == 3) ? (int)X.size(0) : 1;
@@ -108,27 +107,33 @@ at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
     at::Tensor X3 = (X.dim() == 2) ? X.unsqueeze(0) : X;
     at::Tensor Y  = at::zeros({batch_size, rows, features}, X.options());
 
-    auto stream = at::cuda::getCurrentCUDAStream();
+    auto cur_stream   = at::cuda::getCurrentCUDAStream();
+    auto block_stream = at::cuda::getStreamFromPool();
+    auto csr_stream   = at::cuda::getStreamFromPool();
 
-    // PBR row-group kernel: plain store to Y (each row owned by exactly one CUDA block).
-    // Must complete before CSR so that atomicAdd accumulates on top of the stored values.
+    // Both new streams wait for Y to be zeroed on cur_stream
+    cudaEvent_t y_ready;
+    cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
+    cudaEventRecord(y_ready, cur_stream.stream());
+    cudaStreamWaitEvent(block_stream.stream(), y_ready, 0);
+    cudaStreamWaitEvent(csr_stream.stream(),   y_ready, 0);
+    cudaEventDestroy(y_ready);
+
     if (num_groups > 0 && num_pbr_blocks > 0) {
-        launch_pbr_rowgroup_spmm<index_t, scalar_t>(
-            num_groups, num_pbr_blocks, features, batch_size, cols, rows,
+        launch_pbr_blockgroup_spmm<index_t, scalar_t>(
+            num_groups, group_size, num_pbr_blocks, features, batch_size, cols, rows,
             BLOCK_ROWS, BLOCK_COLS,
-            group_row_starts.data_ptr<int>(),
             block_codes.data_ptr<int64_t>(),
             block_coords.data_ptr<index_t>(),
             block_offsets.data_ptr<index_t>(),
             block_data.data_ptr<scalar_t>(),
             X3.data_ptr<scalar_t>(),
             Y.data_ptr<scalar_t>(),
-            stream.stream(),
+            block_stream.stream(),
             smem_size
         );
     }
 
-    // CSR remainder: atomicAdd accumulates on top of PBR's stored values.
     if (csr_nnz > 0) {
         launch_csr_spmm<index_t, scalar_t>(
             rows, features, batch_size, cols, csr_nnz,
@@ -137,10 +142,21 @@ at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
             rem_vals.data_ptr<scalar_t>(),
             X3.data_ptr<scalar_t>(),
             Y.data_ptr<scalar_t>(),
-            stream.stream(),
+            csr_stream.stream(),
             csr_mode
         );
     }
+
+    // Rejoin both streams into cur_stream before returning Y
+    cudaEvent_t block_done, csr_done;
+    cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
+    cudaEventRecord(block_done, block_stream.stream());
+    cudaEventRecord(csr_done,   csr_stream.stream());
+    cudaStreamWaitEvent(cur_stream.stream(), block_done, 0);
+    cudaStreamWaitEvent(cur_stream.stream(), csr_done,   0);
+    cudaEventDestroy(block_done);
+    cudaEventDestroy(csr_done);
 
     return Y;
 }
@@ -148,18 +164,16 @@ at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
 void bind_cuda_functions(py::module_& m) {
     m.def("spdmm_csr_naive", &spdmm_csr_naive);
 
-    m.def("pbr_rowgroup_blocks_per_sm", &get_pbr_rowgroup_blocks_per_sm,
+    m.def("pbr_blockgroup_blocks_per_sm", &get_pbr_blockgroup_blocks_per_sm,
           py::arg("block_rows"), py::arg("smem_size"));
 
-    // csr_mode is passed positionally by the Python wrapper (pbr_batched_matmul_cuda),
-    // so no py::arg defaults are needed; pybind requires all-or-none annotations.
     m.def("pbr_spmm_cuda_i32_f32", &pbr_spmm_cuda_dispatch<int32_t, float>);
     m.def("pbr_spmm_cuda_i64_f32", &pbr_spmm_cuda_dispatch<int64_t, float>);
     m.def("pbr_spmm_cuda_i32_f64", &pbr_spmm_cuda_dispatch<int32_t, double>);
     m.def("pbr_spmm_cuda_i64_f64", &pbr_spmm_cuda_dispatch<int64_t, double>);
 
-    m.def("pbr_rowgroup_spmm_cuda_i32_f32", &pbr_rowgroup_spmm_cuda_dispatch<int32_t, float>);
-    m.def("pbr_rowgroup_spmm_cuda_i64_f32", &pbr_rowgroup_spmm_cuda_dispatch<int64_t, float>);
-    m.def("pbr_rowgroup_spmm_cuda_i32_f64", &pbr_rowgroup_spmm_cuda_dispatch<int32_t, double>);
-    m.def("pbr_rowgroup_spmm_cuda_i64_f64", &pbr_rowgroup_spmm_cuda_dispatch<int64_t, double>);
+    m.def("pbr_blockgroup_spmm_cuda_i32_f32", &pbr_blockgroup_spmm_cuda_dispatch<int32_t, float>);
+    m.def("pbr_blockgroup_spmm_cuda_i64_f32", &pbr_blockgroup_spmm_cuda_dispatch<int64_t, float>);
+    m.def("pbr_blockgroup_spmm_cuda_i32_f64", &pbr_blockgroup_spmm_cuda_dispatch<int32_t, double>);
+    m.def("pbr_blockgroup_spmm_cuda_i64_f64", &pbr_blockgroup_spmm_cuda_dispatch<int64_t, double>);
 }
