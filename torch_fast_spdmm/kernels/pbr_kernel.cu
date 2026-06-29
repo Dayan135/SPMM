@@ -640,6 +640,239 @@ int get_pbr_blockgroup_blocks_per_sm(int block_rows, int smem_size) {
 }
 
 
+// ===========================================================================
+// Column-group fusion kernel
+// ===========================================================================
+//
+// Grid: (num_groups, batch_size, feat_tiles)
+//   Same geometry as blockgroup; num_groups = sm_count × bps (occupancy query).
+//
+// Input arrays are pre-sorted by (col_origin, row_origin) at .to('cuda') time
+// (col_codes, col_coords, col_offsets, col_data).
+//
+// Each CUDA block processes PBR blocks [pbr_start, pbr_end) in column-major
+// order.  When col_origin changes, smem_X is reloaded — amortising the global
+// X load across all blocks that share the same col band.  smem_X holds ALL
+// BLOCK_COLS columns (not just active ones), so no packed-cols indirection is
+// needed in the inner loop and smem_X is reusable even when different blocks
+// in the same col band have different active-column patterns.
+//
+// smem_Y is zeroed and flushed (via atomicAdd) once per PBR block, because
+// consecutive blocks in the same col-band have different row_origins and
+// therefore write to different output rows.
+//
+// Smem layout (identical footprint to blockgroup):
+//   smem_X [BLOCK_COLS × p]  — X tile, reloaded only on col_origin change
+//   smem_Y [BLOCK_ROWS × p]  — per-block Y accumulator, flushed each block
+//
+// Sync structure (3 per block, minimum):
+//   sync_A — after optional smem_X reload; also covers previous flush's smem_Y reads
+//   sync_B — after smem_Y zero
+//   sync_C — after smem_Y accumulation (before flush reads)
+//
+// current_col is initialised to ~0u so the very first block always triggers
+// an smem_X reload, which sync_A then covers.
+
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS, int SMEM_SIZE, int THREADS_PER_BLOCK>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK)
+pbr_spmm_colgroup_kernel(
+    const uint32_t  num_groups,
+    const uint32_t  group_size,
+    const uint32_t  num_pbr_blocks,
+    const uint32_t  features,
+    const uint32_t  batch_size,
+    const uint32_t  cols,
+    const uint32_t  rows,
+    const int64_t*  __restrict__ col_codes,     // col-sorted block codes
+    const index_t*  __restrict__ col_coords,    // col-sorted: [row0,col0, row1,col1, ...]
+    const index_t*  __restrict__ col_offsets,   // col-sorted start offsets into col_data
+    const scalar_t* __restrict__ col_data,      // col-sorted block data
+    const scalar_t* __restrict__ X,
+    scalar_t*       __restrict__ Y
+) {
+    constexpr int p = SMEM_SIZE / (BLOCK_ROWS + BLOCK_COLS);
+
+    __shared__ scalar_t smem_X[BLOCK_COLS * p];
+    __shared__ scalar_t smem_Y[BLOCK_ROWS * p];
+
+    const uint32_t group_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_tile = blockIdx.z;
+    const uint32_t tx        = threadIdx.x;
+
+    if (group_idx >= num_groups || batch_idx >= batch_size) return;
+
+    const uint32_t base_f = feat_tile * (uint32_t)p;
+    if (base_f >= features) return;
+    const uint32_t cur_p = min((uint32_t)p, features - base_f);
+
+    const uint32_t pbr_start = group_idx * group_size;
+    const uint32_t pbr_end   = min(pbr_start + group_size, num_pbr_blocks);
+    if (pbr_start >= num_pbr_blocks) return;
+
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    // ~0u forces a reload on the very first block.
+    uint32_t current_col = ~0u;
+
+    for (uint32_t pbr_bi = pbr_start; pbr_bi < pbr_end; ++pbr_bi) {
+        const uint32_t col_origin = (uint32_t)col_coords[pbr_bi * 2 + 1];
+        const uint32_t row_origin = (uint32_t)col_coords[pbr_bi * 2];
+
+        // Reload smem_X when col_origin changes (always on first block).
+        if (col_origin != current_col) {
+            for (uint32_t i = tx; i < (uint32_t)(BLOCK_COLS * cur_p); i += THREADS_PER_BLOCK) {
+                const uint32_t c_idx = i / cur_p;
+                const uint32_t f_off = i % cur_p;
+                smem_X[c_idx * p + f_off] = X[(size_t)batch_idx * cols * features
+                                               + (size_t)(col_origin + c_idx) * features
+                                               + base_f + f_off];
+            }
+            current_col = col_origin;
+        }
+        // sync_A: smem_X visible + previous flush's smem_Y reads are complete.
+        __syncthreads();
+
+        // Zero smem_Y for this block.
+        for (uint32_t i = tx; i < (uint32_t)(BLOCK_ROWS * p); i += THREADS_PER_BLOCK)
+            smem_Y[i] = scalar_t(0);
+        // sync_B: smem_Y is zero.
+        __syncthreads();
+
+        const uint64_t code     = (uint64_t)col_codes[pbr_bi];
+        uint32_t       data_ptr = (uint32_t)col_offsets[pbr_bi];
+
+        // Accumulate: smem_Y += val × smem_X using direct column index c.
+        // No packed_cols indirection needed — smem_X holds all BLOCK_COLS columns.
+        #pragma unroll
+        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+            if (row_mask == 0) continue;
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_mask >> c) & 1) {
+                    const scalar_t val = __ldg(&col_data[data_ptr++]);
+                    for (uint32_t f = tx; f < cur_p; f += THREADS_PER_BLOCK)
+                        smem_Y[r * p + f] += val * smem_X[c * p + f];
+                }
+            }
+        }
+        // sync_C: smem_Y is complete before flush reads.
+        __syncthreads();
+
+        // Flush smem_Y → Y via atomicAdd.
+        #pragma unroll
+        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+            const uint32_t global_row = row_origin + r;
+            if (global_row >= rows) break;
+            for (uint32_t f = tx; f < cur_p; f += THREADS_PER_BLOCK)
+                atomicAdd(&Y[(size_t)batch_idx * rows * features
+                             + (size_t)global_row * features + base_f + f],
+                          smem_Y[r * p + f]);
+        }
+        // No sync here — sync_A of the next iteration covers this flush.
+    }
+}
+
+
+template <typename index_t, typename scalar_t>
+void launch_pbr_colgroup_spmm(
+    const int  num_groups,
+    const int  group_size,
+    const int  num_pbr_blocks,
+    const int  features,
+    const int  batch_size,
+    const int  cols,
+    const int  rows,
+    const int  runtime_block_rows,
+    const int  runtime_block_cols,
+    const int64_t*  col_codes,
+    const index_t*  col_coords,
+    const index_t*  col_offsets,
+    const scalar_t* col_data,
+    const scalar_t* X,
+    scalar_t*       Y,
+    cudaStream_t    stream,
+    int smem_size
+) {
+    if (num_groups == 0 || num_pbr_blocks == 0) return;
+
+    constexpr int THREADS_PER_BLOCK = 128;
+
+    const int p          = smem_size / (runtime_block_rows + runtime_block_cols);
+    const int feat_tiles = (features + p - 1) / p;
+
+    const dim3 grid((uint32_t)num_groups, (uint32_t)batch_size, (uint32_t)feat_tiles);
+    const dim3 block(THREADS_PER_BLOCK);
+
+    #define CG_LAUNCH(BR, BC, TS) \
+        pbr_spmm_colgroup_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK> \
+            <<<grid, block, 0, stream>>>( \
+                (uint32_t)num_groups,     (uint32_t)group_size, \
+                (uint32_t)num_pbr_blocks, (uint32_t)features,   \
+                (uint32_t)batch_size,     (uint32_t)cols,        \
+                (uint32_t)rows,                                  \
+                col_codes, col_coords, col_offsets, col_data, X, Y)
+
+    #define DISPATCH_SMEM_CG(BR, BC)                              \
+        do {                                                      \
+            if      (smem_size <= 512)  CG_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) CG_LAUNCH(BR, BC, 1024); \
+            else                        CG_LAUNCH(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_CG(8, 8);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_CG(4, 4);
+    else if (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_CG(2, 2);
+    else throw std::invalid_argument("Unsupported block size for PBR col-group SpMM.");
+
+    #undef CG_LAUNCH
+    #undef DISPATCH_SMEM_CG
+}
+
+template void launch_pbr_colgroup_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+
+
+// ---------------------------------------------------------------------------
+// Occupancy query — colgroup kernel
+// ---------------------------------------------------------------------------
+
+template <int BLOCK_ROW, int BLOCK_COL, int SMEM>
+static int _colgroup_bps() {
+    constexpr int THREADS_PER_BLOCK = 128;
+    int bps = 8;
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &bps,
+        pbr_spmm_colgroup_kernel<int32_t, float, BLOCK_ROW, BLOCK_COL, SMEM, THREADS_PER_BLOCK>,
+        THREADS_PER_BLOCK,
+        0);
+    return bps;
+}
+
+int get_pbr_colgroup_blocks_per_sm(int block_rows, int smem_size) {
+    if (block_rows == 2) {
+        if (smem_size <= 512)  return _colgroup_bps<2, 2,  512>();
+        if (smem_size <= 1024) return _colgroup_bps<2, 2, 1024>();
+        return                        _colgroup_bps<2, 2, 2048>();
+    }
+    if (block_rows == 4) {
+        if (smem_size <= 512)  return _colgroup_bps<4, 4,  512>();
+        if (smem_size <= 1024) return _colgroup_bps<4, 4, 1024>();
+        return                        _colgroup_bps<4, 4, 2048>();
+    }
+    if (block_rows == 8) {
+        if (smem_size <= 512)  return _colgroup_bps<8, 8,  512>();
+        if (smem_size <= 1024) return _colgroup_bps<8, 8, 1024>();
+        return                        _colgroup_bps<8, 8, 2048>();
+    }
+    return 8;
+}
+
+
 // --- CSR remainder kernel (warp-per-row / CSR-Vector) ---
 //
 // One warp (32 lanes) owns one output row for ALL features.

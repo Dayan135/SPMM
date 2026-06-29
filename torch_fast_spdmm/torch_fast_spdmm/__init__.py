@@ -24,11 +24,48 @@ def _pbr_to_method(self, device='cuda'):
         return self
 
     if target_device != 'cpu':
+        # Build col-sorted permutation of PBR blocks for the colgroup kernel.
+        # Col-major order: sort by (col_origin, row_origin) so consecutive blocks
+        # in the same column band can share smem_X across col_origin runs.
+        block_codes_np   = np.asarray(self.block_codes)
+        block_coords_np  = np.asarray(self.block_coords)
+        block_offsets_np = np.asarray(self.block_offsets)
+        block_data_np    = np.asarray(self.block_data)
+
+        n_blocks = len(block_codes_np)
+        if n_blocks > 0:
+            rows_arr   = block_coords_np[0::2]
+            cols_arr   = block_coords_np[1::2]
+            col_order  = np.lexsort((rows_arr, cols_arr))  # primary: col, secondary: row
+
+            col_codes_np  = block_codes_np[col_order].astype(np.int64)
+            col_coords_np = block_coords_np.reshape(-1, 2)[col_order].flatten()
+
+            popcounts        = np.array([bin(int(c)).count('1') for c in block_codes_np], dtype=np.int64)
+            col_data_lengths = popcounts[col_order]
+            col_offsets_np   = np.concatenate([[0], np.cumsum(col_data_lengths[:-1])]).astype(block_offsets_np.dtype)
+
+            col_data_np = np.empty(len(block_data_np), dtype=block_data_np.dtype)
+            for k, orig_i in enumerate(col_order):
+                src = int(block_offsets_np[orig_i])
+                n   = int(popcounts[orig_i])
+                dst = int(col_offsets_np[k])
+                col_data_np[dst:dst + n] = block_data_np[src:src + n]
+        else:
+            col_codes_np   = block_codes_np.astype(np.int64)
+            col_coords_np  = block_coords_np
+            col_offsets_np = block_offsets_np
+            col_data_np    = block_data_np
+
         self._gpu_meta = types.SimpleNamespace(
             codes       = _pin_to_device(self.block_codes,      device, dtype=np.int64),
             coords      = _pin_to_device(self.block_coords,     device),
             offsets     = _pin_to_device(self.block_offsets,    device),
             data        = _pin_to_device(self.block_data,       device),
+            col_codes   = _pin_to_device(col_codes_np,          device, dtype=np.int64),
+            col_coords  = _pin_to_device(col_coords_np,         device),
+            col_offsets = _pin_to_device(col_offsets_np,        device),
+            col_data    = _pin_to_device(col_data_np,           device),
             rem_indptr  = _pin_to_device(self.remainder_indptr,  device),
             rem_col_ind = _pin_to_device(self.remainder_col_ind, device),
             rem_vals    = _pin_to_device(self.remainder_data,    device),
@@ -74,8 +111,17 @@ def _build_blockgroup_cuda_dispatch():
         (torch.int64, torch.float64): core.pbr_blockgroup_spmm_cuda_i64_f64,
     }
 
+def _build_colgroup_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_colgroup_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_colgroup_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_colgroup_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_colgroup_spmm_cuda_i64_f64,
+    }
+
 _CUDA_KERNEL_DISPATCH = None
 _BLOCKGROUP_CUDA_KERNEL_DISPATCH = None
+_COLGROUP_CUDA_KERNEL_DISPATCH = None
 
 
 def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
@@ -161,6 +207,55 @@ def pbr_batched_matmul_blockgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int =
     )
 
 
+def pbr_batched_matmul_colgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+    """
+    Column-group fusion variant: PBR blocks pre-sorted by (col_origin, row_origin).
+    Groups share smem_X across all blocks with the same col_origin, amortising
+    the global X load for column-heavy sparsity patterns.
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
+    smem_size: 512 / 1024 / 2048 floats; determines p = smem_size / (block_rows + block_cols)
+    """
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+
+    global _COLGROUP_CUDA_KERNEL_DISPATCH
+    if _COLGROUP_CUDA_KERNEL_DISPATCH is None:
+        _COLGROUP_CUDA_KERNEL_DISPATCH = _build_colgroup_cuda_dispatch()
+
+    num_pbr_blocks = int(meta.col_codes.shape[0])
+    if num_pbr_blocks > 0:
+        device = meta.col_codes.device
+        sm_count      = torch.cuda.get_device_properties(device).multi_processor_count
+        bps           = core.pbr_colgroup_blocks_per_sm(pbr_mat.block_rows, smem_size)
+        target_groups = sm_count * bps
+        group_size    = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
+        num_groups    = (num_pbr_blocks + group_size - 1) // group_size
+    else:
+        num_groups = 0
+        group_size = 1
+
+    kernel = _COLGROUP_CUDA_KERNEL_DISPATCH[(meta.col_coords.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
+        num_groups,
+        group_size,
+        meta.col_codes,
+        meta.col_coords,
+        meta.col_offsets,
+        meta.col_data,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
+
+
 def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
                kernel: str = 'block') -> torch.Tensor:
     """
@@ -170,6 +265,7 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
     smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
     kernel:    'block'      — one CUDA block per PBR block; atomicAdd to Y
                'blockgroup' — one CUDA block per block-count-balanced group; atomicAdd to Y
+               'colgroup'   — same as blockgroup but col-sorted; amortises smem_X per col band
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -180,6 +276,8 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
         if kernel == 'blockgroup':
             y = pbr_batched_matmul_blockgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        elif kernel == 'colgroup':
+            y = pbr_batched_matmul_colgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
         else:
             y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
@@ -347,4 +445,5 @@ __all__ = [
     'pbr_batched_matmul_cpu',
     'pbr_batched_matmul_cuda',
     'pbr_batched_matmul_blockgroup_cuda',
+    'pbr_batched_matmul_colgroup_cuda',
 ]

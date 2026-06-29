@@ -87,9 +87,10 @@ def build(size: int, features: int, block: int, min_nnz: int,
 
     pbr_mat = pbr_mat.to("cuda")
 
-    if kernel == "blockgroup":
+    if kernel in ("blockgroup", "colgroup"):
         num_pbr_blocks = int(pbr_mat.accounted_blocks())
-        bps = _core.pbr_blockgroup_blocks_per_sm(block, smem_size)
+        bps_fn = _core.pbr_blockgroup_blocks_per_sm if kernel == "blockgroup" else _core.pbr_colgroup_blocks_per_sm
+        bps = bps_fn(block, smem_size)
         target_groups = sm_count * bps
         group_size = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
         num_groups = (num_pbr_blocks + group_size - 1) // group_size
@@ -114,7 +115,7 @@ def main() -> None:
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
     p.add_argument("--kernel",         type=str, default="block",
-                   choices=["block", "blockgroup"],
+                   choices=["block", "blockgroup", "colgroup"],
                    help="which PBR kernel to profile")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()

@@ -98,6 +98,7 @@ PBR_CONFIGS = [
 PBR_KERNELS = [
     pytest.param("block",      id="block"),
     pytest.param("blockgroup", id="blockgroup"),
+    pytest.param("colgroup",   id="colgroup"),
 ]
 
 # Adding a new baseline algorithm = one line here.
