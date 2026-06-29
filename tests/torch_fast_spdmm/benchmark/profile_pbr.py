@@ -10,9 +10,9 @@ Matrix profiles (--matrix-profile):
   scattered_1x8    — 1-row × 8-col scattered blocks
   scattered_2x4    — 2-row × 4-col scattered blocks
   scattered_dense2 — dense 2×2 block scatter (block_size=2)
-  diag_dd0.001     — diagonal blocks + noise (diag_density=0.001)
-  diag_dd0.002     — diagonal blocks + noise (diag_density=0.002)
-  diag_dd0.003     — diagonal blocks + noise (diag_density=0.003)
+  diag_dd0.017     — diagonal blocks + noise (64×64 blocks, diag_density=0.017)
+  diag_dd0.033     — diagonal blocks + noise (64×64 blocks, diag_density=0.033)
+  diag_dd0.05      — diagonal blocks + noise (64×64 blocks, diag_density=0.05)
 
 Kernels (--kernel):
   block    — original one-CUDA-block-per-PBR-block (default)
@@ -46,9 +46,9 @@ _MATRIX_PROFILES = {
     "scattered_1x8":    ("scattered", {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8}),
     "scattered_2x4":    ("scattered", {"block_size": 8, "rows_per_block": 2, "cols_per_block": 4}),
     "scattered_dense2": ("scattered", {"block_size": 2, "rows_per_block": 2, "cols_per_block": 2}),
-    "diag_dd0.001":     ("diag",      {"block_size": 8, "diag_density": 0.001, "off_diag_density": 0.000001}),
-    "diag_dd0.002":     ("diag",      {"block_size": 8, "diag_density": 0.002, "off_diag_density": 0.000001}),
-    "diag_dd0.003":     ("diag",      {"block_size": 8, "diag_density": 0.003, "off_diag_density": 0.000001}),
+    "diag_dd0.017":     ("diag",      {"block_size": 64, "diag_density": 0.017, "off_diag_density": 0.0000002}),
+    "diag_dd0.033":     ("diag",      {"block_size": 64, "diag_density": 0.033, "off_diag_density": 0.0000002}),
+    "diag_dd0.05":      ("diag",      {"block_size": 64, "diag_density": 0.05,  "off_diag_density": 0.0000002}),
 }
 
 
