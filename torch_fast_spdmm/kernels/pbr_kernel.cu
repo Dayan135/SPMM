@@ -873,6 +873,316 @@ int get_pbr_colgroup_blocks_per_sm(int block_rows, int smem_size) {
 }
 
 
+// ===========================================================================
+// Tile ("block of blocks") kernel
+// ===========================================================================
+//
+// Grid: (num_tiles, batch_size, feat_tiles)
+//   num_tiles — one CUDA block per tile; fully data-determined (no CPU scan
+//               needed at launch time -- tile_offsets.size(0)-1 from Python).
+//
+// A tile groups up to TILE_ROWS x TILE_COLS PBR blocks that together touch at
+// most TILE_ROWS distinct row-bands and TILE_COLS distinct col-bands. Unlike
+// rowgroup/colgroup (which reuse only smem_Y or only smem_X, one band at a
+// time, sequentially), this kernel holds ALL of the tile's row-bands and
+// col-bands resident in smem simultaneously, so smem_X is loaded ONCE and
+// smem_Y is flushed ONCE per tile regardless of block count -- 2 syncthreads
+// total per tile, vs ~2-3 per PBR block for rowgroup/colgroup.
+//
+// Which PBR blocks land in which tile (and at which local row/col slot) is
+// decided entirely on the host by a pluggable strategy (see _TILE_STRATEGIES
+// in __init__.py: 'grid' partitions by fixed row/col-band windows; 'greedy'
+// clusters by density to also catch non-grid-aligned reuse). This kernel is
+// agnostic to that choice -- it only consumes the resulting contract:
+//   block_codes/block_offsets/block_data — tile-ordered (like block/rowgroup)
+//   tile_offsets      [num_tiles+1]        — CSR range into the block_* arrays
+//   tile_row_origins  [num_tiles*TILE_ROWS]  — absolute row origin per row-slot, -1 = unused
+//   tile_col_origins  [num_tiles*TILE_COLS]  — absolute col origin per col-slot, -1 = unused
+//   tile_row_local/tile_col_local            — per (tile-ordered) block, its row/col slot
+//
+// Smem layout:
+//   smem_X [TILE_COLS*BLOCK_COLS × p]  — all col-slots, loaded once
+//   smem_Y [TILE_ROWS*BLOCK_ROWS × p]  — all row-slots, zeroed once, flushed once
+//
+// v1 only supports BLOCK_ROWS=BLOCK_COLS=8 (see launch_pbr_tile_spmm) to keep
+// the tile_shape x smem_tier template instantiation count bounded.
+
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS, int TILE_ROWS, int TILE_COLS,
+          int SMEM_SIZE, int THREADS_PER_BLOCK>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK)
+pbr_spmm_tile_kernel(
+    const uint32_t  num_tiles,
+    const uint32_t  features,
+    const uint32_t  batch_size,
+    const uint32_t  cols,
+    const uint32_t  rows,
+    const int64_t*  __restrict__ block_codes,       // tile-ordered
+    const index_t*  __restrict__ block_offsets,     // tile-ordered, CSR offsets into block_data
+    const scalar_t* __restrict__ block_data,        // tile-ordered
+    const index_t*  __restrict__ tile_offsets,      // [num_tiles+1]
+    const index_t*  __restrict__ tile_row_origins,  // [num_tiles*TILE_ROWS], -1 = unused
+    const index_t*  __restrict__ tile_col_origins,  // [num_tiles*TILE_COLS], -1 = unused
+    const uint8_t*  __restrict__ tile_row_local,    // per tile-ordered block
+    const uint8_t*  __restrict__ tile_col_local,    // per tile-ordered block
+    const scalar_t* __restrict__ X,
+    scalar_t*       __restrict__ Y
+) {
+    constexpr int p = SMEM_SIZE / (TILE_ROWS * BLOCK_ROWS + TILE_COLS * BLOCK_COLS);
+
+    __shared__ scalar_t smem_X[TILE_COLS * BLOCK_COLS * p];
+    __shared__ scalar_t smem_Y[TILE_ROWS * BLOCK_ROWS * p];
+    __shared__ index_t  s_row_origin[TILE_ROWS];
+    __shared__ index_t  s_col_origin[TILE_COLS];
+
+    const uint32_t tile_idx  = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_tile = blockIdx.z;
+    const uint32_t tx        = threadIdx.x;
+
+    if (tile_idx >= num_tiles || batch_idx >= batch_size) return;
+
+    const uint32_t base_f = feat_tile * (uint32_t)p;
+    if (base_f >= features) return;
+    const uint32_t cur_p = min((uint32_t)p, features - base_f);
+
+    const index_t blk_start = tile_offsets[tile_idx];
+    const index_t blk_end   = tile_offsets[tile_idx + 1];
+
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    if (tx < (uint32_t)TILE_ROWS) s_row_origin[tx] = tile_row_origins[tile_idx * TILE_ROWS + tx];
+    if (tx < (uint32_t)TILE_COLS) s_col_origin[tx] = tile_col_origins[tile_idx * TILE_COLS + tx];
+
+    // Load smem_X: every col-slot's full BLOCK_COLS x cur_p band, once. Slots
+    // with no data in this tile (-1 origin) are left uninitialized -- no
+    // block's col_local ever indexes an unused slot, so it's never read.
+    for (uint32_t i = tx; i < (uint32_t)(TILE_COLS * BLOCK_COLS * cur_p); i += THREADS_PER_BLOCK) {
+        const uint32_t slot_and_c = i / cur_p;
+        const uint32_t f_off      = i % cur_p;
+        const uint32_t col_slot   = slot_and_c / BLOCK_COLS;
+        const uint32_t c_in_block = slot_and_c % BLOCK_COLS;
+        const index_t  col_origin = tile_col_origins[tile_idx * TILE_COLS + col_slot];
+        if (col_origin >= 0) {
+            smem_X[slot_and_c * p + f_off] = X[(size_t)batch_idx * cols * features
+                                                + (size_t)(col_origin + c_in_block) * features
+                                                + base_f + f_off];
+        }
+    }
+
+    // Zero smem_Y, once.
+    for (uint32_t i = tx; i < (uint32_t)(TILE_ROWS * BLOCK_ROWS * p); i += THREADS_PER_BLOCK)
+        smem_Y[i] = scalar_t(0);
+
+    // Covers: smem_X fully loaded, smem_Y fully zeroed, s_row/col_origin visible.
+    __syncthreads();
+
+    // Accumulate every PBR block in the tile. No sync between blocks: smem_X
+    // is never rewritten mid-tile (unlike rowgroup/colgroup, which reload it
+    // per block and so must sync between iterations), and smem_Y[row_slot*
+    // BLOCK_ROWS+r][f] is always touched by the same thread (f mod
+    // THREADS_PER_BLOCK) regardless of which block contributes to it, so
+    // there's no cross-thread write hazard to guard against either.
+    for (index_t bi = blk_start; bi < blk_end; ++bi) {
+        const uint64_t code     = (uint64_t)block_codes[bi];
+        uint32_t       data_ptr = (uint32_t)block_offsets[bi];
+        const uint32_t row_slot = tile_row_local[bi];
+        const uint32_t col_slot = tile_col_local[bi];
+
+        #pragma unroll
+        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+            if (row_mask == 0) continue;
+            const uint32_t smem_row = row_slot * BLOCK_ROWS + r;
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_mask >> c) & 1) {
+                    const scalar_t val = __ldg(&block_data[data_ptr++]);
+                    const uint32_t smem_col = col_slot * BLOCK_COLS + c;
+                    for (uint32_t f = tx; f < cur_p; f += THREADS_PER_BLOCK)
+                        smem_Y[smem_row * p + f] += val * smem_X[smem_col * p + f];
+                }
+            }
+        }
+    }
+
+    // smem_Y fully accumulated before the flush reads it.
+    __syncthreads();
+
+    // Flush smem_Y -> Y once per tile, guarded per row-slot by the origin
+    // sentinel (an atomicAdd of 0 is still a real atomic RMW, worth skipping
+    // for tiles -- especially 'greedy'-built ones -- with unused row-slots).
+    #pragma unroll
+    for (uint32_t r_slot = 0; r_slot < (uint32_t)TILE_ROWS; ++r_slot) {
+        const index_t row_origin = s_row_origin[r_slot];
+        if (row_origin < 0) continue;
+        #pragma unroll
+        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+            const uint32_t global_row = (uint32_t)row_origin + r;
+            if (global_row >= rows) break;
+            const uint32_t smem_row = r_slot * BLOCK_ROWS + r;
+            for (uint32_t f = tx; f < cur_p; f += THREADS_PER_BLOCK)
+                atomicAdd(&Y[(size_t)batch_idx * rows * features
+                             + (size_t)global_row * features + base_f + f],
+                          smem_Y[smem_row * p + f]);
+        }
+    }
+}
+
+
+template <typename index_t, typename scalar_t>
+void launch_pbr_tile_spmm(
+    const int  num_tiles,
+    const int  features,
+    const int  batch_size,
+    const int  cols,
+    const int  rows,
+    const int  runtime_block_rows,
+    const int  runtime_block_cols,
+    const int  tile_rows,
+    const int  tile_cols,
+    const int64_t*  block_codes,
+    const index_t*  block_offsets,
+    const scalar_t* block_data,
+    const index_t*  tile_offsets,
+    const index_t*  tile_row_origins,
+    const index_t*  tile_col_origins,
+    const uint8_t*  tile_row_local,
+    const uint8_t*  tile_col_local,
+    const scalar_t* X,
+    scalar_t*       Y,
+    cudaStream_t    stream,
+    int smem_size
+) {
+    if (num_tiles == 0) return;
+    if (runtime_block_rows != 8 || runtime_block_cols != 8)
+        throw std::invalid_argument("PBR tile SpMM currently only supports block_rows=block_cols=8.");
+
+    constexpr int THREADS_PER_BLOCK = 128;
+    constexpr int BR = 8, BC = 8;
+
+    #define TILE_LAUNCH(TR, TC, TS)                                                            \
+        do {                                                                                   \
+            constexpr int p      = TS / (TR * BR + TC * BC);                                   \
+            const int feat_tiles = (features + p - 1) / p;                                     \
+            const dim3 grid((uint32_t)num_tiles, (uint32_t)batch_size, (uint32_t)feat_tiles);  \
+            const dim3 block(THREADS_PER_BLOCK);                                               \
+            pbr_spmm_tile_kernel<index_t, scalar_t, BR, BC, TR, TC, TS, THREADS_PER_BLOCK>      \
+                <<<grid, block, 0, stream>>>(                                                   \
+                    (uint32_t)num_tiles, (uint32_t)features, (uint32_t)batch_size,              \
+                    (uint32_t)cols, (uint32_t)rows,                                             \
+                    block_codes, block_offsets, block_data,                                     \
+                    tile_offsets, tile_row_origins, tile_col_origins,                           \
+                    tile_row_local, tile_col_local, X, Y);                                      \
+        } while (0)
+
+    #define DISPATCH_TILE_SMEM(TR, TC)                                \
+        do {                                                          \
+            if      (smem_size <= 512)  TILE_LAUNCH(TR, TC,  512);   \
+            else if (smem_size <= 1024) TILE_LAUNCH(TR, TC, 1024);   \
+            else                        TILE_LAUNCH(TR, TC, 2048);   \
+        } while (0)
+
+    if      (tile_rows == 1 && tile_cols == 1) DISPATCH_TILE_SMEM(1, 1);
+    else if (tile_rows == 1 && tile_cols == 2) DISPATCH_TILE_SMEM(1, 2);
+    else if (tile_rows == 2 && tile_cols == 1) DISPATCH_TILE_SMEM(2, 1);
+    else if (tile_rows == 1 && tile_cols == 4) DISPATCH_TILE_SMEM(1, 4);
+    else if (tile_rows == 4 && tile_cols == 1) DISPATCH_TILE_SMEM(4, 1);
+    else if (tile_rows == 2 && tile_cols == 2) DISPATCH_TILE_SMEM(2, 2);
+    else if (tile_rows == 2 && tile_cols == 4) DISPATCH_TILE_SMEM(2, 4);
+    else if (tile_rows == 4 && tile_cols == 2) DISPATCH_TILE_SMEM(4, 2);
+    else if (tile_rows == 4 && tile_cols == 4) DISPATCH_TILE_SMEM(4, 4);
+    else if (tile_rows == 8 && tile_cols == 8) DISPATCH_TILE_SMEM(8, 8);
+    else throw std::invalid_argument("Unsupported tile shape for PBR tile SpMM.");
+
+    #undef TILE_LAUNCH
+    #undef DISPATCH_TILE_SMEM
+}
+
+template void launch_pbr_tile_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const float*,  const int32_t*, const int32_t*, const int32_t*, const uint8_t*, const uint8_t*, const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_tile_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const float*,  const int64_t*, const int64_t*, const int64_t*, const uint8_t*, const uint8_t*, const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_tile_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const double*, const int32_t*, const int32_t*, const int32_t*, const uint8_t*, const uint8_t*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_tile_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const double*, const int64_t*, const int64_t*, const int64_t*, const uint8_t*, const uint8_t*, const double*, double*, cudaStream_t, int);
+
+
+// ---------------------------------------------------------------------------
+// Occupancy query — tile kernel
+// ---------------------------------------------------------------------------
+// dynamicSMemSize=0: kernel uses only static __shared__ arrays (the same
+// caveat already hit once for rowgroup -- see LAST_EXPERIMENTS.md).
+
+template <int TR, int TC, int BR, int BC, int SMEM>
+static int _tile_bps() {
+    constexpr int THREADS_PER_BLOCK = 128;
+    int bps = 8;
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &bps,
+        pbr_spmm_tile_kernel<int32_t, float, BR, BC, TR, TC, SMEM, THREADS_PER_BLOCK>,
+        THREADS_PER_BLOCK,
+        0);
+    return bps;
+}
+
+// block_rows is accepted for signature symmetry with get_pbr_rowgroup/colgroup_blocks_per_sm;
+// v1 only supports 8x8 PBR blocks for the tile kernel (see launch_pbr_tile_spmm), so it's unused.
+int get_pbr_tile_blocks_per_sm(int tile_rows, int tile_cols, int block_rows, int smem_size) {
+    (void)block_rows;
+    constexpr int BR = 8, BC = 8;
+
+    if (tile_rows == 1 && tile_cols == 1) {
+        if (smem_size <= 512)  return _tile_bps<1, 1, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<1, 1, BR, BC, 1024>();
+        return                        _tile_bps<1, 1, BR, BC, 2048>();
+    }
+    if (tile_rows == 1 && tile_cols == 2) {
+        if (smem_size <= 512)  return _tile_bps<1, 2, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<1, 2, BR, BC, 1024>();
+        return                        _tile_bps<1, 2, BR, BC, 2048>();
+    }
+    if (tile_rows == 2 && tile_cols == 1) {
+        if (smem_size <= 512)  return _tile_bps<2, 1, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<2, 1, BR, BC, 1024>();
+        return                        _tile_bps<2, 1, BR, BC, 2048>();
+    }
+    if (tile_rows == 1 && tile_cols == 4) {
+        if (smem_size <= 512)  return _tile_bps<1, 4, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<1, 4, BR, BC, 1024>();
+        return                        _tile_bps<1, 4, BR, BC, 2048>();
+    }
+    if (tile_rows == 4 && tile_cols == 1) {
+        if (smem_size <= 512)  return _tile_bps<4, 1, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<4, 1, BR, BC, 1024>();
+        return                        _tile_bps<4, 1, BR, BC, 2048>();
+    }
+    if (tile_rows == 2 && tile_cols == 2) {
+        if (smem_size <= 512)  return _tile_bps<2, 2, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<2, 2, BR, BC, 1024>();
+        return                        _tile_bps<2, 2, BR, BC, 2048>();
+    }
+    if (tile_rows == 2 && tile_cols == 4) {
+        if (smem_size <= 512)  return _tile_bps<2, 4, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<2, 4, BR, BC, 1024>();
+        return                        _tile_bps<2, 4, BR, BC, 2048>();
+    }
+    if (tile_rows == 4 && tile_cols == 2) {
+        if (smem_size <= 512)  return _tile_bps<4, 2, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<4, 2, BR, BC, 1024>();
+        return                        _tile_bps<4, 2, BR, BC, 2048>();
+    }
+    if (tile_rows == 4 && tile_cols == 4) {
+        if (smem_size <= 512)  return _tile_bps<4, 4, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<4, 4, BR, BC, 1024>();
+        return                        _tile_bps<4, 4, BR, BC, 2048>();
+    }
+    if (tile_rows == 8 && tile_cols == 8) {
+        if (smem_size <= 512)  return _tile_bps<8, 8, BR, BC,  512>();
+        if (smem_size <= 1024) return _tile_bps<8, 8, BR, BC, 1024>();
+        return                        _tile_bps<8, 8, BR, BC, 2048>();
+    }
+    return 8;
+}
+
+
 // --- CSR remainder kernel (warp-per-row / CSR-Vector) ---
 //
 // One warp (32 lanes) owns one output row for ALL features.

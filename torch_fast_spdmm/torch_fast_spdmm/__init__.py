@@ -1,4 +1,5 @@
 import types
+from collections import defaultdict
 from dataclasses import dataclass
 import numpy as np
 import scipy.sparse as sp
@@ -12,6 +13,29 @@ pbr_batched_matmul_cpu = core.pbr_batched_matmul_cpu
 
 def _pin_to_device(arr, device, dtype=None):
     return torch.from_numpy(np.asarray(arr, dtype=dtype)).pin_memory().to(device, non_blocking=True)
+
+
+def _reorder_pbr_arrays(block_codes_np, block_offsets_np, block_data_np, order):
+    """Permute a PBR block array (codes/offsets/data) by `order`, recomputing
+    block_offsets (a CSR-style prefix sum into block_data) from the permuted
+    codes' popcounts. Shared by colgroup's col-sort and the tile kernel's
+    per-shape tile-sort -- both need the same "reorder blocks, repack data" step."""
+    if len(order) == 0:
+        return block_codes_np.astype(np.int64), block_offsets_np, block_data_np
+
+    codes_out = block_codes_np[order].astype(np.int64)
+    popcounts = np.array([bin(int(c)).count('1') for c in block_codes_np], dtype=np.int64)
+    lengths_out = popcounts[order]
+    offsets_out = np.concatenate([[0], np.cumsum(lengths_out[:-1])]).astype(block_offsets_np.dtype)
+
+    data_out = np.empty(len(block_data_np), dtype=block_data_np.dtype)
+    for k, orig_i in enumerate(order):
+        src = int(block_offsets_np[orig_i])
+        n = int(popcounts[orig_i])
+        dst = int(offsets_out[k])
+        data_out[dst:dst + n] = block_data_np[src:src + n]
+
+    return codes_out, offsets_out, data_out
 
 
 def _pbr_to_method(self, device='cuda'):
@@ -38,19 +62,9 @@ def _pbr_to_method(self, device='cuda'):
             cols_arr   = block_coords_np[1::2]
             col_order  = np.lexsort((rows_arr, cols_arr))  # primary: col, secondary: row
 
-            col_codes_np  = block_codes_np[col_order].astype(np.int64)
+            col_codes_np, col_offsets_np, col_data_np = _reorder_pbr_arrays(
+                block_codes_np, block_offsets_np, block_data_np, col_order)
             col_coords_np = block_coords_np.reshape(-1, 2)[col_order].flatten()
-
-            popcounts        = np.array([bin(int(c)).count('1') for c in block_codes_np], dtype=np.int64)
-            col_data_lengths = popcounts[col_order]
-            col_offsets_np   = np.concatenate([[0], np.cumsum(col_data_lengths[:-1])]).astype(block_offsets_np.dtype)
-
-            col_data_np = np.empty(len(block_data_np), dtype=block_data_np.dtype)
-            for k, orig_i in enumerate(col_order):
-                src = int(block_offsets_np[orig_i])
-                n   = int(popcounts[orig_i])
-                dst = int(col_offsets_np[k])
-                col_data_np[dst:dst + n] = block_data_np[src:src + n]
         else:
             col_codes_np   = block_codes_np.astype(np.int64)
             col_coords_np  = block_coords_np
@@ -69,6 +83,7 @@ def _pbr_to_method(self, device='cuda'):
             rem_indptr  = _pin_to_device(self.remainder_indptr,  device),
             rem_col_ind = _pin_to_device(self.remainder_col_ind, device),
             rem_vals    = _pin_to_device(self.remainder_data,    device),
+            tile_cache  = {},
         )
         torch.cuda.synchronize(device)
     else:
@@ -256,8 +271,320 @@ def pbr_batched_matmul_colgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0
     )
 
 
+# ===========================================================================
+# Tile ("block of blocks") kernel: pluggable PBR-block-to-tile grouping
+# ===========================================================================
+#
+# A tile is a group of up to tile_rows x tile_cols PBR blocks sharing at most
+# tile_rows distinct row-bands and tile_cols distinct col-bands, processed by
+# one CUDA block with both smem_X and smem_Y resident (and flushed once) for
+# the whole tile -- rowgroup/colgroup only ever reuse one of the two axes.
+#
+# Grouping strategy is decoupled from the kernel: any strategy function below
+# only needs to produce a TileMeta (see _empty_tile_meta) satisfying this
+# contract, and the CUDA kernel/bindings are entirely agnostic to how it was
+# built. To add a strategy: write a builder with the signature
+# (rows_arr, cols_arr, block_rows, block_cols, tile_rows, tile_cols) -> TileMeta
+# and register it in _TILE_STRATEGIES.
+
+def _empty_tile_meta():
+    return types.SimpleNamespace(
+        tile_block_order=np.empty(0, dtype=np.int64),
+        tile_offsets=np.zeros(1, dtype=np.int64),
+        tile_row_origins=np.empty(0, dtype=np.int64),
+        tile_col_origins=np.empty(0, dtype=np.int64),
+        tile_row_local=np.empty(0, dtype=np.uint8),
+        tile_col_local=np.empty(0, dtype=np.uint8),
+    )
+
+
+def _finalize_tile_meta(rows_arr, cols_arr, tile_of_block, tile_rows, tile_cols):
+    """Turn an arbitrary per-block tile-id labeling into the TileMeta contract:
+    group blocks by tile_of_block, then dedupe each tile's row/col origins into
+    local slots. Not vectorized (a per-tile np.unique) -- fine for 'greedy',
+    which is already O(n_blocks x capacity) and Python-side; 'grid' has a
+    fully-vectorized fast path instead since its slot assignment is arithmetic.
+    """
+    n_blocks = len(rows_arr)
+    order = np.argsort(tile_of_block, kind='stable')
+    sorted_tile_id = tile_of_block[order]
+
+    change = np.empty(n_blocks, dtype=bool)
+    change[0] = True
+    change[1:] = sorted_tile_id[1:] != sorted_tile_id[:-1]
+    tile_starts = np.flatnonzero(change)
+    num_tiles = len(tile_starts)
+    tile_offsets = np.append(tile_starts, n_blocks).astype(np.int64)
+
+    tile_row_origins = np.full(num_tiles * tile_rows, -1, dtype=np.int64)
+    tile_col_origins = np.full(num_tiles * tile_cols, -1, dtype=np.int64)
+    tile_row_local = np.empty(n_blocks, dtype=np.uint8)
+    tile_col_local = np.empty(n_blocks, dtype=np.uint8)
+
+    sorted_rows = rows_arr[order]
+    sorted_cols = cols_arr[order]
+
+    for t in range(num_tiles):
+        lo, hi = tile_offsets[t], tile_offsets[t + 1]
+        uniq_r, r_local = np.unique(sorted_rows[lo:hi], return_inverse=True)
+        uniq_c, c_local = np.unique(sorted_cols[lo:hi], return_inverse=True)
+        if len(uniq_r) > tile_rows or len(uniq_c) > tile_cols:
+            raise ValueError(
+                f"tile {t} exceeds capacity: {len(uniq_r)} rows / {len(uniq_c)} cols "
+                f"> capacity {tile_rows}x{tile_cols} -- tile_strategy bug")
+        tile_row_origins[t * tile_rows: t * tile_rows + len(uniq_r)] = uniq_r
+        tile_col_origins[t * tile_cols: t * tile_cols + len(uniq_c)] = uniq_c
+        tile_row_local[lo:hi] = r_local.astype(np.uint8)
+        tile_col_local[lo:hi] = c_local.astype(np.uint8)
+
+    return types.SimpleNamespace(
+        tile_block_order=order.astype(np.int64),
+        tile_offsets=tile_offsets,
+        tile_row_origins=tile_row_origins,
+        tile_col_origins=tile_col_origins,
+        tile_row_local=tile_row_local,
+        tile_col_local=tile_col_local,
+    )
+
+
+def _build_tile_meta_grid(rows_arr, cols_arr, block_rows, block_cols, tile_rows, tile_cols):
+    """Fixed grid partition: bucket PBR blocks by (row_band // tile_rows, col_band
+    // tile_cols). Cheap (one lexsort, fully vectorized), but only catches reuse
+    among blocks that already fall in the same fixed row/col-band window --
+    e.g. a scattered pattern with populated bands {0, 2} under tile_rows=2 lands
+    band 0 and band 2 in different tiles even though a 2-row tile could hold both.
+    """
+    n_blocks = len(rows_arr)
+    if n_blocks == 0:
+        return _empty_tile_meta()
+
+    row_band = rows_arr // block_rows
+    col_band = cols_arr // block_cols
+    tile_row_id = row_band // tile_rows
+    tile_col_id = col_band // tile_cols
+    row_local_full = (row_band % tile_rows).astype(np.uint8)
+    col_local_full = (col_band % tile_cols).astype(np.uint8)
+
+    order = np.lexsort((tile_col_id, tile_row_id))
+    s_tile_row = tile_row_id[order]
+    s_tile_col = tile_col_id[order]
+
+    change = np.empty(n_blocks, dtype=bool)
+    change[0] = True
+    change[1:] = (s_tile_row[1:] != s_tile_row[:-1]) | (s_tile_col[1:] != s_tile_col[:-1])
+    tile_starts = np.flatnonzero(change)
+    num_tiles = len(tile_starts)
+    tile_offsets = np.append(tile_starts, n_blocks).astype(np.int64)
+
+    tile_row_local = row_local_full[order]
+    tile_col_local = col_local_full[order]
+
+    tile_row_origins = np.full(num_tiles * tile_rows, -1, dtype=np.int64)
+    tile_col_origins = np.full(num_tiles * tile_cols, -1, dtype=np.int64)
+
+    tile_idx_per_block = np.repeat(np.arange(num_tiles), np.diff(tile_offsets))
+    tile_row_origins[tile_idx_per_block * tile_rows + tile_row_local] = row_band[order] * block_rows
+    tile_col_origins[tile_idx_per_block * tile_cols + tile_col_local] = col_band[order] * block_cols
+
+    return types.SimpleNamespace(
+        tile_block_order=order.astype(np.int64),
+        tile_offsets=tile_offsets,
+        tile_row_origins=tile_row_origins,
+        tile_col_origins=tile_col_origins,
+        tile_row_local=tile_row_local,
+        tile_col_local=tile_col_local,
+    )
+
+
+def _build_tile_meta_greedy(rows_arr, cols_arr, block_rows, block_cols, tile_rows, tile_cols):
+    """Seed-and-grow density-maximizing clustering: repeatedly seed a tile from
+    an unassigned block, then greedily add whichever row-band or col-band
+    (within capacity) covers the most additional unassigned blocks, until full
+    or no beneficial candidate remains. Catches scattered/permuted reuse a
+    fixed grid partition misses (e.g. populated row-bands {0, 2} both land in
+    one tile if that's where the density is), at the cost of not being a
+    single vectorized pass -- O(n_blocks x capacity) with plain Python sets.
+    Not globally optimal (max-edge-biclique-cover is NP-hard); a bounded local
+    heuristic is enough to beat a fixed grid on non-grid-aligned sparsity.
+    """
+    n_blocks = len(rows_arr)
+    if n_blocks == 0:
+        return _empty_tile_meta()
+
+    row_band = (rows_arr // block_rows).astype(np.int64)
+    col_band = (cols_arr // block_cols).astype(np.int64)
+
+    blocks_by_row = defaultdict(set)
+    blocks_by_col = defaultdict(set)
+    for i in range(n_blocks):
+        blocks_by_row[int(row_band[i])].add(i)
+        blocks_by_col[int(col_band[i])].add(i)
+
+    unassigned = set(range(n_blocks))
+    tile_of_block = np.empty(n_blocks, dtype=np.int64)
+    next_tile_id = 0
+
+    for seed in range(n_blocks):
+        if seed not in unassigned:
+            continue
+
+        row_set = {int(row_band[seed])}
+        col_set = {int(col_band[seed])}
+
+        while len(row_set) < tile_rows or len(col_set) < tile_cols:
+            best_gain, best_kind, best_val = 0, None, None
+
+            if len(row_set) < tile_rows:
+                candidate_rows = set()
+                for c in col_set:
+                    candidate_rows.update(int(row_band[i]) for i in blocks_by_col[c] if i in unassigned)
+                candidate_rows -= row_set
+                for r in candidate_rows:
+                    gain = sum(1 for i in blocks_by_row[r]
+                               if i in unassigned and int(col_band[i]) in col_set)
+                    if gain > best_gain:
+                        best_gain, best_kind, best_val = gain, 'row', r
+
+            if len(col_set) < tile_cols:
+                candidate_cols = set()
+                for r in row_set:
+                    candidate_cols.update(int(col_band[i]) for i in blocks_by_row[r] if i in unassigned)
+                candidate_cols -= col_set
+                for c in candidate_cols:
+                    gain = sum(1 for i in blocks_by_col[c]
+                               if i in unassigned and int(row_band[i]) in row_set)
+                    if gain > best_gain:
+                        best_gain, best_kind, best_val = gain, 'col', c
+
+            if best_kind is None:
+                break
+            elif best_kind == 'row':
+                row_set.add(best_val)
+            else:
+                col_set.add(best_val)
+
+        covered = {i for r in row_set for i in blocks_by_row[r]
+                   if i in unassigned and int(col_band[i]) in col_set}
+        if not covered:
+            covered = {seed}
+
+        for i in covered:
+            tile_of_block[i] = next_tile_id
+            unassigned.discard(i)
+        next_tile_id += 1
+
+    return _finalize_tile_meta(rows_arr, cols_arr, tile_of_block, tile_rows, tile_cols)
+
+
+_TILE_STRATEGIES = {
+    'grid':   _build_tile_meta_grid,
+    'greedy': _build_tile_meta_greedy,
+}
+
+
+def _build_tile_meta(pbr_mat, tile_rows, tile_cols, tile_strategy, device):
+    cache = pbr_mat._gpu_meta.tile_cache
+    key = (tile_rows, tile_cols, tile_strategy)
+    if key in cache:
+        return cache[key]
+
+    block_codes_np   = np.asarray(pbr_mat.block_codes)
+    block_coords_np  = np.asarray(pbr_mat.block_coords)
+    block_offsets_np = np.asarray(pbr_mat.block_offsets)
+    block_data_np    = np.asarray(pbr_mat.block_data)
+    n_blocks = len(block_codes_np)
+
+    if n_blocks == 0:
+        tile_meta = _empty_tile_meta()
+    else:
+        rows_arr = block_coords_np[0::2].astype(np.int64)
+        cols_arr = block_coords_np[1::2].astype(np.int64)
+        builder = _TILE_STRATEGIES[tile_strategy]
+        tile_meta = builder(rows_arr, cols_arr, pbr_mat.block_rows, pbr_mat.block_cols, tile_rows, tile_cols)
+
+    tile_block_codes_np, tile_block_offsets_np, tile_block_data_np = _reorder_pbr_arrays(
+        block_codes_np, block_offsets_np, block_data_np, tile_meta.tile_block_order)
+
+    index_dtype = block_offsets_np.dtype
+    gpu_meta = types.SimpleNamespace(
+        block_codes      = _pin_to_device(tile_block_codes_np,      device, dtype=np.int64),
+        block_offsets    = _pin_to_device(tile_block_offsets_np,    device),
+        block_data       = _pin_to_device(tile_block_data_np,       device),
+        tile_offsets     = _pin_to_device(tile_meta.tile_offsets,     device, dtype=index_dtype),
+        tile_row_origins = _pin_to_device(tile_meta.tile_row_origins, device, dtype=index_dtype),
+        tile_col_origins = _pin_to_device(tile_meta.tile_col_origins, device, dtype=index_dtype),
+        tile_row_local   = _pin_to_device(tile_meta.tile_row_local,   device, dtype=np.uint8),
+        tile_col_local   = _pin_to_device(tile_meta.tile_col_local,   device, dtype=np.uint8),
+    )
+    cache[key] = gpu_meta
+    return gpu_meta
+
+
+def _build_tile_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_tile_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_tile_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_tile_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_tile_spmm_cuda_i64_f64,
+    }
+
+_TILE_CUDA_KERNEL_DISPATCH = None
+
+
+def pbr_batched_matmul_tile_cuda(pbr_mat, x: torch.Tensor, tile_rows: int = 2, tile_cols: int = 2,
+                                  tile_strategy: str = 'grid', csr_mode: int = 0,
+                                  smem_size: int = 2048) -> torch.Tensor:
+    """
+    Block-of-blocks (2D tile) fusion variant: one CUDA block per tile of up to
+    tile_rows x tile_cols PBR blocks. Both smem_X and smem_Y are cached for the
+    whole tile and flushed once at the end -- rowgroup/colgroup only reuse one
+    of the two axes. tile_strategy picks how PBR blocks are grouped into tiles
+    ('grid': fixed row/col-band partition; 'greedy': density-maximizing
+    clustering -- see _TILE_STRATEGIES). Grid size is fully data-determined
+    (one CUDA block per non-empty tile); no group_size/occupancy tuning needed.
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
+    smem_size: 512 / 1024 / 2048 floats; p = smem_size / (tile_rows*block_rows + tile_cols*block_cols)
+    """
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+    if tile_strategy not in _TILE_STRATEGIES:
+        raise ValueError(f"Unknown tile_strategy {tile_strategy!r}; choose from {list(_TILE_STRATEGIES)}")
+
+    tile_meta = _build_tile_meta(pbr_mat, tile_rows, tile_cols, tile_strategy, meta.codes.device)
+
+    global _TILE_CUDA_KERNEL_DISPATCH
+    if _TILE_CUDA_KERNEL_DISPATCH is None:
+        _TILE_CUDA_KERNEL_DISPATCH = _build_tile_cuda_dispatch()
+
+    kernel = _TILE_CUDA_KERNEL_DISPATCH[(tile_meta.block_offsets.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
+        tile_rows,
+        tile_cols,
+        tile_meta.block_codes,
+        tile_meta.block_offsets,
+        tile_meta.block_data,
+        tile_meta.tile_offsets,
+        tile_meta.tile_row_origins,
+        tile_meta.tile_col_origins,
+        tile_meta.tile_row_local,
+        tile_meta.tile_col_local,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
+
+
 def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
-               kernel: str = 'block') -> torch.Tensor:
+               kernel: str = 'block', tile_rows: int = 2, tile_cols: int = 2,
+               tile_strategy: str = 'grid') -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
@@ -266,6 +593,10 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
     kernel:    'block'    — one CUDA block per PBR block; atomicAdd to Y
                'rowgroup' — one CUDA block per block-count-balanced group; atomicAdd to Y
                'colgroup' — same as rowgroup but col-sorted; amortises smem_X per col band
+               'tile'     — one CUDA block per tile_rows x tile_cols group of PBR blocks;
+                            reuses both smem_X and smem_Y for the whole tile (see
+                            pbr_batched_matmul_tile_cuda). tile_rows/tile_cols/tile_strategy
+                            are only used when kernel='tile'.
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -278,6 +609,10 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
             y = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
         elif kernel == 'colgroup':
             y = pbr_batched_matmul_colgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        elif kernel == 'tile':
+            y = pbr_batched_matmul_tile_cuda(pbr_mat, x, tile_rows=tile_rows, tile_cols=tile_cols,
+                                              tile_strategy=tile_strategy, csr_mode=csr_mode,
+                                              smem_size=smem_size)
         else:
             y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
@@ -446,4 +781,5 @@ __all__ = [
     'pbr_batched_matmul_cuda',
     'pbr_batched_matmul_rowgroup_cuda',
     'pbr_batched_matmul_colgroup_cuda',
+    'pbr_batched_matmul_tile_cuda',
 ]
