@@ -210,16 +210,15 @@ def _annotated_heatmap(ax, piv, fmt="{:.2f}", center=1.0):
     return im
 
 
-def kernel_speedup_heatmap(df: pd.DataFrame, out_path: Path) -> Path:
-    """Heatmap of best-rowgroup speedup over best-block per (profile, features), per size.
+def kernel_speedup_heatmap(df: pd.DataFrame, challenger: str, out_path: Path) -> Path:
+    """Heatmap of best-challenger speedup over best-block per (profile, features), per size.
 
-    speedup = best_block_time / best_rowgroup_time  (>1 = rowgroup faster).
-    Both kernels are best-of across all block-config/smem variants, so this
-    answers "is the row-group fusion kernel worth using?" independent of tuning.
+    speedup = best_block_time / best_challenger_time  (>1 = challenger faster).
+    Both kernels are best-of across all block-config/smem variants.
     """
     block = _best_pbr_by_kernel(df, "block")
-    rowgroup = _best_pbr_by_kernel(df, "rowgroup")
-    speedup = (block / rowgroup).rename("speedup").reset_index().dropna()
+    other = _best_pbr_by_kernel(df, challenger)
+    speedup = (block / other).rename("speedup").reset_index().dropna()
 
     if speedup.empty:
         return out_path
@@ -234,7 +233,7 @@ def kernel_speedup_heatmap(df: pd.DataFrame, out_path: Path) -> Path:
         ax.set_title(f"size={size}", fontsize=10)
         ax.set_xlabel("features")
         fig.colorbar(im, ax=ax, fraction=0.046)
-    fig.suptitle("rowgroup speedup over block kernel (>1 = rowgroup faster)", fontsize=12)
+    fig.suptitle(f"{challenger} speedup over block kernel (>1 = {challenger} faster)", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     fig.savefig(out_path, dpi=130)
     plt.close(fig)
@@ -362,12 +361,15 @@ def main() -> None:
 
     written.append(speedup_heatmap(df, outdir / "speedup.png"))
 
-    # Kernel comparison (only meaningful when the sweep carries a `kernel` column
-    # with both 'block' and 'rowgroup' rows).
-    if "kernel" in df.columns and {"block", "rowgroup"} <= set(df["kernel"].unique()):
-        written.append(kernel_speedup_heatmap(df, outdir / "rowgroup_vs_block.png"))
+    # Kernel comparison heatmaps — generated for any non-block PBR kernel present.
+    if "kernel" in df.columns:
+        kernels = set(df["kernel"].unique())
         written.append(kernel_vs_cusparse_heatmap(df, "block", outdir / "block_vs_cusparse.png"))
-        written.append(kernel_vs_cusparse_heatmap(df, "rowgroup", outdir / "rowgroup_vs_cusparse.png"))
+        for challenger in kernels - {"block", "baseline"}:
+            written.append(kernel_speedup_heatmap(
+                df, challenger, outdir / f"{challenger}_vs_block.png"))
+            written.append(kernel_vs_cusparse_heatmap(
+                df, challenger, outdir / f"{challenger}_vs_cusparse.png"))
 
     if _has_smem_sweep(df):
         for size in sizes:
