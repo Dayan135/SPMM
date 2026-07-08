@@ -267,3 +267,38 @@ def generate_fem_2d(
     # small asymmetries; (A + A.T) / 2 guarantees A[i,j] == A[j,i] exactly.
     mat = (mat + mat.T) * 0.5
     return mat.astype(np.float32)
+
+
+def generate_permuted_fem_2d(
+    system_size: int,
+    dofs_per_node: int = 4,
+    coupling: Literal["isotropic", "anisotropic"] = "anisotropic",
+    noise_density: float = 0.0,
+    seed: int = None,
+) -> sp.csr_matrix:
+    """
+    generate_fem_2d with mesh nodes randomly relabeled before returning.
+
+    Same connectivity and per-block structure as generate_fem_2d (each
+    populated dofs_per_node x dofs_per_node block is untouched — the
+    permutation acts on whole nodes, so a node's DOFs stay contiguous), but
+    neighbouring mesh nodes are no longer adjacent in row/col index space.
+
+    This is the stress case for PBR tile-grouping strategies: generate_fem_2d
+    itself is already grid-friendly (adjacent nodes -> adjacent row/col bands),
+    so a fixed-window 'grid' tile partition happens to work well on it. Here,
+    reuse still exists (the same node pairs are still connected) but a fixed
+    grid partition can no longer find it by band-window proximity, since
+    "adjacent in the mesh" no longer means "adjacent in index space". A
+    density-based strategy (see 'greedy' in _TILE_STRATEGIES) is indifferent
+    to the relabeling and should recover most of generate_fem_2d's reuse.
+    """
+    mat = generate_fem_2d(system_size, dofs_per_node=dofs_per_node, coupling=coupling,
+                          noise_density=noise_density, seed=seed)
+    d = dofs_per_node
+    n_nodes = mat.shape[0] // d
+
+    node_perm = np.random.default_rng(seed).permutation(n_nodes)
+    perm = (node_perm[:, None] * d + np.arange(d)[None, :]).ravel()
+
+    return mat[perm][:, perm].tocsr()

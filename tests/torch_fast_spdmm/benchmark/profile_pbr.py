@@ -13,17 +13,27 @@ Matrix profiles (--matrix-profile):
   diag_dd0.017     — diagonal blocks + noise (64×64 blocks, diag_density=0.017)
   diag_dd0.033     — diagonal blocks + noise (64×64 blocks, diag_density=0.033)
   diag_dd0.05      — diagonal blocks + noise (64×64 blocks, diag_density=0.05)
+  fem2d            — 2D FEM stiffness matrix (grid-aligned reuse)
+  fem2d_permuted   — same, with mesh nodes relabeled (breaks grid-aligned reuse;
+                     stress case for the 'grid' vs 'greedy' tile strategies)
 
 Kernels (--kernel):
   block    — original one-CUDA-block-per-PBR-block (default)
   rowgroup — block-count-balanced fusion kernel, row-major order (smem_Y reuse)
   colgroup — block-count-balanced fusion kernel, col-sorted order (smem_X reuse)
+  tile     — one CUDA block per tile_rows x tile_cols group of PBR blocks,
+             reusing both smem_X and smem_Y for the whole tile (see
+             --tile-rows/--tile-cols/--tile-strategy)
 
 Usage (under ncu):
     ncu --profile-from-start off --metrics <...> --csv \
         python -m benchmark.profile_pbr --size 262144 --features 512 \
             --block 8 --min-nnz 2 --smem-size 2048 \
             --matrix-profile diag_dd0.001 --kernel block
+
+    ncu ... python -m benchmark.profile_pbr --size 262144 --features 512 \
+            --matrix-profile diag_dd0.001 --kernel tile \
+            --tile-rows 2 --tile-cols 2 --tile-strategy greedy
 """
 
 from __future__ import annotations
@@ -36,8 +46,12 @@ import torch
 import torch.cuda.profiler as profiler
 
 import torch_fast_spdmm_core as _core
-from benchmark.matrices import generate_scattered_block_matrix, generate_diag_blocks_plus_noise
+from benchmark.matrices import (generate_scattered_block_matrix, generate_diag_blocks_plus_noise,
+                                generate_fem_2d, generate_permuted_fem_2d)
 from torch_fast_spdmm import csr_to_pbr, pbr_info, pbr_matmul
+# _build_tile_meta is private (not in __all__) -- reached into here for diagnostics only,
+# same spirit as this script's direct _core occupancy-query calls below.
+from torch_fast_spdmm import _build_tile_meta
 
 # Each entry: (kind, cfg)
 #   kind="scattered" → generate_scattered_block_matrix
@@ -50,11 +64,14 @@ _MATRIX_PROFILES = {
     "diag_dd0.017":     ("diag",      {"block_size": 64, "diag_density": 0.017, "off_diag_density": 0.0000002}),
     "diag_dd0.033":     ("diag",      {"block_size": 64, "diag_density": 0.033, "off_diag_density": 0.0000002}),
     "diag_dd0.05":      ("diag",      {"block_size": 64, "diag_density": 0.05,  "off_diag_density": 0.0000002}),
+    "fem2d":            ("fem",       {"permuted": False}),
+    "fem2d_permuted":   ("fem",       {"permuted": True}),
 }
 
 
 def build(size: int, features: int, block: int, min_nnz: int,
-          matrix_profile: str, smem_size: int, kernel: str):
+          matrix_profile: str, smem_size: int, kernel: str,
+          tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid"):
     kind, cfg = _MATRIX_PROFILES[matrix_profile]
     if kind == "scattered":
         mat = generate_scattered_block_matrix(
@@ -62,13 +79,16 @@ def build(size: int, features: int, block: int, min_nnz: int,
             block_size=cfg["block_size"],
             profiles=[(cfg["rows_per_block"], cfg["cols_per_block"], 0.00001)],
         ).astype(np.float32)
-    else:  # diag
+    elif kind == "diag":
         mat = generate_diag_blocks_plus_noise(
             system_size=size,
             block_size=cfg["block_size"],
             diag_density=cfg["diag_density"],
             off_diag_density=cfg["off_diag_density"],
         ).astype(np.float32)
+    else:  # fem
+        gen = generate_permuted_fem_2d if cfg["permuted"] else generate_fem_2d
+        mat = gen(system_size=size).astype(np.float32)
 
     pbr_mat = csr_to_pbr(mat, block_rows=block, block_cols=block,
                          min_nnz_per_block=min_nnz)
@@ -100,6 +120,16 @@ def build(size: int, features: int, block: int, min_nnz: int,
         print(f"  {'group_size':26s} = {group_size}")
         print(f"  {'num_groups':26s} = {num_groups}")
         print()
+    elif kernel == "tile":
+        bps = _core.pbr_tile_blocks_per_sm(tile_rows, tile_cols, block, smem_size)
+        tile_meta = _build_tile_meta(pbr_mat, tile_rows, tile_cols, tile_strategy,
+                                     pbr_mat._gpu_meta.codes.device)
+        num_tiles = int(tile_meta.tile_offsets.shape[0]) - 1
+        print(f"  {'tile_shape':26s} = {tile_rows}x{tile_cols}")
+        print(f"  {'tile_strategy':26s} = {tile_strategy}")
+        print(f"  {'blocks_per_sm':26s} = {bps}")
+        print(f"  {'num_tiles':26s} = {num_tiles}")
+        print()
 
     x = torch.randn((size, features), dtype=torch.float32, device="cuda")
     return pbr_mat, x
@@ -116,22 +146,32 @@ def main() -> None:
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
     p.add_argument("--kernel",         type=str, default="block",
-                   choices=["block", "rowgroup", "colgroup"],
+                   choices=["block", "rowgroup", "colgroup", "tile"],
                    help="which PBR kernel to profile")
+    p.add_argument("--tile-rows",      type=int, default=2, help="tile kernel only")
+    p.add_argument("--tile-cols",      type=int, default=2, help="tile kernel only")
+    p.add_argument("--tile-strategy",  type=str, default="grid", choices=["grid", "greedy"],
+                   help="tile kernel only")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
     pbr_mat, x = build(
         args.size, args.features, args.block, args.min_nnz,
         args.matrix_profile, args.smem_size, args.kernel,
+        args.tile_rows, args.tile_cols, args.tile_strategy,
     )
 
+    matmul_kwargs = dict(smem_size=args.smem_size, kernel=args.kernel)
+    if args.kernel == "tile":
+        matmul_kwargs.update(tile_rows=args.tile_rows, tile_cols=args.tile_cols,
+                             tile_strategy=args.tile_strategy)
+
     for _ in range(args.warmup):
-        pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel)
+        pbr_matmul(pbr_mat, x, **matmul_kwargs)
     torch.cuda.synchronize()
 
     profiler.start()
-    pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel)
+    pbr_matmul(pbr_mat, x, **matmul_kwargs)
     torch.cuda.synchronize()
     profiler.stop()
 

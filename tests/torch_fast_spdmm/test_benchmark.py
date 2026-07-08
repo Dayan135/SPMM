@@ -23,6 +23,8 @@ from pytest import mark
 
 from benchmark.matrices import (
     generate_diag_blocks_plus_noise,
+    generate_fem_2d,
+    generate_permuted_fem_2d,
     generate_random_sparse,
     generate_scattered_block_matrix,
 )
@@ -66,6 +68,12 @@ MATRIX_FAMILIES = [
     (generate_random_sparse,
      lambda n: {"system_size": n, "density": 0.000001},
      "random_d1e-6"),
+    (generate_fem_2d,
+     lambda n: {"system_size": n},
+     "fem2d"),
+    (generate_permuted_fem_2d,
+     lambda n: {"system_size": n, "seed": 0},
+     "fem2d_permuted"),
 ]
 
 # Cross size × family into the actual workload table.
@@ -96,10 +104,23 @@ PBR_CONFIGS = [
 #   block    — one CUDA block per PBR block, atomicAdd commit (original)
 #   rowgroup — one CUDA block per block-count-balanced group, row-major order
 #   colgroup — same, but col-sorted order (smem_X reuse instead of smem_Y)
+#   tile     — one CUDA block per tile_rows x tile_cols group of PBR blocks,
+#              reusing both smem_X and smem_Y for the whole tile; swept over
+#              shape and grouping strategy (see _TILE_STRATEGIES in __init__.py)
+_TILE_SHAPES     = [(1, 1), (1, 2), (2, 1), (1, 4), (4, 1), (2, 2), (2, 4), (4, 2), (4, 4)]
+_TILE_STRATEGIES = ["grid", "greedy"]
+
 PBR_KERNELS = [
-    pytest.param("block",    id="block"),
-    pytest.param("rowgroup", id="rowgroup"),
-    pytest.param("colgroup", id="colgroup"),
+    pytest.param({"kernel": "block"},    id="block"),
+    pytest.param({"kernel": "rowgroup"}, id="rowgroup"),
+    pytest.param({"kernel": "colgroup"}, id="colgroup"),
+] + [
+    pytest.param(
+        {"kernel": "tile", "tile_rows": tr, "tile_cols": tc, "tile_strategy": ts},
+        id=f"tile_{tr}x{tc}_{ts}",
+    )
+    for tr, tc in _TILE_SHAPES
+    for ts in _TILE_STRATEGIES
 ]
 
 # Adding a new baseline algorithm = one line here.
@@ -224,21 +245,25 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg
     pbr_mat = pbr_mat.to("cuda")
 
     try:
-        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], kernel=kernel)
+        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel)
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
     finally:
         _cleanup()
 
+    kernel_name = kernel["kernel"]
+    variant = kernel_name
+    if kernel_name == "tile":
+        variant = f"tile_{kernel['tile_rows']}x{kernel['tile_cols']}_{kernel['tile_strategy']}"
     algo_name = (
         f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
-        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{kernel}"
+        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{variant}"
     )
     bench_results.append({
         "commit":      _COMMIT,
         "algorithm":   algo_name,
-        "kernel":      kernel,
+        "kernel":      kernel_name,
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),
