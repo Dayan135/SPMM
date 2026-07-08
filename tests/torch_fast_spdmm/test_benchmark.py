@@ -34,40 +34,62 @@ from torch_fast_spdmm import csr_to_pbr, pbr_matmul, spdmm_csr_naive
 
 # ── Configuration tables ───────────────────────────────────────────────────────
 
-FEATURES = [64, 128, 256, 512]
+FEATURES = [16, 32, 64, 128, 256, 512]
 DTYPES   = [torch.float32]
 
 # Square-matrix dimensions to sweep. Powers of two stay divisible by every
-# block size used below.
-SIZES = [16384, 65536, 262144]
+# block size used below (~1k / 4k / 16k / 64k / 256k).
+#
+# One SLURM array task per size: set SPDMM_ONLY_SIZE=<n> to restrict this run
+# (and thus pytest collection + the W&B run name) to a single size. Unset =
+# all sizes (local/ad-hoc use).
+_ALL_SIZES = [1024, 4096, 16384, 65536, 262144]
+_ONLY_SIZE = os.environ.get("SPDMM_ONLY_SIZE")
+SIZES = [int(_ONLY_SIZE)] if _ONLY_SIZE else _ALL_SIZES
 
 # Matrix families, parametrised by system size. Each entry is
 # (generator_func, size -> kwargs, family_name). Adding a family = one line.
 MATRIX_FAMILIES = [
-    (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, 0.00001)]},
-     "scattered_1x8"),
-    (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, 0.00001)]},
-     "scattered_8x1"),
-    (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, 0.00001)]},
-     "scattered_2x4"),
-    (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, 0.0001)]},
-     "scattered_dense2"),
+    # Block-diagonal (64-wide dense bands, no off-block noise) — dense super-blocks
+    # of 8x8 = 64 PBR 8x8 blocks each; ideal territory for the 2D tile kernel.
     (generate_diag_blocks_plus_noise,
-     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.017, "off_diag_density": 0.0000002},
-     "diag_dd0.017"),
+     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.1, "off_diag_density": 0.0},
+     "diag_b0.1"),
     (generate_diag_blocks_plus_noise,
-     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.033, "off_diag_density": 0.0000002},
-     "diag_dd0.033"),
+     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.5, "off_diag_density": 0.0},
+     "diag_b0.5"),
     (generate_diag_blocks_plus_noise,
-     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.05,  "off_diag_density": 0.0000002},
-     "diag_dd0.05"),
-    (generate_random_sparse,
-     lambda n: {"system_size": n, "density": 0.000001},
-     "random_d1e-6"),
+     lambda n: {"system_size": n, "block_size": 64, "diag_density": 1.0, "off_diag_density": 0.0},
+     "diag_b1.0"),
+    # Scattered 1x8 / 8x1 blocks (row- vs col-oriented reuse), 0.5% and 2% of grid.
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, 0.005)]},
+     "scattered_1x8_d0.5pct"),
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, 0.02)]},
+     "scattered_1x8_d2pct"),
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, 0.005)]},
+     "scattered_8x1_d0.5pct"),
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, 0.02)]},
+     "scattered_8x1_d2pct"),
+    # Scattered dense 2x2 blocks (block_size=2).
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, 0.005)]},
+     "scattered_2x2_d0.5pct"),
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, 0.02)]},
+     "scattered_2x2_d2pct"),
+    # Scattered 2x4 blocks within 8x8 windows.
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, 0.005)]},
+     "scattered_2x4_d0.5pct"),
+    (generate_scattered_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, 0.02)]},
+     "scattered_2x4_d2pct"),
+    # 2D FEM (grid-aligned reuse) and its node-permuted variant (breaks index-space
+    # locality — isolates what the 'greedy' tile strategy recovers over 'grid').
     (generate_fem_2d,
      lambda n: {"system_size": n},
      "fem2d"),
@@ -83,45 +105,40 @@ MATRIX_CONFIGS = [
     for (gen, make_kwargs, name) in MATRIX_FAMILIES
 ]
 
-# PBR variants: (block_size, min_nnz, smem_size).
-# smem_size controls the shared-memory tile (floats) per CTA; smaller values
-# leave more of the 128 KB L1/smem pool as true L1 for X-column caching.
-PBR_VARIANTS = [
-    (bs, mn, sm)
-    for bs, mn in [(2, 2), (2, 3), (4, 2), (4, 4), (8, 2), (8, 4)]
-    for sm in [512, 1024, 2048]
-]
+# PBR block-size / min-nnz variants, crossed with the shared-memory tier.
+# smem_size controls the shared-memory tile (floats) per CTA.
+_PBR_BLOCK_CONFIGS = [
+    (2, 2), (2, 3),            # 2x2 PBR blocks
+    (4, 2), (4, 4), (4, 8),    # 4x4 PBR blocks
+    (8, 2), (8, 8), (8, 12),   # 8x8 PBR blocks
+]  # (block_size, min_nnz)
+_SMEM_TIERS = [512, 1024, 2048]
 
-PBR_CONFIGS = [
-    pytest.param(
-        {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": sm},
-        id=f"pbr_{bs}x{bs}_min{mn}_sm{sm}",
-    )
-    for bs, mn, sm in PBR_VARIANTS
-]
-
-# Kernel variants swept per PBR config:
-#   block    — one CUDA block per PBR block, atomicAdd commit (original)
-#   rowgroup — one CUDA block per block-count-balanced group, row-major order
-#   colgroup — same, but col-sorted order (smem_X reuse instead of smem_Y)
-#   tile     — one CUDA block per tile_rows x tile_cols group of PBR blocks,
-#              reusing both smem_X and smem_Y for the whole tile; swept over
-#              shape and grouping strategy (see _TILE_STRATEGIES in __init__.py)
+# Tile ("block of blocks") kernel: all 9 shapes x {grid, greedy}. v1 supports
+# 8x8 PBR blocks only, so tile is paired only with the 8x8 configs below.
 _TILE_SHAPES     = [(1, 1), (1, 2), (2, 1), (1, 4), (4, 1), (2, 2), (2, 4), (4, 2), (4, 4)]
 _TILE_STRATEGIES = ["grid", "greedy"]
 
-PBR_KERNELS = [
-    pytest.param({"kernel": "block"},    id="block"),
-    pytest.param({"kernel": "rowgroup"}, id="rowgroup"),
-    pytest.param({"kernel": "colgroup"}, id="colgroup"),
-] + [
-    pytest.param(
-        {"kernel": "tile", "tile_rows": tr, "tile_cols": tc, "tile_strategy": ts},
-        id=f"tile_{tr}x{tc}_{ts}",
-    )
-    for tr, tc in _TILE_SHAPES
-    for ts in _TILE_STRATEGIES
-]
+# Combined (kernel_spec, pbr_cfg) runs — VALID pairings only, so pytest collects
+# exactly the runnable cases (no ~100k skipped tile/non-8x8 cross-product items):
+#   block / rowgroup / colgroup — every (block_size, min_nnz, smem) config
+#   tile (shape x strategy)      — 8x8 configs only
+def _make_pbr_runs():
+    runs = []
+    for bs, mn in _PBR_BLOCK_CONFIGS:
+        for sm in _SMEM_TIERS:
+            cfg = {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": sm}
+            cfg_id = f"pbr_{bs}x{bs}_min{mn}_sm{sm}"
+            for k in ("block", "rowgroup", "colgroup"):
+                runs.append(pytest.param(({"kernel": k}, cfg), id=f"{k}-{cfg_id}"))
+            if bs == 8:
+                for tr, tc in _TILE_SHAPES:
+                    for ts in _TILE_STRATEGIES:
+                        spec = {"kernel": "tile", "tile_rows": tr, "tile_cols": tc, "tile_strategy": ts}
+                        runs.append(pytest.param((spec, cfg), id=f"tile_{tr}x{tc}_{ts}-{cfg_id}"))
+    return runs
+
+PBR_RUNS = _make_pbr_runs()
 
 # Adding a new baseline algorithm = one line here.
 BASELINE_ALGOS = [
@@ -228,12 +245,12 @@ def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, al
 # ── PBR benchmarks ─────────────────────────────────────────────────
 
 @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-@mark.parametrize("kernel",     PBR_KERNELS)
-@mark.parametrize("pbr_cfg",    PBR_CONFIGS)
+@mark.parametrize("pbr_run",    PBR_RUNS)
 @mark.parametrize("dtype",      DTYPES)
 @mark.parametrize("features",   FEATURES)
 @mark.parametrize("mat_config", MATRIX_CONFIGS)
-def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg, kernel):
+def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run):
+    kernel, pbr_cfg = pbr_run
     scipy_mat, _, x, size, profile = _prepare(mat_config, features, dtype)
 
     pbr_mat = csr_to_pbr(
@@ -244,7 +261,13 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_cfg
     )
     pbr_mat = pbr_mat.to("cuda")
 
+    # Warm-up (excluded from timing): one-time CUDA launch overhead and, for the
+    # tile kernel, the CPU-side tile-meta build (cached on pbr_mat after the first
+    # call). Steady-state matmul is what we measure — the grouping is a one-time
+    # preprocessing cost amortized across many matmuls on the same PBR matrix.
     try:
+        pbr_matmul(pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel)
+        torch.cuda.synchronize()
         benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel)
     except torch.OutOfMemoryError:
         _cleanup()

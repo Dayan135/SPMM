@@ -115,6 +115,64 @@ a dedicated ncu replay pass (e.g., `ncu --set full`).
 
 ---
 
+## 3. Tile ("block of blocks") 2D kernel (2026-07-08, branch `feat/pbr-tileblock`)
+
+### Motivation
+
+`rowgroup` (formerly `blockgroup`) reuses only `smem_Y` across a row-strip; `colgroup` reuses only
+`smem_X` across a column band. Head-to-head ncu profiling (Experiment note in
+`ncu_out/blockgroup_colgroup/`, June 2026) showed `rowgroup` winning on all 3 tested cases — the
+hypothesized colgroup win (X-load amortization at low features) never materialized. Neither is a clear
+general win because each reuses only *one* smem axis. The `tile` kernel generalizes both: one CUDA block
+owns a `tile_rows × tile_cols` group of PBR blocks, holds **all** its row-slots and col-slots resident
+in smem simultaneously, and flushes `smem_Y` via atomicAdd **once per tile** (2 `__syncthreads` total)
+rather than once per strip (rowgroup) or once per block (colgroup).
+
+### Design
+
+- **Rename** `blockgroup` → `rowgroup` throughout (commit `e6310a5`, mechanical, verified
+  behavior-preserving: 624/624 tests including 96 `TestPBRRowgroupKernel` + 96 `TestPBRColgroupKernel`).
+  Frees "block" for the new 2D kernel; `rowgroup`/`colgroup` now a symmetric pair, both kept for
+  head-to-head benchmarking.
+- **Pluggable grouping, fixed kernel contract.** How PBR blocks map to tiles is decided host-side and
+  decoupled from the kernel via a metadata contract (`tile_offsets` CSR + per-slot `tile_row/col_origins`
+  with `-1` sentinels for unused slots + per-block `tile_row/col_local` slot lookups). The kernel never
+  searches and a tile's rows/cols can be **any** set of bands, contiguous or not. Strategies live in
+  `_TILE_STRATEGIES` (`__init__.py`); adding one is a single function + registry entry, no kernel change.
+  - `'grid'` — fixed `(row_band // tile_rows, col_band // tile_cols)` window partition. Cheap (one
+    `np.lexsort`, fully vectorized). Only catches reuse already aligned to fixed band windows.
+  - `'greedy'` — seed-and-grow density-maximizing clustering. Catches non-grid-aligned reuse `'grid'`
+    structurally misses: e.g. populated row-bands `{0, 2}` land in one 2×2 tile (the motivating toy
+    example `[[1,0,1],[0,0,0],[1,0,1]]`), where a fixed window puts each corner in its own tile.
+    `O(num_blocks × capacity)`, plain-Python sets; port to C++ later only if it becomes a bottleneck.
+- **Grid size is data-determined** — one CUDA block per non-empty tile, no `group_size`/occupancy tuning
+  at call time (unlike rowgroup/colgroup). `get_pbr_tile_blocks_per_sm` (with the required
+  `dynamicSMemSize=0`, per Experiment 1) is still exposed for diagnostics and a future count-balanced
+  group-of-tiles v2.
+- **Smem:** `p = SMEM_SIZE / (tile_rows·BLOCK_ROWS + tile_cols·BLOCK_COLS)`; `smem_X[tile_cols·BLOCK_COLS·p]`
+  loaded once, `smem_Y[tile_rows·BLOCK_ROWS·p]` zeroed once and flushed once (per-row-slot guarded by the
+  `-1` origin sentinel to skip atomicAdd-of-0 on unused slots). v1: 8×8 PBR blocks × 9 tile shapes
+  (`{1,2,4}²` plus `(1,1)`) × 3 smem tiers = 27 template instantiations × 4 dtype combos.
+
+### Correctness
+
+`grid`/`greedy` builders validated locally (500+ randomized contract checks: every block placed exactly
+once, tile capacity respected, origins match local-slot lookups; `'greedy'` collapses the toy corner
+example to a single 2×2 tile, `'grid'` to four singletons). GPU correctness: `TestPBRTileKernel` sweeps
+all 9 shapes × {grid, greedy} against the `block` kernel as ground truth, plus sparse-fill,
+non-block-aligned-size, and scattered-corners edge cases.
+
+**GPU build + test results: _pending remote run_** (RTX 3090, `feat/pbr-tileblock`).
+
+### Benchmark plan
+
+Sweep `tile` (9 shapes × {grid, greedy}) against `block`/`rowgroup`/`colgroup` on the existing
+scattered/diag families plus two new FEM families: `fem2d` (grid-aligned reuse — `'grid'` should already
+do well) and `fem2d_permuted` (mesh nodes relabeled to break index-space locality while preserving reuse
+structure — the case that isolates what `'greedy'` recovers that `'grid'` cannot). Results: _pending._
+
+---
+
 ## Open questions / next steps
 
 1. **Auto kernel selection** — pick block vs rowgroup based on expected compute per group
