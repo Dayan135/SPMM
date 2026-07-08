@@ -3,7 +3,7 @@ import scipy.sparse as sp
 from pytest import fixture, mark
 import torch
 from torch.testing import assert_close
-from torch_fast_spdmm import pbr_to_csr, csr_to_pbr, pbr_batched_matmul_cuda, pbr_batched_matmul_blockgroup_cuda, pbr_batched_matmul_colgroup_cuda
+from torch_fast_spdmm import pbr_to_csr, csr_to_pbr, pbr_batched_matmul_cuda, pbr_batched_matmul_rowgroup_cuda, pbr_batched_matmul_colgroup_cuda
 
 
 from test_utils import TestTorchNoGrad
@@ -113,11 +113,11 @@ class TestTorchFastPBR(TestTorchNoGrad):
 @mark.parametrize('block_size', [8])
 @mark.parametrize('features', [128, 256], ids=['feat128', 'feat256'])
 @mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
-class TestPBRBlockgroupKernel(TestTorchNoGrad):
-    """Correctness tests for the block-group fusion kernel against the block kernel reference."""
+class TestPBRRowgroupKernel(TestTorchNoGrad):
+    """Correctness tests for the row-group fusion kernel against the block kernel reference."""
 
-    def test_blockgroup_matches_reference(self, sparse_mat, features, data_dtype, block_size,
-                                          system_size, min_nnz, index_dtype):
+    def test_rowgroup_matches_reference(self, sparse_mat, features, data_dtype, block_size,
+                                         system_size, min_nnz, index_dtype):
         device = 'cuda'
         torch_dtype = torch.from_numpy(np.array([], dtype=data_dtype)).dtype
         mat = sparse_mat.astype(data_dtype)
@@ -131,11 +131,11 @@ class TestPBRBlockgroupKernel(TestTorchNoGrad):
                               min_nnz_per_block=min_nnz)
         pbr_mat = pbr_mat.to(device)
 
-        y_blockgroup = pbr_batched_matmul_blockgroup_cuda(pbr_mat, x_gpu)
-        y_block      = pbr_batched_matmul_cuda(pbr_mat, x_gpu)
+        y_rowgroup = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x_gpu)
+        y_block    = pbr_batched_matmul_cuda(pbr_mat, x_gpu)
 
-        assert_close(y_blockgroup, y_block, rtol=1e-5, atol=1e-5,
-                     msg="blockgroup kernel output differs from block kernel")
+        assert_close(y_rowgroup, y_block, rtol=1e-5, atol=1e-5,
+                     msg="rowgroup kernel output differs from block kernel")
 
 
 @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")

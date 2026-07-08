@@ -103,12 +103,12 @@ def _build_cuda_dispatch():
         (torch.int64, torch.float64): core.pbr_spmm_cuda_i64_f64,
     }
 
-def _build_blockgroup_cuda_dispatch():
+def _build_rowgroup_cuda_dispatch():
     return {
-        (torch.int32, torch.float32): core.pbr_blockgroup_spmm_cuda_i32_f32,
-        (torch.int64, torch.float32): core.pbr_blockgroup_spmm_cuda_i64_f32,
-        (torch.int32, torch.float64): core.pbr_blockgroup_spmm_cuda_i32_f64,
-        (torch.int64, torch.float64): core.pbr_blockgroup_spmm_cuda_i64_f64,
+        (torch.int32, torch.float32): core.pbr_rowgroup_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_rowgroup_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_rowgroup_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_rowgroup_spmm_cuda_i64_f64,
     }
 
 def _build_colgroup_cuda_dispatch():
@@ -120,7 +120,7 @@ def _build_colgroup_cuda_dispatch():
     }
 
 _CUDA_KERNEL_DISPATCH = None
-_BLOCKGROUP_CUDA_KERNEL_DISPATCH = None
+_ROWGROUP_CUDA_KERNEL_DISPATCH = None
 _COLGROUP_CUDA_KERNEL_DISPATCH = None
 
 
@@ -158,9 +158,9 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
     )
 
 
-def pbr_batched_matmul_blockgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
-    Block-group fusion variant: one CUDA block per block-count-balanced group.
+    Row-group fusion variant: one CUDA block per block-count-balanced group.
     Partitions PBR blocks uniformly by count; no CPU scan needed.
     Writes Y via atomicAdd (safe for concurrent CSR on a separate stream).
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
@@ -170,15 +170,15 @@ def pbr_batched_matmul_blockgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int =
     if meta is None:
         raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
 
-    global _BLOCKGROUP_CUDA_KERNEL_DISPATCH
-    if _BLOCKGROUP_CUDA_KERNEL_DISPATCH is None:
-        _BLOCKGROUP_CUDA_KERNEL_DISPATCH = _build_blockgroup_cuda_dispatch()
+    global _ROWGROUP_CUDA_KERNEL_DISPATCH
+    if _ROWGROUP_CUDA_KERNEL_DISPATCH is None:
+        _ROWGROUP_CUDA_KERNEL_DISPATCH = _build_rowgroup_cuda_dispatch()
 
     num_pbr_blocks = int(meta.codes.shape[0])
     if num_pbr_blocks > 0:
         device = meta.codes.device
         sm_count  = torch.cuda.get_device_properties(device).multi_processor_count
-        bps       = core.pbr_blockgroup_blocks_per_sm(pbr_mat.block_rows, smem_size)
+        bps       = core.pbr_rowgroup_blocks_per_sm(pbr_mat.block_rows, smem_size)
         target_groups = sm_count * bps
         group_size = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
         num_groups = (num_pbr_blocks + group_size - 1) // group_size
@@ -186,7 +186,7 @@ def pbr_batched_matmul_blockgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int =
         num_groups = 0
         group_size = 1
 
-    kernel = _BLOCKGROUP_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
+    kernel = _ROWGROUP_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
     return kernel(
         pbr_mat.cols,
         pbr_mat.rows,
@@ -263,9 +263,9 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
     Dispatches to the correct backend based on x.device.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (GPU only)
     smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
-    kernel:    'block'      — one CUDA block per PBR block; atomicAdd to Y
-               'blockgroup' — one CUDA block per block-count-balanced group; atomicAdd to Y
-               'colgroup'   — same as blockgroup but col-sorted; amortises smem_X per col band
+    kernel:    'block'    — one CUDA block per PBR block; atomicAdd to Y
+               'rowgroup' — one CUDA block per block-count-balanced group; atomicAdd to Y
+               'colgroup' — same as rowgroup but col-sorted; amortises smem_X per col band
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -274,8 +274,8 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         meta = getattr(pbr_mat, '_gpu_meta', None)
         if meta is None:
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
-        if kernel == 'blockgroup':
-            y = pbr_batched_matmul_blockgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        if kernel == 'rowgroup':
+            y = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
         elif kernel == 'colgroup':
             y = pbr_batched_matmul_colgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
         else:
@@ -444,6 +444,6 @@ __all__ = [
     'pbr_matmul',
     'pbr_batched_matmul_cpu',
     'pbr_batched_matmul_cuda',
-    'pbr_batched_matmul_blockgroup_cuda',
+    'pbr_batched_matmul_rowgroup_cuda',
     'pbr_batched_matmul_colgroup_cuda',
 ]

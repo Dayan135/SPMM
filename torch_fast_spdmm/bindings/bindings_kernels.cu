@@ -84,7 +84,7 @@ at::Tensor pbr_spmm_cuda_dispatch(
 }
 
 template <typename index_t, typename scalar_t>
-at::Tensor pbr_blockgroup_spmm_cuda_dispatch(
+at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
     int cols, int rows,
     int BLOCK_ROWS, int BLOCK_COLS,
     int num_groups, int group_size,
@@ -120,7 +120,7 @@ at::Tensor pbr_blockgroup_spmm_cuda_dispatch(
     cudaEventDestroy(y_ready);
 
     if (num_groups > 0 && num_pbr_blocks > 0) {
-        launch_pbr_blockgroup_spmm<index_t, scalar_t>(
+        launch_pbr_rowgroup_spmm<index_t, scalar_t>(
             num_groups, group_size, num_pbr_blocks, features, batch_size, cols, rows,
             BLOCK_ROWS, BLOCK_COLS,
             block_codes.data_ptr<int64_t>(),
@@ -240,7 +240,7 @@ at::Tensor pbr_colgroup_spmm_cuda_dispatch(
 void bind_cuda_functions(py::module_& m) {
     m.def("spdmm_csr_naive", &spdmm_csr_naive);
 
-    m.def("pbr_blockgroup_blocks_per_sm", &get_pbr_blockgroup_blocks_per_sm,
+    m.def("pbr_rowgroup_blocks_per_sm", &get_pbr_rowgroup_blocks_per_sm,
           py::arg("block_rows"), py::arg("smem_size"));
 
     m.def("pbr_colgroup_blocks_per_sm", &get_pbr_colgroup_blocks_per_sm,
@@ -251,10 +251,10 @@ void bind_cuda_functions(py::module_& m) {
     m.def("pbr_spmm_cuda_i32_f64", &pbr_spmm_cuda_dispatch<int32_t, double>);
     m.def("pbr_spmm_cuda_i64_f64", &pbr_spmm_cuda_dispatch<int64_t, double>);
 
-    m.def("pbr_blockgroup_spmm_cuda_i32_f32", &pbr_blockgroup_spmm_cuda_dispatch<int32_t, float>);
-    m.def("pbr_blockgroup_spmm_cuda_i64_f32", &pbr_blockgroup_spmm_cuda_dispatch<int64_t, float>);
-    m.def("pbr_blockgroup_spmm_cuda_i32_f64", &pbr_blockgroup_spmm_cuda_dispatch<int32_t, double>);
-    m.def("pbr_blockgroup_spmm_cuda_i64_f64", &pbr_blockgroup_spmm_cuda_dispatch<int64_t, double>);
+    m.def("pbr_rowgroup_spmm_cuda_i32_f32", &pbr_rowgroup_spmm_cuda_dispatch<int32_t, float>);
+    m.def("pbr_rowgroup_spmm_cuda_i64_f32", &pbr_rowgroup_spmm_cuda_dispatch<int64_t, float>);
+    m.def("pbr_rowgroup_spmm_cuda_i32_f64", &pbr_rowgroup_spmm_cuda_dispatch<int32_t, double>);
+    m.def("pbr_rowgroup_spmm_cuda_i64_f64", &pbr_rowgroup_spmm_cuda_dispatch<int64_t, double>);
 
     m.def("pbr_colgroup_spmm_cuda_i32_f32", &pbr_colgroup_spmm_cuda_dispatch<int32_t, float>);
     m.def("pbr_colgroup_spmm_cuda_i64_f32", &pbr_colgroup_spmm_cuda_dispatch<int64_t, float>);

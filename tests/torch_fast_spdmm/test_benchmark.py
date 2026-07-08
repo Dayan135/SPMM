@@ -93,12 +93,13 @@ PBR_CONFIGS = [
 ]
 
 # Kernel variants swept per PBR config:
-#   block      — one CUDA block per PBR block, atomicAdd commit (original)
-#   blockgroup — one CUDA block per block-count-balanced group, atomicAdd commit
+#   block    — one CUDA block per PBR block, atomicAdd commit (original)
+#   rowgroup — one CUDA block per block-count-balanced group, row-major order
+#   colgroup — same, but col-sorted order (smem_X reuse instead of smem_Y)
 PBR_KERNELS = [
-    pytest.param("block",      id="block"),
-    pytest.param("blockgroup", id="blockgroup"),
-    pytest.param("colgroup",   id="colgroup"),
+    pytest.param("block",    id="block"),
+    pytest.param("rowgroup", id="rowgroup"),
+    pytest.param("colgroup", id="colgroup"),
 ]
 
 # Adding a new baseline algorithm = one line here.

@@ -15,8 +15,9 @@ Matrix profiles (--matrix-profile):
   diag_dd0.05      — diagonal blocks + noise (64×64 blocks, diag_density=0.05)
 
 Kernels (--kernel):
-  block      — original one-CUDA-block-per-PBR-block (default)
-  blockgroup — block-count-balanced fusion kernel
+  block    — original one-CUDA-block-per-PBR-block (default)
+  rowgroup — block-count-balanced fusion kernel, row-major order (smem_Y reuse)
+  colgroup — block-count-balanced fusion kernel, col-sorted order (smem_X reuse)
 
 Usage (under ncu):
     ncu --profile-from-start off --metrics <...> --csv \
@@ -87,9 +88,9 @@ def build(size: int, features: int, block: int, min_nnz: int,
 
     pbr_mat = pbr_mat.to("cuda")
 
-    if kernel in ("blockgroup", "colgroup"):
+    if kernel in ("rowgroup", "colgroup"):
         num_pbr_blocks = int(pbr_mat.accounted_blocks())
-        bps_fn = _core.pbr_blockgroup_blocks_per_sm if kernel == "blockgroup" else _core.pbr_colgroup_blocks_per_sm
+        bps_fn = _core.pbr_rowgroup_blocks_per_sm if kernel == "rowgroup" else _core.pbr_colgroup_blocks_per_sm
         bps = bps_fn(block, smem_size)
         target_groups = sm_count * bps
         group_size = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
@@ -115,7 +116,7 @@ def main() -> None:
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
     p.add_argument("--kernel",         type=str, default="block",
-                   choices=["block", "blockgroup", "colgroup"],
+                   choices=["block", "rowgroup", "colgroup"],
                    help="which PBR kernel to profile")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()

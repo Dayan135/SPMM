@@ -385,7 +385,7 @@ template void launch_pbr_spmm<int64_t, double>(const int, const int, const int, 
 
 
 // ===========================================================================
-// Block-group fusion kernel
+// Row-group fusion kernel
 // ===========================================================================
 //
 // Grid: (num_groups, batch_size, feat_tiles)
@@ -407,13 +407,13 @@ template void launch_pbr_spmm<int64_t, double>(const int, const int, const int, 
 //   smem_X [BLOCK_COLS × p]  — X tile, reloaded per PBR block
 //   smem_Y [BLOCK_ROWS × p]  — persistent Y accumulator, flushed at each strip change
 //
-// Stream: blockgroup uses atomicAdd so it can run concurrently with the CSR
+// Stream: rowgroup uses atomicAdd so it can run concurrently with the CSR
 // remainder kernel on a separate stream (same as the block kernel).
 
 template <typename index_t, typename scalar_t,
           int BLOCK_ROWS, int BLOCK_COLS, int SMEM_SIZE, int THREADS_PER_BLOCK>
 __global__ void __launch_bounds__(THREADS_PER_BLOCK)
-pbr_spmm_blockgroup_kernel(
+pbr_spmm_rowgroup_kernel(
     const uint32_t  num_groups,
     const uint32_t  group_size,
     const uint32_t  num_pbr_blocks,
@@ -543,7 +543,7 @@ pbr_spmm_blockgroup_kernel(
 
 
 template <typename index_t, typename scalar_t>
-void launch_pbr_blockgroup_spmm(
+void launch_pbr_rowgroup_spmm(
     const int  num_groups,
     const int  group_size,
     const int  num_pbr_blocks,
@@ -572,8 +572,8 @@ void launch_pbr_blockgroup_spmm(
     const dim3 grid((uint32_t)num_groups, (uint32_t)batch_size, (uint32_t)feat_tiles);
     const dim3 block(THREADS_PER_BLOCK);
 
-    #define BG_LAUNCH(BR, BC, TS) \
-        pbr_spmm_blockgroup_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK> \
+    #define RG_LAUNCH(BR, BC, TS) \
+        pbr_spmm_rowgroup_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK> \
             <<<grid, block, 0, stream>>>( \
                 (uint32_t)num_groups,     (uint32_t)group_size, \
                 (uint32_t)num_pbr_blocks, (uint32_t)features,   \
@@ -581,60 +581,60 @@ void launch_pbr_blockgroup_spmm(
                 (uint32_t)rows,                                  \
                 block_codes, block_coords, block_offsets, block_data, X, Y)
 
-    #define DISPATCH_SMEM_BG(BR, BC)                              \
+    #define DISPATCH_SMEM_RG(BR, BC)                              \
         do {                                                      \
-            if      (smem_size <= 512)  BG_LAUNCH(BR, BC,  512); \
-            else if (smem_size <= 1024) BG_LAUNCH(BR, BC, 1024); \
-            else                        BG_LAUNCH(BR, BC, 2048); \
+            if      (smem_size <= 512)  RG_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) RG_LAUNCH(BR, BC, 1024); \
+            else                        RG_LAUNCH(BR, BC, 2048); \
         } while (0)
 
-    if      (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_BG(8, 8);
-    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_BG(4, 4);
-    else if (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_BG(2, 2);
-    else throw std::invalid_argument("Unsupported block size for PBR block-group SpMM.");
+    if      (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_RG(8, 8);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_RG(4, 4);
+    else if (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_RG(2, 2);
+    else throw std::invalid_argument("Unsupported block size for PBR row-group SpMM.");
 
-    #undef BG_LAUNCH
-    #undef DISPATCH_SMEM_BG
+    #undef RG_LAUNCH
+    #undef DISPATCH_SMEM_RG
 }
 
-template void launch_pbr_blockgroup_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
-template void launch_pbr_blockgroup_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
-template void launch_pbr_blockgroup_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
-template void launch_pbr_blockgroup_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
 
 
 // ---------------------------------------------------------------------------
-// Occupancy query — blockgroup kernel
+// Occupancy query — rowgroup kernel
 // ---------------------------------------------------------------------------
 // dynamicSMemSize=0: kernel uses only static __shared__ arrays.
 
 template <int BLOCK_ROW, int BLOCK_COL, int SMEM>
-static int _blockgroup_bps() {
+static int _rowgroup_bps() {
     constexpr int THREADS_PER_BLOCK = 128;
     int bps = 8;
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(
         &bps,
-        pbr_spmm_blockgroup_kernel<int32_t, float, BLOCK_ROW, BLOCK_COL, SMEM, THREADS_PER_BLOCK>,
+        pbr_spmm_rowgroup_kernel<int32_t, float, BLOCK_ROW, BLOCK_COL, SMEM, THREADS_PER_BLOCK>,
         THREADS_PER_BLOCK,
         0);
     return bps;
 }
 
-int get_pbr_blockgroup_blocks_per_sm(int block_rows, int smem_size) {
+int get_pbr_rowgroup_blocks_per_sm(int block_rows, int smem_size) {
     if (block_rows == 2) {
-        if (smem_size <= 512)  return _blockgroup_bps<2, 2,  512>();
-        if (smem_size <= 1024) return _blockgroup_bps<2, 2, 1024>();
-        return                        _blockgroup_bps<2, 2, 2048>();
+        if (smem_size <= 512)  return _rowgroup_bps<2, 2,  512>();
+        if (smem_size <= 1024) return _rowgroup_bps<2, 2, 1024>();
+        return                        _rowgroup_bps<2, 2, 2048>();
     }
     if (block_rows == 4) {
-        if (smem_size <= 512)  return _blockgroup_bps<4, 4,  512>();
-        if (smem_size <= 1024) return _blockgroup_bps<4, 4, 1024>();
-        return                        _blockgroup_bps<4, 4, 2048>();
+        if (smem_size <= 512)  return _rowgroup_bps<4, 4,  512>();
+        if (smem_size <= 1024) return _rowgroup_bps<4, 4, 1024>();
+        return                        _rowgroup_bps<4, 4, 2048>();
     }
     if (block_rows == 8) {
-        if (smem_size <= 512)  return _blockgroup_bps<8, 8,  512>();
-        if (smem_size <= 1024) return _blockgroup_bps<8, 8, 1024>();
-        return                        _blockgroup_bps<8, 8, 2048>();
+        if (smem_size <= 512)  return _rowgroup_bps<8, 8,  512>();
+        if (smem_size <= 1024) return _rowgroup_bps<8, 8, 1024>();
+        return                        _rowgroup_bps<8, 8, 2048>();
     }
     return 8;
 }
@@ -645,7 +645,7 @@ int get_pbr_blockgroup_blocks_per_sm(int block_rows, int smem_size) {
 // ===========================================================================
 //
 // Grid: (num_groups, batch_size, feat_tiles)
-//   Same geometry as blockgroup; num_groups = sm_count × bps (occupancy query).
+//   Same geometry as rowgroup; num_groups = sm_count × bps (occupancy query).
 //
 // Input arrays are pre-sorted by (col_origin, row_origin) at .to('cuda') time
 // (col_codes, col_coords, col_offsets, col_data).
@@ -661,7 +661,7 @@ int get_pbr_blockgroup_blocks_per_sm(int block_rows, int smem_size) {
 // consecutive blocks in the same col-band have different row_origins and
 // therefore write to different output rows.
 //
-// Smem layout (identical footprint to blockgroup):
+// Smem layout (identical footprint to rowgroup):
 //   smem_X [BLOCK_COLS × p]  — X tile, reloaded only on col_origin change
 //   smem_Y [BLOCK_ROWS × p]  — per-block Y accumulator, flushed each block
 //

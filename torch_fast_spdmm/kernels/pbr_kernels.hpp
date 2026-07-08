@@ -22,7 +22,7 @@ void launch_pbr_spmm(
 );
 
 template <typename index_t, typename scalar_t>
-void launch_pbr_blockgroup_spmm(
+void launch_pbr_rowgroup_spmm(
     const int  num_groups,
     const int  group_size,
     const int  num_pbr_blocks,
@@ -42,8 +42,8 @@ void launch_pbr_blockgroup_spmm(
     int smem_size = 2048
 );
 
-// Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the blockgroup kernel.
-int get_pbr_blockgroup_blocks_per_sm(int block_rows, int smem_size);
+// Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the rowgroup kernel.
+int get_pbr_rowgroup_blocks_per_sm(int block_rows, int smem_size);
 
 template <typename index_t, typename scalar_t>
 void launch_pbr_colgroup_spmm(
