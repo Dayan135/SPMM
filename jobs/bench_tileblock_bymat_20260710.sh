@@ -9,12 +9,12 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
-#SBATCH --array=0-64
+#SBATCH --array=0-49
 #SBATCH --output=jobs/logs/%A_%a.out
 #SBATCH --error=jobs/logs/%A_%a.err
 
 # Full block-of-blocks sweep, one SLURM array task per (size, matrix).
-#   task_id = size_idx * 13 + matrix_idx   (5 sizes x 13 matrices = 65 tasks)
+#   task_id = size_idx * 10 + matrix_idx   (5 sizes x 10 matrices = 50 tasks)
 # Each task: 234 kernel/config combos x 6 features (~1.4k benchmarks) -> never
 # times out and logs a small W&B table (avoids the 10k-row session-table cap).
 # Rerun of the per-size sweep after: density rescaled O(N) (was O(N^2), OOM at
@@ -22,12 +22,11 @@
 # .so assumed already built by jobs/build_spdmm_20260623.sh on this commit.
 
 SYS_SIZES=(1024 4096 16384 65536 262144)
-MATRICES=(diag_b0.1 diag_b0.5 diag_b1.0 \
+MATRICES=(diag_b0.3 diag_b1.0 \
           scattered_1x8_d0.5pct scattered_1x8_d2pct \
           scattered_8x1_d0.5pct scattered_8x1_d2pct \
           scattered_2x2_d0.5pct scattered_2x2_d2pct \
-          scattered_2x4_d0.5pct scattered_2x4_d2pct \
-          fem2d fem2d_permuted)
+          scattered_2x4_d0.5pct scattered_2x4_d2pct)
 NM=${#MATRICES[@]}
 
 SIDX=$(( SLURM_ARRAY_TASK_ID / NM ))

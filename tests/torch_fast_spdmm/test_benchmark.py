@@ -23,9 +23,6 @@ from pytest import mark
 
 from benchmark.matrices import (
     generate_diag_blocks_plus_noise,
-    generate_fem_2d,
-    generate_permuted_fem_2d,
-    generate_random_sparse,
     generate_scattered_block_matrix,
 )
 from test_utils import scipy_csr_to_torch_csr
@@ -62,12 +59,11 @@ def _sd(base_density, n):
 MATRIX_FAMILIES = [
     # Block-diagonal (64-wide dense bands, no off-block noise) — dense super-blocks
     # of 8x8 = 64 PBR 8x8 blocks each; ideal territory for the 2D tile kernel.
+    # Densities are the original {0.1,0.5,1.0} tripled and clamped at 1.0
+    # (0.5*3 and 1.0*3 both saturate -> single 1.0 entry).
     (generate_diag_blocks_plus_noise,
-     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.1, "off_diag_density": 0.0},
-     "diag_b0.1"),
-    (generate_diag_blocks_plus_noise,
-     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.5, "off_diag_density": 0.0},
-     "diag_b0.5"),
+     lambda n: {"system_size": n, "block_size": 64, "diag_density": 0.3, "off_diag_density": 0.0},
+     "diag_b0.3"),
     (generate_diag_blocks_plus_noise,
      lambda n: {"system_size": n, "block_size": 64, "diag_density": 1.0, "off_diag_density": 0.0},
      "diag_b1.0"),
@@ -99,14 +95,6 @@ MATRIX_FAMILIES = [
     (generate_scattered_block_matrix,
      lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, _sd(0.02, n))]},
      "scattered_2x4_d2pct"),
-    # 2D FEM (grid-aligned reuse) and its node-permuted variant (breaks index-space
-    # locality — isolates what the 'greedy' tile strategy recovers over 'grid').
-    (generate_fem_2d,
-     lambda n: {"system_size": n},
-     "fem2d"),
-    (generate_permuted_fem_2d,
-     lambda n: {"system_size": n, "seed": 0},
-     "fem2d_permuted"),
 ]
 
 # Optional per-matrix gate: one SLURM task per (size, matrix) so each task is
