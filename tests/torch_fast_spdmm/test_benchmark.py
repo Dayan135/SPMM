@@ -47,6 +47,16 @@ _ALL_SIZES = [1024, 4096, 16384, 65536, 262144]
 _ONLY_SIZE = os.environ.get("SPDMM_ONLY_SIZE")
 SIZES = [int(_ONLY_SIZE)] if _ONLY_SIZE else _ALL_SIZES
 
+# Scattered "density" = fraction of the N/bs x N/bs block grid, so a fixed
+# fraction gives O(N^2) nnz -- fine at small N, but ~1.4B nnz (OOM) at 262144.
+# Anchor the requested fractions at N=1024 and scale as 1024/N so absolute
+# block count (hence nnz) grows ~O(N): matrices stay genuinely sparse and
+# comparable across sizes, and N=1024 keeps the literal 0.5%/2% spec.
+# (diag/FEM are already O(N) and are not scaled.)
+_SCAT_REF = 1024
+def _sd(base_density, n):
+    return base_density * _SCAT_REF / n
+
 # Matrix families, parametrised by system size. Each entry is
 # (generator_func, size -> kwargs, family_name). Adding a family = one line.
 MATRIX_FAMILIES = [
@@ -61,32 +71,33 @@ MATRIX_FAMILIES = [
     (generate_diag_blocks_plus_noise,
      lambda n: {"system_size": n, "block_size": 64, "diag_density": 1.0, "off_diag_density": 0.0},
      "diag_b1.0"),
-    # Scattered 1x8 / 8x1 blocks (row- vs col-oriented reuse), 0.5% and 2% of grid.
+    # Scattered 1x8 / 8x1 blocks (row- vs col-oriented reuse), 0.5% and 2% of grid
+    # at N=1024, scaled 1024/N for larger sizes (see _sd).
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, 0.005)]},
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, _sd(0.005, n))]},
      "scattered_1x8_d0.5pct"),
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, 0.02)]},
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(1, 8, _sd(0.02, n))]},
      "scattered_1x8_d2pct"),
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, 0.005)]},
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, _sd(0.005, n))]},
      "scattered_8x1_d0.5pct"),
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, 0.02)]},
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(8, 1, _sd(0.02, n))]},
      "scattered_8x1_d2pct"),
     # Scattered dense 2x2 blocks (block_size=2).
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, 0.005)]},
+     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, _sd(0.005, n))]},
      "scattered_2x2_d0.5pct"),
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, 0.02)]},
+     lambda n: {"system_size": n, "block_size": 2, "profiles": [(2, 2, _sd(0.02, n))]},
      "scattered_2x2_d2pct"),
     # Scattered 2x4 blocks within 8x8 windows.
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, 0.005)]},
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, _sd(0.005, n))]},
      "scattered_2x4_d0.5pct"),
     (generate_scattered_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, 0.02)]},
+     lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, _sd(0.02, n))]},
      "scattered_2x4_d2pct"),
     # 2D FEM (grid-aligned reuse) and its node-permuted variant (breaks index-space
     # locality — isolates what the 'greedy' tile strategy recovers over 'grid').
@@ -97,6 +108,13 @@ MATRIX_FAMILIES = [
      lambda n: {"system_size": n, "seed": 0},
      "fem2d_permuted"),
 ]
+
+# Optional per-matrix gate: one SLURM task per (size, matrix) so each task is
+# small (~1.4k benchmarks), never times out, and logs a small W&B table (the
+# session-level table silently truncates at 10k rows). Unset = all matrices.
+_ONLY_MATRIX = os.environ.get("SPDMM_ONLY_MATRIX")
+if _ONLY_MATRIX:
+    MATRIX_FAMILIES = [m for m in MATRIX_FAMILIES if m[2] == _ONLY_MATRIX]
 
 # Cross size × family into the actual workload table.
 MATRIX_CONFIGS = [
@@ -180,9 +198,10 @@ def bench_results():
     """Accumulate every case into one W&B run as a single table.
 
     Each test appends a row; at session teardown the rows become one
-    wandb.Table logged to a single run. Run split by size (the Slurm array)
-    this yields one run per size instead of 768 micro-runs, so the
-    offline→server sync is near-instant and the UI is one sortable table.
+    wandb.Table logged to a single run. The Slurm array runs one task per
+    (size, matrix), so each run's table is ~1.4k rows -- well under the
+    wandb.Table 10k-row cap that silently truncated the earlier per-size runs.
+    Runs share group=commit; plotting concatenates all of a commit's runs.
     """
     rows: list[dict] = []
     yield rows
@@ -195,11 +214,16 @@ def bench_results():
         table.add_data(*(r.get(c) for c in _RESULT_COLUMNS))
 
     sizes = sorted({r["system_size"] for r in rows})
+    profiles = sorted({r["profile"] for r in rows})
+    # Unique run name per (sizes, matrices) slice so per-matrix tasks don't collide.
+    name = f"{_COMMIT}_" + "_".join(str(s) for s in sizes)
+    if _ONLY_MATRIX:
+        name += f"_{_ONLY_MATRIX}"
     run = wandb.init(
         project="torch-fast-spdmm",
         group=_COMMIT,
-        name=f"{_COMMIT}_" + "_".join(str(s) for s in sizes),
-        config={"commit": _COMMIT, "sizes": sizes},
+        name=name,
+        config={"commit": _COMMIT, "sizes": sizes, "profiles": profiles},
         reinit=True,
     )
     run.log({"benchmarks": table})
