@@ -4,12 +4,15 @@
 *improving* with size (geomean 0.77 → 1.28, best-config-per-size). But that framing hid the real
 picture. This doc investigates the actual scaling behavior, three hypotheses deep.
 
-**Bottom line:** confirmed and mechanistically explained. `block` launches one CUDA block per
-naturally-occurring PBR block regardless of how much nonzero work it actually contains; cuSPARSE
-instead pre-partitions work by nnz count. On `diag_b0.3` this makes `block` launch ~5× more CUDA
-blocks than cuSPARSE needs for identical work. That's invisible while the GPU has slack (small N)
-but directly costs wall-clock time once the grid saturates the SMs (large N) — which is exactly the
-crossover the sweep measured.
+**Bottom line:** H1–H3 confirm and mechanistically explain the correlation — `block` launches ~5×
+more CUDA blocks than cuSPARSE needs on `diag_b0.3`, invisible while the GPU has slack (small N) but
+directly on the critical path once the grid saturates the SMs (large N). **H4 then built a
+purpose-designed kernel to test whether that mechanism is *sufficient* on its own — and it isn't.**
+Reducing CTA count in isolation (no other change) doesn't recover cuSPARSE's speed and gets *worse*
+past a small chunk size, with DRAM traffic exploding up to 7.4× for identical total work. The real
+gap is at least two mechanisms, not one: grid-size mismatch (confirmed) **and** cuSPARSE's genuinely
+nnz-*balanced* (not just block-*count*-balanced) work distribution, which our naive chunking doesn't
+replicate. See H4 for the full, honestly-reported (partially negative) result.
 
 ---
 
@@ -176,18 +179,104 @@ than `block` does across the same size range: `rowgroup` 0.57→0.96 (+0.39) vs 
 group, atomicAdd-per-strip-flush bookkeeping) currently outweighs the benefit at these particular
 configs, rather than the mechanism being wrong.
 
+## H4: Direct verification via a purpose-built diagnostic kernel
+
+**Hypothesis:** if H3's mechanism (CTA count / wave count) is the dominant cause, then a kernel that
+changes *only* CTA count — nothing else — should close most of the gap to cuSPARSE as chunk size
+grows, with DRAM traffic roughly unchanged (same total work, just batched differently).
+
+**Experiment:** built `pbr_spmm_chunk_kernel` — a new, minimal kernel whose per-iteration body is
+byte-for-byte identical to `pbr_spmm_vec_kernel`'s (own smem_X/smem_Y carve-out, own load, own
+`atomicAdd` flush, zero reuse across iterations), wrapped in a `#pragma unroll` loop over
+`chunk_size` PBR blocks per CTA (`grid.x = ceil(num_pbr_blocks / chunk_size)`). Deliberately changes
+*nothing else* `rowgroup`/`colgroup`/`tile` also change (no persistent smem_Y, no extra sync
+patterns, no occupancy-tuned grouping) — an ablation that isolates the one variable H3 blamed.
+Correctness: 480+96 new parametrized cases (`TestPBRChunkKernel`, chunk_size ∈ {2,4,8,16,32,64}) all
+pass against `block` as ground truth. ncu-profiled `block` vs `chunk` (all 6 sizes) vs cuSPARSE on
+the identical `diag_b0.3` matrix, N=1024 and N=262144, f64 and f512
+(`jobs/profile_chunk_scaling/`, output in `ncu_out/chunk_scaling/`).
+
+**Finding: the simple version of the hypothesis does not hold — and the failure mode is itself
+informative.**
+
+At N=1024 (GPU has slack, `waves/SM < 1.2` for `block`): time gets **monotonically worse** as
+chunk_size grows — expected, since there's no oversubscription to relieve, so batching PBR blocks
+sequentially per CTA is pure added serialization with no compensating benefit:
+
+| chunk_size | f64 time (ms) | f512 time (ms) | waves/SM |
+|---|---|---|---|
+| `block` (=1) | 0.0124 | 0.0595 | 1.14 |
+| 2 | 0.0127 | 0.0644 | 0.62 |
+| 4 | 0.0150 | 0.0677 | 0.31 |
+| 8 | 0.0207 | 0.0832 | 0.17 |
+| 16 | 0.0457 | 0.1324 | 0.09 |
+| 32 | 0.1012 | 0.2482 | 0.04 |
+| 64 | 0.1304 | 0.4666 | 0.02 |
+| cuSPARSE | 0.0173 | 0.0261 | 0.25 |
+
+At N=262144 (the regime H3 predicts should benefit) — **it doesn't.** `waves/SM` drops exactly as
+designed (290.63 → 159.84 → 79.92 → 44.40 → 22.20 → 11.10 → 4.54, essentially halving each step,
+confirming the grid-shrink mechanism works exactly as modeled), but wall-clock time stays flat for
+small chunks and then gets **worse**, never approaching cuSPARSE at any chunk size:
+
+| chunk_size | f64 time (ms) | f512 time (ms) | waves/SM | regs/thread | f512 DRAM rd (MB) |
+|---|---|---|---|---|---|
+| `block` (=1) | 1.7204 | 12.9913 | 290.63 | 40 | 1099.2 |
+| 2 | 1.6947 | 12.9072 | 159.84 | 48 | 1270.3 |
+| 4 | 1.6978 | 12.9497 | 79.92 | 48 | 3118.6 |
+| 8 | 1.7173 | 14.8244 | 44.40 | 56 | 5449.6 |
+| 16 | 1.7895 | 15.6322 | 22.20 | 56 | 6803.6 |
+| 32 | 1.9128 | 16.4131 | 11.10 | 56 | 7776.6 |
+| 64 | 1.7948 | 16.7506 | 4.54 | 40 | 8141.3 |
+| cuSPARSE (`csrmm_alg2`) | 0.6114 | 4.1068 | 63.94 / 255.75 | 44 | 165.0 / 1203.2 |
+
+Even `chunk=64` — **64× fewer waves than `block`** — is still ~13× slower than cuSPARSE at f512, and
+markedly *slower* than `chunk=2`. Two things stand out as the actual cause:
+- **DRAM traffic explodes with chunk_size for supposedly identical total work** — f512 reads climb
+  1099 → 1270 → 3119 → 5450 → 6804 → 7777 → **8141 MB**, a 7.4× increase from `block` to `chunk=64`,
+  despite every chunk size processing the exact same matrix/features. Register count rises modestly
+  (40→48→56) and `sm__warps_active%` *drops* (91%→~74-83%) for most chunk sizes before an anomalous
+  partial recovery at chunk=64 — consistent with the `#pragma unroll`'d loop increasing per-thread
+  live state/register pressure and degrading cache locality (each CTA now touches a wider, more
+  scattered working set sequentially, with no cross-iteration reuse designed in) rather than a clean
+  occupancy win.
+- **cuSPARSE's `csr_partition_kernel` balances by nnz, our chunking only balances by block *count*.**
+  `diag_b0.3` blocks don't all carry identical nnz (density=0.3 gives real variance per 8×8 block).
+  Grouping a *fixed count* of blocks per CTA does not guarantee a *fixed amount of work* per CTA — as
+  chunk_size grows, per-CTA nnz variance grows too, so the slowest CTA (the actual determinant of
+  kernel end time) becomes a worse outlier. This directly tracks the observed `sm__throughput`
+  decline (30.26% → 23.54% from `block` to `chunk=32` at f512) and gives a mechanistic explanation
+  for why bigger chunks measured *worse*, not better.
+
+**Conclusion of H4:** CTA-count/wave-count (H3) is a real, confirmed contributor, but it is **not
+sufficient on its own** — a kernel that changes only that variable, with no other change, fails to
+close the gap and actively regresses beyond a small chunk size. The remaining gap is most plausibly
+cuSPARSE's genuinely *nnz-balanced* work partitioning (equal work per launched unit, not just equal
+block count) combined with a more register/cache-efficient per-nonzero compute path — neither of
+which a naive `#pragma unroll` chunking loop replicates. This is exactly the kind of result a good
+ablation should produce: it rules out an oversimplified version of the hypothesis and sharpens what
+to build next.
+
 ## Conclusion
 
 The improving-with-scale story in the original sweep summary was an artifact of re-tuning the PBR
-config independently at every size. Held fixed, the real trend is degradation on several matrices,
-and it has a concrete, measurable cause: `block`'s one-CTA-per-PBR-block launch granularity is
-**~5× finer than cuSPARSE's nnz-balanced work partition** for `diag_b0.3`. That mismatch is latent
-while the GPU has spare capacity and becomes the dominant cost once the grid saturates the SMs —
-which happens well before N=262144 (the fixed-config table already shows the crossover between
-4096 and 16384).
+config independently at every size. Held fixed, the real trend is degradation on several matrices.
+H1–H3 identified a real, measurable contributor: `block`'s one-CTA-per-PBR-block launch granularity
+is **~5× finer than cuSPARSE's nnz-balanced work partition** for `diag_b0.3`, latent while the GPU
+has spare capacity and on the critical path once the grid saturates the SMs (well before N=262144).
+
+**H4 then falsified the simple version of that story.** A kernel built specifically to change only
+CTA count — nothing else — does not recover cuSPARSE's speed, and actively gets worse past a small
+chunk size, with DRAM traffic exploding for identical total work. The honest picture: CTA count is a
+*real but insufficient* contributor. The rest of the gap is most plausibly cuSPARSE's genuinely
+nnz-*balanced* (not just block-*count*-balanced) partitioning — its `csr_partition_kernel` equalizes
+actual work per launched unit, which a naive count-based grouping does not — combined with a more
+register/cache-efficient per-nonzero compute path.
 
 This is a **different root cause than the tile kernel's failure** (see `TILE_STATE.md` — that was
-missing vectorization, not this). It also suggests the more promising next lever isn't "group by
-PBR-block count" (what `rowgroup`/`colgroup`/`tile` all do) but **group by nnz-count** — mirroring
-cuSPARSE's own `csr_partition_kernel` — so that the number of launched CUDA blocks tracks actual work
-rather than block *occurrence* count.
+missing vectorization, not this). It also sharpens the next lever worth trying: not "group by
+PBR-block count" (what `rowgroup`/`colgroup`/`tile`/`chunk` all do) but **group by nnz-count**,
+mirroring cuSPARSE's own `csr_partition_kernel`, so the number of launched CUDA blocks — and the
+work assigned to each — tracks actual nnz rather than block *occurrence* count. Any future attempt
+at this should be benchmarked against the `chunk` kernel's numbers above as the honest baseline, not
+against `block` alone, since H4 shows naive grouping is not automatically an improvement.
