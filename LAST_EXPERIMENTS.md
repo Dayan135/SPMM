@@ -298,6 +298,59 @@ sizes. Full writeup: `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H5.
 
 ---
 
+## 5. Instruction-mix profiling: the per-block decode overhead (2026-07-13)
+
+### Motivation
+
+Experiment 4 (H5) explained why *grouping-based* fixes can't close the gap to cuSPARSE (L2-locality
+loss), but not why `block` itself — no grouping at all — trails cuSPARSE in the first place. The
+open clue: `sm__throughput` at N=262144 was 67.3%/30.3% (f64/f512) for `block` vs 95.4%/58.4% for
+cuSPARSE's `csrmm_alg2` — cuSPARSE extracts far more useful work per occupied cycle.
+
+### Hypothesis
+
+`block`'s bitmask-decode logic (`pbr_spmm_zero_idle_kernel`/`pbr_spmm_vec_kernel`, `pbr_kernel.cu`) —
+unpacking the 64-bit occupancy code into `packed_active_rows`/`packed_row_offsets`/
+`packed_cols_physical`/`packed_cols_logical` via two 8-iteration unrolled loops plus `__popcll`/
+`__clz` — is not gated by thread index. Every one of the 128 threads in a CTA redundantly repeats the
+same ~16-24 integer/bit-scan ops to decode the *same* code, instead of one thread decoding once and
+broadcasting.
+
+### Experiment
+
+Instruction-mix ncu profiling (`sm__inst_executed_pipe_{fma,alu}.sum`, thread-level
+`sm__sass_thread_inst_executed_op_{integer,fp32}_pred_on.sum`) on `block` vs cuSPARSE, identical
+`diag_b0.3` matrix, N=262144, f64 and f512.
+
+### Results
+
+| | features | pipe ALU:FMA | thread int:fp32 | SM throughput |
+|---|---|---|---|---|
+| `block` | 64 | 0.99 | **12.80** | 67.36% |
+| cuSPARSE | 64 | 1.30 | **2.78** | 95.31% |
+| `block` | 512 | 0.74 | **8.19** | 30.25% |
+| cuSPARSE | 512 | 1.30 | **2.78** | 58.31% |
+
+Confirmed decisively. `block`'s ALU pipe executes almost as many instructions as its FMA pipe (should
+be far below 1 for a matmul kernel). At the thread level, `block` executes **8–13× more integer
+instructions per floating-point instruction** than cuSPARSE, whose ratio (2.78) doesn't move with
+feature count at all — exactly what a well-amortized design should look like. `block`'s ratio
+improves somewhat at f512 (more FMA work amortized against the same fixed per-launch decode cost),
+but is still ~2.9× worse than cuSPARSE even there.
+
+### Implication
+
+The redundant per-thread decode is a textbook compute-once/broadcast antipattern: every thread
+independently re-derives values (`n_r`, `n_c`, `packed_active_rows`, `packed_row_offsets`,
+`packed_cols_physical`, `packed_cols_logical`, `p`/`vp_log2`) that are identical across the whole CTA.
+Fix: one thread (or one per warp via `__shfl_sync`) computes these once, shared via smem or warp
+shuffle — cutting redundant integer-instruction volume by roughly the thread-block size (128×)
+instead of the current 1:1 duplication. Unlike H3–H5 (all launch-configuration/grouping questions
+that turned out not to be the primary lever), this is a genuine kernel-body fix that directly targets
+the measured cause. Full writeup: `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H6.
+
+---
+
 ## Open questions / next steps
 
 1. **Auto kernel selection** — pick block vs rowgroup based on expected compute per group

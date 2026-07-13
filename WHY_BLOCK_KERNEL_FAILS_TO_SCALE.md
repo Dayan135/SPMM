@@ -2,17 +2,20 @@
 
 **Question:** the full benchmark sweep (commit `69041a9`) reported PBR's advantage over cuSPARSE
 *improving* with size (geomean 0.77 → 1.28, best-config-per-size). But that framing hid the real
-picture. This doc investigates the actual scaling behavior, five hypotheses deep.
+picture. This doc investigates the actual scaling behavior, six hypotheses deep.
 
-**Bottom line (updated after H5):** `block` launches ~5× more CUDA blocks than cuSPARSE needs on
-`diag_b0.3` (H1–H3) — a real correlation, but two follow-up purpose-built kernels each ruled out a
-simpler version of "why": H4 showed reducing CTA count alone doesn't recover cuSPARSE's speed and
-gets *worse* past a small chunk size; H5 showed nnz-*balanced* grouping (branch `feat/pbr-nnzgroup`)
-doesn't either, even when directly verified to achieve near-perfect per-group work balance. **The
-actual mechanism, found by H5's follow-up profiling: coarser grouping — by any criterion — collapses
-L2 cache hit rate (94.6% → 60.0%) that `block`'s massive, spatially-narrow concurrency provides for
-free**, while the underlying memory-request volume never changes. This is a spatial-locality cost
-neither CTA-count nor nnz-balance can see or fix. See H5 for the full mechanism and evidence.
+**Bottom line (updated after H6): two separate, now fully-identified causes.** (1) *Why grouping
+can't fix it*: any kernel that consolidates PBR blocks into fewer, coarser CUDA blocks — by CTA count
+(H3/H4) or by nnz-balance (H5) — trades away L2 cache hit rate (94.6% → 60.0%) that `block`'s massive,
+narrow concurrency provides for free, while the underlying memory-request volume never changes. This
+is a spatial-locality cost neither CTA-count nor nnz-balance can see or fix, and it's why
+`rowgroup`/`colgroup`/`chunk`/`tile` all fail to close the gap. (2) *Why `block` itself trails
+cuSPARSE, independent of grouping*: instruction-mix profiling (H6) found `block` executes **8–13×
+more integer instructions per floating-point instruction** than cuSPARSE — a redundant per-thread
+bitmask-decode step (every one of 128 threads in a CTA independently repeats the same ~20 integer
+ops) that should be computed once and shared. This directly explains the SM-throughput gap
+(67%/30% vs cuSPARSE's 95%/58%) and, unlike H3–H5, is a concrete, fixable kernel-body inefficiency.
+See H6 for the full instruction-level evidence.
 
 ---
 
@@ -320,12 +323,60 @@ CTA-count hypothesis (H3/H4) and the nnz-balance hypothesis (H5) — neither tar
 only aggregate per-CTA work volume — which is exactly why neither grouping criterion moved the
 needle.**
 
+## H6: the per-block instruction overhead, isolated at the SASS level
+
+H5's L2-locality finding explains why *grouping-based* fixes fail — it doesn't explain why `block`
+itself (unmodified, no grouping at all) loses to cuSPARSE in the first place. The strongest existing
+clue was `sm__throughput`: at N=262144, cuSPARSE's `csrmm_alg2` hit 95.4%/58.4% (f64/f512) vs
+`block`'s 67.3%/30.3% — cuSPARSE extracts far more useful work per cycle from the SMs it occupies.
+
+**Hypothesis:** `block`'s per-PBR-block decode logic (unpacking the 64-bit occupancy bitmask into
+`packed_active_rows`/`packed_row_offsets`/`packed_cols_physical`/`packed_cols_logical` via two
+8-iteration unrolled loops plus `__popcll`/`__clz`) is **not gated by thread index** in either
+`pbr_spmm_zero_idle_kernel` or `pbr_spmm_vec_kernel` (`pbr_kernel.cu`) — every one of the 128 threads
+in a CTA redundantly re-executes the same ~16-24 integer/bit-scan operations to decode the *same*
+64-bit code, rather than one thread decoding once and broadcasting. For an 8×8 block with only ~19
+useful FMAs on average, up to 128× duplicated decode work could plausibly rival or exceed the actual
+arithmetic.
+
+**Experiment:** instruction-mix profiling (`sm__inst_executed_pipe_{fma,alu}.sum`, thread-level
+`sm__sass_thread_inst_executed_op_{integer,fp32}_pred_on.sum`) on `block` vs cuSPARSE's `csrmm_alg2`,
+identical `diag_b0.3` matrix, N=262144, f64 and f512.
+
+| | features | pipe ALU:FMA | thread int:fp32 | SM throughput |
+|---|---|---|---|---|
+| `block` | 64 | 0.99 | **12.80** | 67.36% |
+| cuSPARSE | 64 | 1.30 | **2.78** | 95.31% |
+| `block` | 512 | 0.74 | **8.19** | 30.25% |
+| cuSPARSE | 512 | 1.30 | **2.78** | 58.31% |
+
+**Finding: confirmed, decisively.** `block`'s ALU pipe executes almost as many instructions as its
+FMA pipe (0.74–0.99:1) — for a matmul kernel, that ratio should be far below 1. At the thread level,
+`block` executes **8–13× more integer instructions per floating-point instruction** than cuSPARSE
+does (12.80/8.19 vs cuSPARSE's constant 2.78 at both feature counts — cuSPARSE's ratio doesn't move
+with features, exactly as expected for a well-amortized design). `block`'s ratio *does* improve
+somewhat at f512 vs f64 (more FMA work gets amortized against the same fixed per-launch decode cost),
+but even then it's still ~2.9× worse than cuSPARSE's baseline ratio. This directly explains the
+`sm__throughput` gap: a large fraction of `block`'s occupied cycles are spent on ALU/integer
+instructions that produce no arithmetic result, not on the FMA work that actually computes the
+matmul.
+
+**Root cause, concretely:** the redundant per-thread decode is a textbook "compute-once,
+broadcast-across-the-block" antipattern — every thread independently re-derives values (`n_r`, `n_c`,
+`packed_active_rows`, `packed_row_offsets`, `packed_cols_physical`, `packed_cols_logical`, `p`/
+`vp_log2`) that are identical across the whole CTA. The fix is mechanical: have one thread (or one
+thread per warp, via `__shfl_sync`) compute these once and either write them to shared memory for all
+threads to read, or broadcast via warp shuffle — cutting the redundant integer-instruction volume by
+roughly the thread-block size (128×) rather than the current 1:1 duplication. This is a genuine kernel
+rewrite, not a launch-configuration change, and unlike every grouping-based attempt (H4/H5) it
+directly targets the actual measured cause rather than a correlated symptom.
+
 ## Conclusion
 
 The improving-with-scale story in the original sweep summary was an artifact of re-tuning the PBR
 config independently at every size. Held fixed, the real trend is degradation on several matrices.
 
-Three mechanisms were hypothesized and tested, in order, each ruling out the simpler one before it:
+Four mechanisms were hypothesized and tested, in order, each ruling out the simpler one before it:
 
 1. **H1–H3**: `block` launches ~5× more CUDA blocks than cuSPARSE's nnz-balanced partition for
    `diag_b0.3` — a real correlation, but H4 showed reducing CTA count alone (holding grouping
@@ -334,11 +385,16 @@ Three mechanisms were hypothesized and tested, in order, each ruling out the sim
 2. **H5 (nnz-balanced grouping, branch `feat/pbr-nnzgroup`)**: hypothesized cuSPARSE's advantage was
    specifically its nnz-*balanced* partitioning. Directly falsified — even a 6.5× tighter per-group
    nnz balance (verified by direct measurement) produced zero runtime change.
-3. **The real mechanism (also H5)**: coarser grouping — by any criterion — trades away L2 cache hit
-   rate (94.6% → 60.0%) that `block`'s massive, spatially-narrow concurrency provides "for free."
+3. **The grouping mechanism (also H5)**: coarser grouping — by any criterion — trades away L2 cache
+   hit rate (94.6% → 60.0%) that `block`'s massive, spatially-narrow concurrency provides "for free."
    L1TEX-level request volume is flat throughout; only the fraction served by cache collapses. This
-   is a **spatial-locality cost**, orthogonal to both CTA-count and nnz-balance, and it's the actual
-   driver of the DRAM-traffic-growth pattern first observed in H4.
+   explains why *grouping* can't fix the gap, but not why `block` itself trails cuSPARSE.
+4. **H6 (the actual per-kernel-body cause)**: instruction-mix profiling found `block` executes
+   8–13× more integer instructions per floating-point instruction than cuSPARSE, from a redundant
+   decode step every thread in a CTA independently repeats instead of computing once and sharing.
+   This directly explains the `sm__throughput` gap and is a fixable, concrete kernel inefficiency —
+   unlike H3–H5, which were all launch-configuration/grouping questions that turned out not to be
+   the primary lever.
 
 **Practical implication:** any future kernel that groups multiple PBR blocks per CUDA block (whether
 by count, by nnz, or by any other work-balance criterion) needs to also preserve *spatial* locality
