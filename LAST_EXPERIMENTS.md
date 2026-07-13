@@ -162,14 +162,68 @@ example to a single 2×2 tile, `'grid'` to four singletons). GPU correctness: `T
 all 9 shapes × {grid, greedy} against the `block` kernel as ground truth, plus sparse-fill,
 non-block-aligned-size, and scattered-corners edge cases.
 
-**GPU build + test results: _pending remote run_** (RTX 3090, `feat/pbr-tileblock`).
+**GPU build + test results:** all 2360 tests pass on RTX 3090 (1728 `TestPBRTileKernel` cases across all
+9 shapes × {grid, greedy} × dtypes/sizes/min_nnz, plus sparse-fill / non-aligned-size / scattered-corners
+edge cases). Correctness is not in question — the kernel is right, just slow (see below).
 
-### Benchmark plan
+### Benchmark results (commit `69041a9`, 5 sizes × 10 matrices × 6 features, RTX 3090)
 
-Sweep `tile` (9 shapes × {grid, greedy}) against `block`/`rowgroup`/`colgroup` on the existing
-scattered/diag families plus two new FEM families: `fem2d` (grid-aligned reuse — `'grid'` should already
-do well) and `fem2d_permuted` (mesh nodes relabeled to break index-space locality while preserving reuse
-structure — the case that isolates what `'greedy'` recovers that `'grid'` cannot). Results: _pending._
+**`tile` loses to `block` everywhere, and gets *worse* with size.** Fastest-kernel win counts across
+~300 (size, matrix, feature) cells: `block` wins 46-60/60 at every size; `tile` wins **1** cell total
+(at 65536). Geomean `tile_vs_block` ratio (>1 = tile faster) degrades monotonically: 0.90 (1024) → 0.86
+(4096) → 0.80 (16384) → 0.79 (65536) → **0.77 (262144)**. `tile` is also the worst of the three fusion
+kernels at 262144 (rowgroup 0.87, colgroup 0.87, tile 0.77 vs block).
+
+**Worst case is the one that should be best.** `diag_b1.0` (fully dense 64-wide diagonal band — every
+2×2/4×4 tile the `'grid'` strategy forms is 100% populated, no scattering to fight) shows `tile` at
+**2.4× slower** than `block` at 262144 (block 4.0ms vs tile-best 9.5ms; rowgroup/colgroup similarly bad,
+9.7/9.3ms). The best `tile` *shape* on this matrix is almost always `1×1` — bigger tiles (more nominal
+reuse) make it *worse*. One bright spot: PBR+`block` beats cuSPARSE at scale (1.03× at 16384 → 1.27× at
+262144), so the format itself remains a real win; it's specifically the fusion kernels that underperform.
+
+`grid` vs `greedy` grouping is indistinguishable here (0.99-1.00× everywhere) — expected, since this
+matrix set (FEM dropped per experiment scope, see commit `69041a9`) has no permutation-hidden structure
+for `greedy` to recover that `grid` can't already see.
+
+Full data/config: `plots/tileblock_partial/` (1024/4096 only — see truncation note below), raw CSV at
+commit time in W&B project `private-dayan/torch-fast-spdmm`, runs `69041a9_<size>_<matrix>`.
+
+Three infrastructure bugs surfaced and fixed along the way (all in git history on `feat/pbr-tileblock`):
+scattered-matrix "density" was a fraction of the whole block grid → O(N²) nnz, OOM at 262144 (rescaled
+to scale as `1024/N`, kept O(N)); one job per size timed out at 24h with the full config matrix (split to
+one job per (size, matrix)); `wandb.Table` silently truncates at 10k rows, which had dropped FEM and the
+densest scattered matrices from the very runs reported as "completed" (fixed by the same per-(size,matrix)
+split — each run's table is now ~1.4k rows).
+
+### Root-cause profiling: why does a *perfectly-tiled* dense matrix still lose? (2026-07-13, ncu)
+
+Profiled `block` vs `tile` (1×1/2×2/4×4, `'grid'`) on `diag_b1.0` @ 262144, f64 and f512
+(`jobs/profile_tileblock_diag/profile_20260712.sh`, output in `ncu_out/tileblock_diag/`). Two compounding
+causes, neither of which is about tile *selection* — `diag_b1.0`'s tiles are already 100% dense:
+
+**1. `tile` has no vectorized (`float4`) inner loop — this alone dominates even when grid geometry
+matches.** At f64, `block` and `tile_1×1`/`tile_2×2` all launch the identical grid (`grid.z=1`, same
+block count — `p` covers all 64 features in one pass for every variant tested). Yet `tile` is still
+**2.8-3.3× slower** at *identical* grid geometry: `block` 1.84ms vs `tile_1×1` 6.03ms, `tile_2×2` 5.14ms.
+`block`'s `pbr_spmm_vec_kernel` dispatches a `float4`/`double2`-vectorized path whenever
+`features % L == 0` (`pbr_kernel.cu:162-315`); the `tile` kernel added in this branch is plain scalar.
+That gap alone accounts for most of the loss, independent of tile shape.
+
+**2. Bigger tiles compound it via more redundant passes.** At f512, `p = SMEM_SIZE/((tile_rows+tile_cols)·
+BLOCK_ROWS)` shrinks as tiles grow (128→64→32 for 1×1→2×2→4×4 @ SMEM=2048), forcing more `feat_tile`
+passes: `grid.z` = 1 (block) vs 4/8/16 (tile 1×1/2×2/4×4). Each extra pass re-reads the same small
+per-tile metadata (`tile_offsets`, `tile_row/col_origins`, `tile_row/col_local`) from global memory, so
+`dram__bytes_read.sum` climbs *monotonically with tile size* — 1.15GB (block) → 1.37 → 1.65 → **2.22GB**
+(tile 1×1→2×2→4×4) — the opposite of the X-reuse the design intended. This is exactly why bigger tiles
+measured worse in the benchmark, and why `1×1` usually won among tile shapes there.
+
+**Implication:** the negative benchmark result is not a tile-*selection* problem (the user's proposed
+biclique-cover / co-clustering refinement to `'greedy'`, see conversation 2026-07-12, would not move
+this number — `'grid'` already produces ideal tiles on this matrix). It's a kernel-*implementation* gap:
+no vectorized load/store path, plus a smem-split formula that trades away occupancy for reuse in a way
+that isn't paying for itself yet. Fixing this (vectorize the inner loop; reconsider whether metadata
+should be loaded once per tile-invocation-across-feat-tiles rather than once per (tile, feat_tile) pair)
+is the prerequisite before any further investment in tile-selection algorithms.
 
 ---
 
