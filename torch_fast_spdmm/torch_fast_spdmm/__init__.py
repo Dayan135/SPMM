@@ -19,14 +19,20 @@ def _reorder_pbr_arrays(block_codes_np, block_offsets_np, block_data_np, order):
     """Permute a PBR block array (codes/offsets/data) by `order`, recomputing
     block_offsets (a CSR-style prefix sum into block_data) from the permuted
     codes' popcounts. Shared by colgroup's col-sort and the tile kernel's
-    per-shape tile-sort -- both need the same "reorder blocks, repack data" step."""
+    per-shape tile-sort -- both need the same "reorder blocks, repack data" step.
+
+    offsets_out keeps the same num_blocks+1 contract as the original
+    block_offsets (pbr_matrix.hpp: size = block_codes.size()+1, last entry =
+    total nnz) -- required so callers can treat it as a cumulative-nnz prefix
+    sum (e.g. _build_group_offsets' nnz-balanced grouping), even though the
+    kernels themselves only ever index offsets_out[i] for i < num_blocks."""
     if len(order) == 0:
         return block_codes_np.astype(np.int64), block_offsets_np, block_data_np
 
     codes_out = block_codes_np[order].astype(np.int64)
     popcounts = np.array([bin(int(c)).count('1') for c in block_codes_np], dtype=np.int64)
     lengths_out = popcounts[order]
-    offsets_out = np.concatenate([[0], np.cumsum(lengths_out[:-1])]).astype(block_offsets_np.dtype)
+    offsets_out = np.concatenate([[0], np.cumsum(lengths_out)]).astype(block_offsets_np.dtype)
 
     data_out = np.empty(len(block_data_np), dtype=block_data_np.dtype)
     for k, orig_i in enumerate(order):
