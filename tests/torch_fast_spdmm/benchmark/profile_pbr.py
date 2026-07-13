@@ -76,9 +76,9 @@ _MATRIX_PROFILES = {
 }
 
 
-def build(size: int, features: int, block: int, min_nnz: int,
-          matrix_profile: str, smem_size: int, kernel: str,
-          tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid"):
+def build_matrix(size: int, matrix_profile: str):
+    """Build the raw scipy matrix for a --matrix-profile. Shared with
+    profile_cusparse.py so both drivers profile the identical matrix."""
     kind, cfg = _MATRIX_PROFILES[matrix_profile]
     if kind == "scattered":
         mat = generate_scattered_block_matrix(
@@ -96,6 +96,13 @@ def build(size: int, features: int, block: int, min_nnz: int,
     else:  # fem
         gen = generate_permuted_fem_2d if cfg["permuted"] else generate_fem_2d
         mat = gen(system_size=size).astype(np.float32)
+    return mat
+
+
+def build(size: int, features: int, block: int, min_nnz: int,
+          matrix_profile: str, smem_size: int, kernel: str,
+          tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid"):
+    mat = build_matrix(size, matrix_profile)
 
     pbr_mat = csr_to_pbr(mat, block_rows=block, block_cols=block,
                          min_nnz_per_block=min_nnz)
