@@ -18,6 +18,9 @@ Matrix profiles (--matrix-profile):
                      no off-diag noise); the case where 'tile' lost 2.4x to 'block'
                      at 262144 despite the 'grid' strategy producing perfectly
                      dense tiles — see LAST_EXPERIMENTS.md Experiment 3
+  diag_skewed      — fully-dense diagonal band + off-diagonal noise, deliberately
+                     bimodal per-block nnz (CV=2.08 vs diag_b0.3's 0.19) — tests
+                     nnz-balanced grouping where there's real per-block work skew
   fem2d            — 2D FEM stiffness matrix (grid-aligned reuse)
   fem2d_permuted   — same, with mesh nodes relabeled (breaks grid-aligned reuse;
                      stress case for the 'grid' vs 'greedy' tile strategies)
@@ -80,6 +83,13 @@ _MATRIX_PROFILES = {
     "diag_dd0.05":      ("diag",      {"block_size": 64, "diag_density": 0.05,  "off_diag_density": 0.0000002}),
     "diag_b0.3":        ("diag",      {"block_size": 64, "diag_density": 0.3,   "off_diag_density": 0.0}),
     "diag_b1.0":        ("diag",      {"block_size": 64, "diag_density": 1.0,   "off_diag_density": 0.0}),
+    # Deliberately bimodal per-8x8-block nnz: fully-dense in-band blocks (~64
+    # nnz) + mostly-near-threshold off-band blocks from the off-diagonal noise
+    # (structural check: min=1 max=64 mean=11.1 std=23.1, CV=2.08 at N=262144
+    # -- vs diag_b0.3's CV=0.19). Tests nnz-balanced grouping (see
+    # WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md) on a matrix that actually HAS
+    # per-block work skew for it to correct, unlike diag_b0.3.
+    "diag_skewed":      ("diag",      {"block_size": 64, "diag_density": 1.0,   "off_diag_density": 0.00002}),
     "fem2d":            ("fem",       {"permuted": False}),
     "fem2d_permuted":   ("fem",       {"permuted": True}),
 }
