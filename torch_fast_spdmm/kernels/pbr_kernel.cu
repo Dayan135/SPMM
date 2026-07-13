@@ -1183,6 +1183,257 @@ int get_pbr_tile_blocks_per_sm(int tile_rows, int tile_cols, int block_rows, int
 }
 
 
+// ===========================================================================
+// Chunk kernel — diagnostic-only, isolates the "CTA count" variable
+// ===========================================================================
+//
+// WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md found `block` launches one CUDA block
+// per naturally-occurring PBR block (grid.x == num_pbr_blocks) while cuSPARSE
+// partitions work by nnz count -- ~5x fewer, denser launched units on
+// diag_b0.3. rowgroup/colgroup also reduce CTA count, but they ALSO change
+// the flush pattern (smem_Y persists across a group, atomicAdd once per
+// strip/never) and add extra __syncthreads, confounding "fewer CTAs helped"
+// with "the reuse logic helped/hurt".
+//
+// This kernel changes ONLY the CTA count: each CUDA block processes exactly
+// CHUNK PBR blocks via a #pragma-unrolled loop, and the body of each
+// iteration is byte-for-byte the same per-block work `pbr_spmm_vec_kernel`
+// already does (own smem_X/smem_Y carve-out, own load, own atomicAdd flush --
+// zero reuse across chunk iterations). If this alone closes most of the gap
+// to cuSPARSE at scale, that confirms CTA-count/occupancy is the dominant
+// cause, isolated from every other design choice rowgroup/colgroup/tile make.
+//
+// No occupancy-guided sizing: chunk_size is a direct user/caller choice
+// (grid.x = ceil(num_pbr_blocks / CHUNK)), unlike rowgroup/colgroup/tile's
+// group_size, which is derived from an occupancy query.
+
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE, int CHUNK>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_chunk_kernel(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    using vec_t = typename PbrVec<scalar_t>::type;
+    constexpr int L = PbrVec<scalar_t>::lanes;
+    union lane_u { vec_t v; scalar_t s[L]; };
+
+    __shared__ __align__(16) scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (batch_idx >= batch_size) return;
+
+    // Every thread in the CTA takes the same branch at each of these guards
+    // (b_idx depends only on blockIdx/ci; code/n_r/n_c are the same value for
+    // every thread), so the __syncthreads() calls below stay uniform across
+    // the block despite the `continue`s -- no divergence/deadlock risk.
+    #pragma unroll
+    for (uint32_t ci = 0; ci < CHUNK; ++ci) {
+        const uint32_t b_idx = blockIdx.x * CHUNK + ci;
+        if (b_idx >= num_pbr_blocks) continue;
+
+        const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+        const uint32_t row_origin = block_coords[b_idx * 2];
+        const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+        const uint32_t data_offset = block_offsets[b_idx];
+
+        // --- SPARSITY SCAN & REGISTER PACKING (identical to pbr_spmm_vec_kernel) ---
+        uint32_t n_r = 0;
+        uint64_t col_mask = 0;
+        const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+        uint32_t packed_active_rows = 0;
+        uint64_t packed_row_offsets = 0;
+        uint32_t current_relative_offset = 0;
+
+        #pragma unroll
+        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+            if (row_mask > 0) {
+                packed_active_rows |= (r << (n_r * 3));
+                packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+                n_r++;
+                col_mask |= row_mask;
+                current_relative_offset += __popcll(row_mask);
+            }
+        }
+
+        const uint32_t n_c = __popcll(col_mask);
+        if (n_r == 0 || n_c == 0) continue;
+
+        uint32_t packed_cols_physical = 0;
+        uint32_t packed_cols_logical = 0;
+        uint32_t pc_idx = 0;
+
+        #pragma unroll
+        for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+            if ((col_mask >> c) & 1) {
+                packed_cols_logical |= (pc_idx << (c * 3));
+                packed_cols_physical |= (c << (pc_idx * 3));
+                pc_idx++;
+            }
+        }
+
+        const uint32_t vp_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features) / L);
+        const uint32_t vp_mask = (1u << vp_log2) - 1u;
+        const uint32_t p       = (1u << vp_log2) * L;
+
+        const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+        const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+        for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+            const uint32_t current_p = min(p, feat_end - base_f);
+            const uint32_t vp = current_p / L;
+
+            scalar_t* smem_X = smem;
+            scalar_t* smem_Y = smem + (n_c * current_p);
+
+            const uint32_t total_xv = n_c * vp;
+            for (uint32_t i = tx; i < total_xv; i += THREADS_PER_BLOCK) {
+                const uint32_t c_idx = i >> vp_log2;
+                const uint32_t f_off = (i & vp_mask) * L;
+                const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+
+                const vec_t xv = *reinterpret_cast<const vec_t*>(
+                    &X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_off]);
+                *reinterpret_cast<vec_t*>(&smem_X[c_idx * current_p + f_off]) = xv;
+            }
+
+            __syncthreads();
+
+            const uint32_t total_vwork = n_r * vp;
+            for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
+                const uint32_t pr    = vwork >> vp_log2;
+                const uint32_t f_off = (vwork & vp_mask) * L;
+
+                const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+                uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+                const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+                lane_u acc;
+                #pragma unroll
+                for (int l = 0; l < L; ++l) acc.s[l] = 0;
+
+                #pragma unroll
+                for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                    if ((row_code >> c) & 1) {
+                        const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                        const scalar_t coef = __ldg(&block_data[local_data_ptr]);
+
+                        lane_u xu;
+                        xu.v = *reinterpret_cast<const vec_t*>(&smem_X[pc * current_p + f_off]);
+                        #pragma unroll
+                        for (int l = 0; l < L; ++l) acc.s[l] += coef * xu.s[l];
+
+                        local_data_ptr++;
+                    }
+                }
+
+                *reinterpret_cast<vec_t*>(&smem_Y[pr * current_p + f_off]) = acc.v;
+            }
+
+            __syncthreads();
+
+            for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
+                const uint32_t pr    = vwork >> vp_log2;
+                const uint32_t f_off = (vwork & vp_mask) * L;
+
+                const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+                const uint32_t global_r = row_origin + actual_r;
+
+                lane_u yu;
+                yu.v = *reinterpret_cast<const vec_t*>(&smem_Y[pr * current_p + f_off]);
+                #pragma unroll
+                for (int l = 0; l < L; ++l) {
+                    atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
+                }
+            }
+
+            __syncthreads();
+        }
+    }
+}
+
+template <typename index_t, typename scalar_t>
+void launch_pbr_chunk_spmm(
+    const int num_pbr_blocks,
+    const int features,
+    const int batch_size,
+    const int cols,
+    const int rows,
+    const int runtime_block_rows,
+    const int runtime_block_cols,
+    const int chunk_size,
+    const int64_t* block_codes,
+    const index_t* block_coords,
+    const index_t* block_offsets,
+    const scalar_t* block_data,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream,
+    int smem_size
+) {
+    if (num_pbr_blocks == 0) return;
+
+    constexpr int THREADS_PER_BLOCK = 128;
+    constexpr int FEAT_BLOCK_SIZE   = 512;
+
+    const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
+    const dim3 block(THREADS_PER_BLOCK);
+
+    #define CHUNK_LAUNCH(BR, BC, TS, CH)                                                          \
+        do {                                                                                      \
+            const dim3 grid((num_pbr_blocks + CH - 1) / CH, batch_size, feat_blocks);             \
+            pbr_spmm_chunk_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK,                \
+                                  FEAT_BLOCK_SIZE, CH><<<grid, block, 0, stream>>>(                \
+                num_pbr_blocks, features, batch_size, cols, rows,                                  \
+                block_codes, block_coords, block_offsets, block_data, X, Y);                       \
+        } while (0)
+
+    #define DISPATCH_CHUNK(BR, BC, TS)                       \
+        do {                                                 \
+            if      (chunk_size <= 2)  CHUNK_LAUNCH(BR, BC, TS, 2);  \
+            else if (chunk_size <= 4)  CHUNK_LAUNCH(BR, BC, TS, 4);  \
+            else if (chunk_size <= 8)  CHUNK_LAUNCH(BR, BC, TS, 8);  \
+            else if (chunk_size <= 16) CHUNK_LAUNCH(BR, BC, TS, 16); \
+            else                       CHUNK_LAUNCH(BR, BC, TS, 32); \
+        } while (0)
+
+    #define DISPATCH_SMEM_CHUNK(BR, BC)                        \
+        do {                                                   \
+            if      (smem_size <= 512)  DISPATCH_CHUNK(BR, BC,  512); \
+            else if (smem_size <= 1024) DISPATCH_CHUNK(BR, BC, 1024); \
+            else                        DISPATCH_CHUNK(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_CHUNK(2, 2);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_CHUNK(4, 4);
+    else if (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_CHUNK(8, 8);
+    else throw std::invalid_argument("Unsupported block size for PBR chunk SpMM. Only 2x2, 4x4, and 8x8 are supported.");
+
+    #undef CHUNK_LAUNCH
+    #undef DISPATCH_CHUNK
+    #undef DISPATCH_SMEM_CHUNK
+}
+
+template void launch_pbr_chunk_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+
+
 // --- CSR remainder kernel (warp-per-row / CSR-Vector) ---
 //
 // One warp (32 lanes) owns one output row for ALL features.

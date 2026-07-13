@@ -118,6 +118,14 @@ def _build_cuda_dispatch():
         (torch.int64, torch.float64): core.pbr_spmm_cuda_i64_f64,
     }
 
+def _build_chunk_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_chunk_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_chunk_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_chunk_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_chunk_spmm_cuda_i64_f64,
+    }
+
 def _build_rowgroup_cuda_dispatch():
     return {
         (torch.int32, torch.float32): core.pbr_rowgroup_spmm_cuda_i32_f32,
@@ -135,6 +143,7 @@ def _build_colgroup_cuda_dispatch():
     }
 
 _CUDA_KERNEL_DISPATCH = None
+_CHUNK_CUDA_KERNEL_DISPATCH = None
 _ROWGROUP_CUDA_KERNEL_DISPATCH = None
 _COLGROUP_CUDA_KERNEL_DISPATCH = None
 
@@ -160,6 +169,46 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
         pbr_mat.rows,
         pbr_mat.block_rows,
         pbr_mat.block_cols,
+        meta.codes,
+        meta.coords,
+        meta.offsets,
+        meta.data,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
+
+
+def pbr_batched_matmul_chunk_cuda(pbr_mat, x: torch.Tensor, chunk_size: int = 8,
+                                   csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+    """
+    Diagnostic-only variant: identical per-block body to the plain 'block' kernel,
+    but CHUNK PBR blocks are processed per CUDA block via a #pragma-unrolled loop
+    instead of one -- no smem reuse across the loop, no extra sync/flush logic.
+    Isolates the CTA-count/occupancy effect from everything rowgroup/colgroup/tile
+    also change. See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
+    chunk_size: PBR blocks processed per CUDA block; dispatched to {2,4,8,16,32}.
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
+    smem_size: 512 / 1024 / 2048 floats (same per-block smem split as 'block')
+    """
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+
+    global _CHUNK_CUDA_KERNEL_DISPATCH
+    if _CHUNK_CUDA_KERNEL_DISPATCH is None:
+        _CHUNK_CUDA_KERNEL_DISPATCH = _build_chunk_cuda_dispatch()
+
+    kernel = _CHUNK_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
+        chunk_size,
         meta.codes,
         meta.coords,
         meta.offsets,
@@ -584,7 +633,7 @@ def pbr_batched_matmul_tile_cuda(pbr_mat, x: torch.Tensor, tile_rows: int = 2, t
 
 def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
                kernel: str = 'block', tile_rows: int = 2, tile_cols: int = 2,
-               tile_strategy: str = 'grid') -> torch.Tensor:
+               tile_strategy: str = 'grid', chunk_size: int = 8) -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
@@ -597,6 +646,12 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                             reuses both smem_X and smem_Y for the whole tile (see
                             pbr_batched_matmul_tile_cuda). tile_rows/tile_cols/tile_strategy
                             are only used when kernel='tile'.
+               'chunk'    — diagnostic-only: identical per-block body to 'block', but
+                            chunk_size PBR blocks per CUDA block via a #pragma-unrolled
+                            loop, no smem reuse across the loop. Isolates the CTA-count
+                            effect from rowgroup/colgroup/tile's added reuse machinery
+                            (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). chunk_size is only
+                            used when kernel='chunk'.
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -613,6 +668,9 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
             y = pbr_batched_matmul_tile_cuda(pbr_mat, x, tile_rows=tile_rows, tile_cols=tile_cols,
                                               tile_strategy=tile_strategy, csr_mode=csr_mode,
                                               smem_size=smem_size)
+        elif kernel == 'chunk':
+            y = pbr_batched_matmul_chunk_cuda(pbr_mat, x, chunk_size=chunk_size, csr_mode=csr_mode,
+                                               smem_size=smem_size)
         else:
             y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
@@ -779,6 +837,7 @@ __all__ = [
     'pbr_matmul',
     'pbr_batched_matmul_cpu',
     'pbr_batched_matmul_cuda',
+    'pbr_batched_matmul_chunk_cuda',
     'pbr_batched_matmul_rowgroup_cuda',
     'pbr_batched_matmul_colgroup_cuda',
     'pbr_batched_matmul_tile_cuda',

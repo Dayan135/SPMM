@@ -24,6 +24,11 @@ Matrix profiles (--matrix-profile):
 
 Kernels (--kernel):
   block    — original one-CUDA-block-per-PBR-block (default)
+  chunk    — diagnostic-only: identical per-block body to 'block', but
+             --chunk-size PBR blocks per CUDA block via a #pragma-unrolled
+             loop (no smem reuse across the loop) — isolates the CTA-count/
+             occupancy effect from rowgroup/colgroup/tile's added reuse
+             machinery. See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
   rowgroup — block-count-balanced fusion kernel, row-major order (smem_Y reuse)
   colgroup — block-count-balanced fusion kernel, col-sorted order (smem_X reuse)
   tile     — one CUDA block per tile_rows x tile_cols group of PBR blocks,
@@ -101,7 +106,8 @@ def build_matrix(size: int, matrix_profile: str):
 
 def build(size: int, features: int, block: int, min_nnz: int,
           matrix_profile: str, smem_size: int, kernel: str,
-          tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid"):
+          tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid",
+          chunk_size: int = 8):
     mat = build_matrix(size, matrix_profile)
 
     pbr_mat = csr_to_pbr(mat, block_rows=block, block_cols=block,
@@ -122,7 +128,14 @@ def build(size: int, features: int, block: int, min_nnz: int,
 
     pbr_mat = pbr_mat.to("cuda")
 
-    if kernel in ("rowgroup", "colgroup"):
+    if kernel == "chunk":
+        num_pbr_blocks = int(pbr_mat.accounted_blocks())
+        num_ctas = (num_pbr_blocks + chunk_size - 1) // chunk_size
+        print(f"  {'chunk_size':26s} = {chunk_size}")
+        print(f"  {'num_pbr_blocks':26s} = {num_pbr_blocks}")
+        print(f"  {'num_ctas (grid.x)':26s} = {num_ctas}")
+        print()
+    elif kernel in ("rowgroup", "colgroup"):
         num_pbr_blocks = int(pbr_mat.accounted_blocks())
         bps_fn = _core.pbr_rowgroup_blocks_per_sm if kernel == "rowgroup" else _core.pbr_colgroup_blocks_per_sm
         bps = bps_fn(block, smem_size)
@@ -160,25 +173,28 @@ def main() -> None:
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
     p.add_argument("--kernel",         type=str, default="block",
-                   choices=["block", "rowgroup", "colgroup", "tile"],
+                   choices=["block", "chunk", "rowgroup", "colgroup", "tile"],
                    help="which PBR kernel to profile")
     p.add_argument("--tile-rows",      type=int, default=2, help="tile kernel only")
     p.add_argument("--tile-cols",      type=int, default=2, help="tile kernel only")
     p.add_argument("--tile-strategy",  type=str, default="grid", choices=["grid", "greedy"],
                    help="tile kernel only")
+    p.add_argument("--chunk-size",     type=int, default=8, help="chunk kernel only")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
     pbr_mat, x = build(
         args.size, args.features, args.block, args.min_nnz,
         args.matrix_profile, args.smem_size, args.kernel,
-        args.tile_rows, args.tile_cols, args.tile_strategy,
+        args.tile_rows, args.tile_cols, args.tile_strategy, args.chunk_size,
     )
 
     matmul_kwargs = dict(smem_size=args.smem_size, kernel=args.kernel)
     if args.kernel == "tile":
         matmul_kwargs.update(tile_rows=args.tile_rows, tile_cols=args.tile_cols,
                              tile_strategy=args.tile_strategy)
+    elif args.kernel == "chunk":
+        matmul_kwargs.update(chunk_size=args.chunk_size)
 
     for _ in range(args.warmup):
         pbr_matmul(pbr_mat, x, **matmul_kwargs)

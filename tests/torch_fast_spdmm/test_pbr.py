@@ -4,6 +4,7 @@ from pytest import fixture, mark
 import torch
 from torch.testing import assert_close
 from torch_fast_spdmm import (pbr_to_csr, csr_to_pbr, pbr_batched_matmul_cuda,
+                              pbr_batched_matmul_chunk_cuda,
                               pbr_batched_matmul_rowgroup_cuda, pbr_batched_matmul_colgroup_cuda,
                               pbr_batched_matmul_tile_cuda)
 
@@ -171,6 +172,43 @@ class TestPBRColgroupKernel(TestTorchNoGrad):
 
         assert_close(y_colgroup, y_block, rtol=1e-5, atol=1e-5,
                      msg="colgroup kernel output differs from block kernel")
+
+
+@mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@mark.parametrize('sparse_data_mat', ['sparse_identity_mat', 'sparse_permutation_mat', 'sparse_random_low_sparsity_mat'], indirect=True)
+@mark.parametrize('index_dtype', [np.int32, np.int64], ids=['int32', 'int64'])
+@mark.parametrize('data_dtype', [np.float32, np.float64], ids=['float32', 'float64'])
+@mark.parametrize('system_size', [8, 16])
+@mark.parametrize('block_size', [8])
+@mark.parametrize('features', [128, 256], ids=['feat128', 'feat256'])
+@mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
+@mark.parametrize('chunk_size', [2, 4, 8, 16, 32])
+class TestPBRChunkKernel(TestTorchNoGrad):
+    """Correctness tests for the diagnostic-only chunk kernel against the block
+    kernel reference. system_size=[8,16]/block_size=8 gives very few PBR blocks,
+    so chunk_size=16/32 always exceeds num_pbr_blocks here -- exercises the
+    tail-guard (b_idx >= num_pbr_blocks) path on every parametrization."""
+
+    def test_chunk_matches_reference(self, sparse_mat, features, data_dtype, block_size,
+                                     system_size, min_nnz, index_dtype, chunk_size):
+        device = 'cuda'
+        torch_dtype = torch.from_numpy(np.array([], dtype=data_dtype)).dtype
+        mat = sparse_mat.astype(data_dtype)
+        mat.indices = mat.indices.astype(index_dtype)
+        mat.indptr  = mat.indptr.astype(index_dtype)
+        cols = mat.shape[1]
+
+        x_gpu = torch.randn((1, cols, features), dtype=torch_dtype, device=device)
+
+        pbr_mat = csr_to_pbr(mat, block_rows=block_size, block_cols=block_size,
+                              min_nnz_per_block=min_nnz)
+        pbr_mat = pbr_mat.to(device)
+
+        y_chunk = pbr_batched_matmul_chunk_cuda(pbr_mat, x_gpu, chunk_size=chunk_size)
+        y_block = pbr_batched_matmul_cuda(pbr_mat, x_gpu)
+
+        assert_close(y_chunk, y_block, rtol=1e-5, atol=1e-5,
+                     msg="chunk kernel output differs from block kernel")
 
 
 @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
