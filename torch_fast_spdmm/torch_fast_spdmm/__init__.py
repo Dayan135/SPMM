@@ -84,6 +84,13 @@ def _pbr_to_method(self, device='cuda'):
             rem_col_ind = _pin_to_device(self.remainder_col_ind, device),
             rem_vals    = _pin_to_device(self.remainder_data,    device),
             tile_cache  = {},
+            # Plain numpy cumulative-nnz arrays, kept alongside the GPU copies
+            # above so _build_group_offsets (nnz-balanced grouping) never needs
+            # a device->host round trip. block_offsets_np is row-major order
+            # (rowgroup/chunk); col_offsets_np is col-sorted (colgroup).
+            group_offsets_cache = {},
+            block_offsets_np = block_offsets_np,
+            col_offsets_np   = col_offsets_np,
         )
         torch.cuda.synchronize(device)
     else:
@@ -148,6 +155,66 @@ _ROWGROUP_CUDA_KERNEL_DISPATCH = None
 _COLGROUP_CUDA_KERNEL_DISPATCH = None
 
 
+# ===========================================================================
+# Group-boundary construction: shared by chunk/rowgroup/colgroup
+# ===========================================================================
+#
+# rowgroup, colgroup, and chunk all partition an ordered PBR block array into
+# groups, one CUDA block per group. How those group boundaries are chosen is
+# decoupled from the kernels (which just index a `group_offsets` CSR-style
+# array, see pbr_kernel.cu) -- this is the "strategy" layer, same separation
+# already used for the tile kernel's grid/greedy grouping.
+#
+# 'count'  — group g covers ceil(num_pbr_blocks/target_groups) consecutive
+#             blocks. Reproduces the original group_idx*group_size arithmetic
+#             bit-for-bit (verified by TestPBRRowgroupKernel/ColgroupKernel/
+#             ChunkKernel's grouping='count' parametrization).
+# 'nnz'    — boundaries chosen via searchsorted over the array's cumulative
+#             nnz (block_offsets for row-major order, col_offsets for
+#             col-sorted) so each group covers ~equal total nnz instead of an
+#             equal block count. Motivated by WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md
+#             H4: a diagnostic count-balanced "chunk" kernel closing zero of
+#             the gap to cuSPARSE, with DRAM traffic and sm__throughput both
+#             getting worse as chunk size grew -- consistent with per-group
+#             nnz variance (not just CTA count) being the actual bottleneck,
+#             since cuSPARSE's own csr_partition_kernel balances by nnz.
+
+def _build_group_offsets(offsets_np, target_groups, grouping):
+    """offsets_np: cumulative-nnz prefix sum over the PBR block array in its
+    stored order (block_offsets_np or col_offsets_np -- both already exactly
+    this shape, see pbr_matrix.cpp / _pbr_to_method). Returns a CSR-style
+    boundary array (size num_groups+1); num_groups = len(result) - 1 may be
+    <= target_groups (e.g. 'nnz' collapses adjacent boundaries that land on
+    the same block when one block's nnz alone exceeds the per-group target).
+    """
+    num_pbr_blocks = len(offsets_np) - 1
+    target_groups = max(1, target_groups)
+
+    if grouping == 'count':
+        group_size = max(1, -(-num_pbr_blocks // target_groups))  # ceil div
+        bounds = np.arange(0, num_pbr_blocks, group_size, dtype=np.int64)
+    elif grouping == 'nnz':
+        total_nnz = int(offsets_np[-1])
+        target_nnz = max(1, -(-total_nnz // target_groups))  # ceil div
+        nnz_bounds = np.arange(0, total_nnz, target_nnz)
+        bounds = np.searchsorted(offsets_np, nnz_bounds, side='left').astype(np.int64)
+    else:
+        raise ValueError(f"Unknown grouping {grouping!r}; expected 'count' or 'nnz'")
+
+    return np.unique(np.concatenate([bounds, [num_pbr_blocks]]))
+
+
+def _get_group_offsets(pbr_mat, cache_key, offsets_np, target_groups, grouping, index_dtype, device):
+    """Cached (per pbr_mat, per (cache_key, grouping, target_groups)) GPU copy
+    of _build_group_offsets' result, mirroring _gpu_meta.tile_cache's pattern."""
+    cache = pbr_mat._gpu_meta.group_offsets_cache
+    key = (cache_key, grouping, target_groups)
+    if key not in cache:
+        group_offsets_np = _build_group_offsets(offsets_np, target_groups, grouping)
+        cache[key] = _pin_to_device(group_offsets_np, device, dtype=index_dtype)
+    return cache[key]
+
+
 def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
     Python wrapper that routes the GPU tensors to the correct PyBind11 CUDA function.
@@ -183,14 +250,21 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
 
 
 def pbr_batched_matmul_chunk_cuda(pbr_mat, x: torch.Tensor, chunk_size: int = 8,
+                                   grouping: str = 'count',
                                    csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
     Diagnostic-only variant: identical per-block body to the plain 'block' kernel,
-    but CHUNK PBR blocks are processed per CUDA block via a #pragma-unrolled loop
-    instead of one -- no smem reuse across the loop, no extra sync/flush logic.
-    Isolates the CTA-count/occupancy effect from everything rowgroup/colgroup/tile
-    also change. See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
-    chunk_size: PBR blocks processed per CUDA block; dispatched to {2,4,8,16,32,64}.
+    but each CUDA block processes a runtime range of PBR blocks (a group) instead
+    of one -- no smem reuse across the loop, no extra sync/flush logic. Isolates
+    the grouping-criterion effect from everything rowgroup/colgroup/tile also
+    change. See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
+    chunk_size: target average PBR blocks per group (target_groups =
+               ceil(num_pbr_blocks/chunk_size)); the actual boundaries and
+               resulting group count depend on `grouping`.
+    grouping:  'count' -- fixed-count groups (H4's original chunk_size sweep,
+               reproduced bit-for-bit). 'nnz' -- nnz-balanced groups targeting
+               the same number of groups as 'count' would for this chunk_size,
+               so the two are a controlled comparison.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
     smem_size: 512 / 1024 / 2048 floats (same per-block smem split as 'block')
     """
@@ -202,13 +276,26 @@ def pbr_batched_matmul_chunk_cuda(pbr_mat, x: torch.Tensor, chunk_size: int = 8,
     if _CHUNK_CUDA_KERNEL_DISPATCH is None:
         _CHUNK_CUDA_KERNEL_DISPATCH = _build_chunk_cuda_dispatch()
 
+    num_pbr_blocks = int(meta.codes.shape[0])
+    if num_pbr_blocks > 0:
+        index_dtype = np.int32 if meta.coords.dtype == torch.int32 else np.int64
+        target_groups = max(1, -(-num_pbr_blocks // chunk_size))  # ceil div
+        group_offsets = _get_group_offsets(
+            pbr_mat, 'chunk', meta.block_offsets_np, target_groups, grouping,
+            index_dtype, meta.codes.device)
+        num_groups = int(group_offsets.shape[0]) - 1
+    else:
+        num_groups = 0
+        group_offsets = meta.offsets  # empty; unused when num_groups==0
+
     kernel = _CHUNK_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
     return kernel(
         pbr_mat.cols,
         pbr_mat.rows,
         pbr_mat.block_rows,
         pbr_mat.block_cols,
-        chunk_size,
+        num_groups,
+        group_offsets,
         meta.codes,
         meta.coords,
         meta.offsets,
@@ -222,10 +309,14 @@ def pbr_batched_matmul_chunk_cuda(pbr_mat, x: torch.Tensor, chunk_size: int = 8,
     )
 
 
-def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, grouping: str = 'count',
+                                      csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
-    Row-group fusion variant: one CUDA block per block-count-balanced group.
-    Partitions PBR blocks uniformly by count; no CPU scan needed.
+    Row-group fusion variant: one CUDA block per group of PBR blocks in
+    natural (row-major) order. grouping='count' balances by block count
+    (original behavior); grouping='nnz' balances by cumulative nnz instead
+    (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). No CPU scan either way -- each
+    CUDA block indexes a precomputed group_offsets boundary array directly.
     Writes Y via atomicAdd (safe for concurrent CSR on a separate stream).
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
     smem_size: 512 / 1024 / 2048 floats; determines p = smem_size / (block_rows + block_cols)
@@ -244,11 +335,14 @@ def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0
         sm_count  = torch.cuda.get_device_properties(device).multi_processor_count
         bps       = core.pbr_rowgroup_blocks_per_sm(pbr_mat.block_rows, smem_size)
         target_groups = sm_count * bps
-        group_size = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
-        num_groups = (num_pbr_blocks + group_size - 1) // group_size
+        index_dtype = np.int32 if meta.coords.dtype == torch.int32 else np.int64
+        group_offsets = _get_group_offsets(
+            pbr_mat, 'rowgroup', meta.block_offsets_np, target_groups, grouping,
+            index_dtype, device)
+        num_groups = int(group_offsets.shape[0]) - 1
     else:
         num_groups = 0
-        group_size = 1
+        group_offsets = meta.offsets
 
     kernel = _ROWGROUP_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
     return kernel(
@@ -257,7 +351,7 @@ def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0
         pbr_mat.block_rows,
         pbr_mat.block_cols,
         num_groups,
-        group_size,
+        group_offsets,
         meta.codes,
         meta.coords,
         meta.offsets,
@@ -271,11 +365,14 @@ def pbr_batched_matmul_rowgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0
     )
 
 
-def pbr_batched_matmul_colgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_batched_matmul_colgroup_cuda(pbr_mat, x: torch.Tensor, grouping: str = 'count',
+                                      csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
     """
     Column-group fusion variant: PBR blocks pre-sorted by (col_origin, row_origin).
     Groups share smem_X across all blocks with the same col_origin, amortising
-    the global X load for column-heavy sparsity patterns.
+    the global X load for column-heavy sparsity patterns. grouping='count'
+    balances by block count (original behavior); grouping='nnz' balances by
+    cumulative nnz instead (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md).
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
     smem_size: 512 / 1024 / 2048 floats; determines p = smem_size / (block_rows + block_cols)
     """
@@ -293,11 +390,14 @@ def pbr_batched_matmul_colgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0
         sm_count      = torch.cuda.get_device_properties(device).multi_processor_count
         bps           = core.pbr_colgroup_blocks_per_sm(pbr_mat.block_rows, smem_size)
         target_groups = sm_count * bps
-        group_size    = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
-        num_groups    = (num_pbr_blocks + group_size - 1) // group_size
+        index_dtype = np.int32 if meta.col_coords.dtype == torch.int32 else np.int64
+        group_offsets = _get_group_offsets(
+            pbr_mat, 'colgroup', meta.col_offsets_np, target_groups, grouping,
+            index_dtype, device)
+        num_groups = int(group_offsets.shape[0]) - 1
     else:
         num_groups = 0
-        group_size = 1
+        group_offsets = meta.col_offsets
 
     kernel = _COLGROUP_CUDA_KERNEL_DISPATCH[(meta.col_coords.dtype, x.dtype)]
     return kernel(
@@ -306,7 +406,7 @@ def pbr_batched_matmul_colgroup_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0
         pbr_mat.block_rows,
         pbr_mat.block_cols,
         num_groups,
-        group_size,
+        group_offsets,
         meta.col_codes,
         meta.col_coords,
         meta.col_offsets,
@@ -633,25 +733,34 @@ def pbr_batched_matmul_tile_cuda(pbr_mat, x: torch.Tensor, tile_rows: int = 2, t
 
 def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
                kernel: str = 'block', tile_rows: int = 2, tile_cols: int = 2,
-               tile_strategy: str = 'grid', chunk_size: int = 8) -> torch.Tensor:
+               tile_strategy: str = 'grid', chunk_size: int = 8,
+               grouping: str = 'count') -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (GPU only)
     smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
     kernel:    'block'    — one CUDA block per PBR block; atomicAdd to Y
-               'rowgroup' — one CUDA block per block-count-balanced group; atomicAdd to Y
-               'colgroup' — same as rowgroup but col-sorted; amortises smem_X per col band
+               'rowgroup' — one CUDA block per group of PBR blocks (row-major order);
+                            atomicAdd to Y. grouping='count'|'nnz' (see below).
+               'colgroup' — same as rowgroup but col-sorted; amortises smem_X per col band.
+                            grouping='count'|'nnz'.
                'tile'     — one CUDA block per tile_rows x tile_cols group of PBR blocks;
                             reuses both smem_X and smem_Y for the whole tile (see
                             pbr_batched_matmul_tile_cuda). tile_rows/tile_cols/tile_strategy
                             are only used when kernel='tile'.
                'chunk'    — diagnostic-only: identical per-block body to 'block', but
-                            chunk_size PBR blocks per CUDA block via a #pragma-unrolled
-                            loop, no smem reuse across the loop. Isolates the CTA-count
-                            effect from rowgroup/colgroup/tile's added reuse machinery
-                            (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). chunk_size is only
-                            used when kernel='chunk'.
+                            each CUDA block processes a group of PBR blocks (runtime
+                            range) instead of one, no smem reuse across the loop.
+                            Isolates the grouping-criterion effect from rowgroup/colgroup/
+                            tile's added reuse machinery (see
+                            WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). chunk_size/grouping are
+                            only used when kernel='chunk'.
+    grouping:  'count' (default) — fixed block-count-balanced groups (original behavior
+               for rowgroup/colgroup/chunk, reproduced bit-for-bit).
+               'nnz' — nnz-balanced groups instead, mirroring cuSPARSE's own
+               csr_partition_kernel (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). Only used
+               when kernel is 'rowgroup', 'colgroup', or 'chunk'.
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -661,16 +770,18 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         if meta is None:
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
         if kernel == 'rowgroup':
-            y = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+            y = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x, grouping=grouping, csr_mode=csr_mode,
+                                                  smem_size=smem_size)
         elif kernel == 'colgroup':
-            y = pbr_batched_matmul_colgroup_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+            y = pbr_batched_matmul_colgroup_cuda(pbr_mat, x, grouping=grouping, csr_mode=csr_mode,
+                                                  smem_size=smem_size)
         elif kernel == 'tile':
             y = pbr_batched_matmul_tile_cuda(pbr_mat, x, tile_rows=tile_rows, tile_cols=tile_cols,
                                               tile_strategy=tile_strategy, csr_mode=csr_mode,
                                               smem_size=smem_size)
         elif kernel == 'chunk':
-            y = pbr_batched_matmul_chunk_cuda(pbr_mat, x, chunk_size=chunk_size, csr_mode=csr_mode,
-                                               smem_size=smem_size)
+            y = pbr_batched_matmul_chunk_cuda(pbr_mat, x, chunk_size=chunk_size, grouping=grouping,
+                                               csr_mode=csr_mode, smem_size=smem_size)
         else:
             y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:

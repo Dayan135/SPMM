@@ -116,11 +116,14 @@ class TestTorchFastPBR(TestTorchNoGrad):
 @mark.parametrize('block_size', [8])
 @mark.parametrize('features', [128, 256], ids=['feat128', 'feat256'])
 @mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
+@mark.parametrize('grouping', ['count', 'nnz'])
 class TestPBRRowgroupKernel(TestTorchNoGrad):
-    """Correctness tests for the row-group fusion kernel against the block kernel reference."""
+    """Correctness tests for the row-group fusion kernel against the block kernel
+    reference. grouping='count' also re-validates the group_offsets-array
+    refactor reproduces the original group_idx*group_size arithmetic exactly."""
 
     def test_rowgroup_matches_reference(self, sparse_mat, features, data_dtype, block_size,
-                                         system_size, min_nnz, index_dtype):
+                                         system_size, min_nnz, index_dtype, grouping):
         device = 'cuda'
         torch_dtype = torch.from_numpy(np.array([], dtype=data_dtype)).dtype
         mat = sparse_mat.astype(data_dtype)
@@ -134,7 +137,7 @@ class TestPBRRowgroupKernel(TestTorchNoGrad):
                               min_nnz_per_block=min_nnz)
         pbr_mat = pbr_mat.to(device)
 
-        y_rowgroup = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x_gpu)
+        y_rowgroup = pbr_batched_matmul_rowgroup_cuda(pbr_mat, x_gpu, grouping=grouping)
         y_block    = pbr_batched_matmul_cuda(pbr_mat, x_gpu)
 
         assert_close(y_rowgroup, y_block, rtol=1e-5, atol=1e-5,
@@ -149,11 +152,14 @@ class TestPBRRowgroupKernel(TestTorchNoGrad):
 @mark.parametrize('block_size', [8])
 @mark.parametrize('features', [128, 256], ids=['feat128', 'feat256'])
 @mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
+@mark.parametrize('grouping', ['count', 'nnz'])
 class TestPBRColgroupKernel(TestTorchNoGrad):
-    """Correctness tests for the col-group fusion kernel against the block kernel reference."""
+    """Correctness tests for the col-group fusion kernel against the block kernel
+    reference. grouping='count' also re-validates the group_offsets-array
+    refactor reproduces the original group_idx*group_size arithmetic exactly."""
 
     def test_colgroup_matches_reference(self, sparse_mat, features, data_dtype, block_size,
-                                        system_size, min_nnz, index_dtype):
+                                        system_size, min_nnz, index_dtype, grouping):
         device = 'cuda'
         torch_dtype = torch.from_numpy(np.array([], dtype=data_dtype)).dtype
         mat = sparse_mat.astype(data_dtype)
@@ -167,7 +173,7 @@ class TestPBRColgroupKernel(TestTorchNoGrad):
                               min_nnz_per_block=min_nnz)
         pbr_mat = pbr_mat.to(device)
 
-        y_colgroup = pbr_batched_matmul_colgroup_cuda(pbr_mat, x_gpu)
+        y_colgroup = pbr_batched_matmul_colgroup_cuda(pbr_mat, x_gpu, grouping=grouping)
         y_block    = pbr_batched_matmul_cuda(pbr_mat, x_gpu)
 
         assert_close(y_colgroup, y_block, rtol=1e-5, atol=1e-5,
@@ -183,14 +189,17 @@ class TestPBRColgroupKernel(TestTorchNoGrad):
 @mark.parametrize('features', [128, 256], ids=['feat128', 'feat256'])
 @mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
 @mark.parametrize('chunk_size', [2, 4, 8, 16, 32, 64])
+@mark.parametrize('grouping', ['count', 'nnz'])
 class TestPBRChunkKernel(TestTorchNoGrad):
     """Correctness tests for the diagnostic-only chunk kernel against the block
     kernel reference. system_size=[8,16]/block_size=8 gives very few PBR blocks,
     so chunk_size=16/32 always exceeds num_pbr_blocks here -- exercises the
-    tail-guard (b_idx >= num_pbr_blocks) path on every parametrization."""
+    tail-guard (b_idx >= num_pbr_blocks) path on every parametrization.
+    grouping='count' also re-validates the group_offsets-array refactor
+    reproduces the original fixed-chunk-size behavior exactly."""
 
     def test_chunk_matches_reference(self, sparse_mat, features, data_dtype, block_size,
-                                     system_size, min_nnz, index_dtype, chunk_size):
+                                     system_size, min_nnz, index_dtype, chunk_size, grouping):
         device = 'cuda'
         torch_dtype = torch.from_numpy(np.array([], dtype=data_dtype)).dtype
         mat = sparse_mat.astype(data_dtype)
@@ -204,7 +213,7 @@ class TestPBRChunkKernel(TestTorchNoGrad):
                               min_nnz_per_block=min_nnz)
         pbr_mat = pbr_mat.to(device)
 
-        y_chunk = pbr_batched_matmul_chunk_cuda(pbr_mat, x_gpu, chunk_size=chunk_size)
+        y_chunk = pbr_batched_matmul_chunk_cuda(pbr_mat, x_gpu, chunk_size=chunk_size, grouping=grouping)
         y_block = pbr_batched_matmul_cuda(pbr_mat, x_gpu)
 
         assert_close(y_chunk, y_block, rtol=1e-5, atol=1e-5,

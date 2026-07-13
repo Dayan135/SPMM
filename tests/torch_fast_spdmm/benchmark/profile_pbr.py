@@ -59,6 +59,10 @@ import torch_fast_spdmm_core as _core
 from benchmark.matrices import (generate_scattered_block_matrix, generate_diag_blocks_plus_noise,
                                 generate_fem_2d, generate_permuted_fem_2d)
 from torch_fast_spdmm import csr_to_pbr, pbr_info, pbr_matmul
+# _build_tile_meta/_build_group_offsets are private (not in __all__) -- reached
+# into here for diagnostics only, same spirit as this script's direct _core
+# occupancy-query calls below.
+from torch_fast_spdmm import _build_group_offsets
 # _build_tile_meta is private (not in __all__) -- reached into here for diagnostics only,
 # same spirit as this script's direct _core occupancy-query calls below.
 from torch_fast_spdmm import _build_tile_meta
@@ -107,7 +111,7 @@ def build_matrix(size: int, matrix_profile: str):
 def build(size: int, features: int, block: int, min_nnz: int,
           matrix_profile: str, smem_size: int, kernel: str,
           tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid",
-          chunk_size: int = 8):
+          chunk_size: int = 8, grouping: str = "count"):
     mat = build_matrix(size, matrix_profile)
 
     pbr_mat = csr_to_pbr(mat, block_rows=block, block_cols=block,
@@ -130,22 +134,28 @@ def build(size: int, features: int, block: int, min_nnz: int,
 
     if kernel == "chunk":
         num_pbr_blocks = int(pbr_mat.accounted_blocks())
-        num_ctas = (num_pbr_blocks + chunk_size - 1) // chunk_size
-        print(f"  {'chunk_size':26s} = {chunk_size}")
+        target_groups = max(1, (num_pbr_blocks + chunk_size - 1) // chunk_size)
+        group_offsets = _build_group_offsets(pbr_mat._gpu_meta.block_offsets_np, target_groups, grouping)
+        num_groups = len(group_offsets) - 1
+        print(f"  {'grouping':26s} = {grouping}")
+        print(f"  {'chunk_size (target)':26s} = {chunk_size}")
         print(f"  {'num_pbr_blocks':26s} = {num_pbr_blocks}")
-        print(f"  {'num_ctas (grid.x)':26s} = {num_ctas}")
+        print(f"  {'target_groups':26s} = {target_groups}")
+        print(f"  {'num_groups (grid.x)':26s} = {num_groups}")
         print()
     elif kernel in ("rowgroup", "colgroup"):
         num_pbr_blocks = int(pbr_mat.accounted_blocks())
         bps_fn = _core.pbr_rowgroup_blocks_per_sm if kernel == "rowgroup" else _core.pbr_colgroup_blocks_per_sm
         bps = bps_fn(block, smem_size)
         target_groups = sm_count * bps
-        group_size = max(1, (num_pbr_blocks + target_groups - 1) // target_groups)
-        num_groups = (num_pbr_blocks + group_size - 1) // group_size
+        offsets_np = (pbr_mat._gpu_meta.block_offsets_np if kernel == "rowgroup"
+                      else pbr_mat._gpu_meta.col_offsets_np)
+        group_offsets = _build_group_offsets(offsets_np, target_groups, grouping)
+        num_groups = len(group_offsets) - 1
+        print(f"  {'grouping':26s} = {grouping}")
         print(f"  {'blocks_per_sm':26s} = {bps}")
         print(f"  {'target_groups':26s} = {target_groups}")
-        print(f"  {'group_size':26s} = {group_size}")
-        print(f"  {'num_groups':26s} = {num_groups}")
+        print(f"  {'num_groups (grid.x)':26s} = {num_groups}")
         print()
     elif kernel == "tile":
         bps = _core.pbr_tile_blocks_per_sm(tile_rows, tile_cols, block, smem_size)
@@ -180,16 +190,20 @@ def main() -> None:
     p.add_argument("--tile-strategy",  type=str, default="grid", choices=["grid", "greedy"],
                    help="tile kernel only")
     p.add_argument("--chunk-size",     type=int, default=8, help="chunk kernel only")
+    p.add_argument("--grouping",       type=str, default="count", choices=["count", "nnz"],
+                   help="chunk/rowgroup/colgroup only")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
     pbr_mat, x = build(
         args.size, args.features, args.block, args.min_nnz,
         args.matrix_profile, args.smem_size, args.kernel,
-        args.tile_rows, args.tile_cols, args.tile_strategy, args.chunk_size,
+        args.tile_rows, args.tile_cols, args.tile_strategy, args.chunk_size, args.grouping,
     )
 
     matmul_kwargs = dict(smem_size=args.smem_size, kernel=args.kernel)
+    if args.kernel in ("chunk", "rowgroup", "colgroup"):
+        matmul_kwargs.update(grouping=args.grouping)
     if args.kernel == "tile":
         matmul_kwargs.update(tile_rows=args.tile_rows, tile_cols=args.tile_cols,
                              tile_strategy=args.tile_strategy)

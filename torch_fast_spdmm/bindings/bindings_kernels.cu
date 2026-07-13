@@ -84,13 +84,14 @@ at::Tensor pbr_spmm_cuda_dispatch(
 }
 
 // Diagnostic-only "chunk" kernel dispatch -- byte-for-byte the same shape as
-// pbr_spmm_cuda_dispatch above, just forwarding an extra chunk_size to
-// launch_pbr_chunk_spmm. See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
+// pbr_spmm_cuda_dispatch above, just forwarding num_groups + group_offsets
+// (same contract as rowgroup/colgroup below) to launch_pbr_chunk_spmm.
+// See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
 template <typename index_t, typename scalar_t>
 at::Tensor pbr_chunk_spmm_cuda_dispatch(
     int cols, int rows,
     int BLOCK_ROWS, int BLOCK_COLS,
-    int chunk_size,
+    int num_groups, const at::Tensor group_offsets,
     const at::Tensor block_codes,
     const at::Tensor block_coords,
     const at::Tensor block_offsets,
@@ -121,9 +122,9 @@ at::Tensor pbr_chunk_spmm_cuda_dispatch(
     cudaStreamWaitEvent(csr_stream.stream(),   y_ready, 0);
     cudaEventDestroy(y_ready);
 
-    if (num_pbr_blocks > 0) {
+    if (num_groups > 0 && num_pbr_blocks > 0) {
         launch_pbr_chunk_spmm<index_t, scalar_t>(
-            num_pbr_blocks, features, batch_size, cols, rows, BLOCK_ROWS, BLOCK_COLS, chunk_size,
+            num_groups, group_offsets.data_ptr<index_t>(), num_pbr_blocks, features, batch_size, cols, rows, BLOCK_ROWS, BLOCK_COLS,
             block_codes.data_ptr<int64_t>(),
             block_coords.data_ptr<index_t>(),
             block_offsets.data_ptr<index_t>(),
@@ -165,7 +166,7 @@ template <typename index_t, typename scalar_t>
 at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
     int cols, int rows,
     int BLOCK_ROWS, int BLOCK_COLS,
-    int num_groups, int group_size,
+    int num_groups, const at::Tensor group_offsets,
     const at::Tensor block_codes,
     const at::Tensor block_coords,
     const at::Tensor block_offsets,
@@ -199,7 +200,7 @@ at::Tensor pbr_rowgroup_spmm_cuda_dispatch(
 
     if (num_groups > 0 && num_pbr_blocks > 0) {
         launch_pbr_rowgroup_spmm<index_t, scalar_t>(
-            num_groups, group_size, num_pbr_blocks, features, batch_size, cols, rows,
+            num_groups, group_offsets.data_ptr<index_t>(), num_pbr_blocks, features, batch_size, cols, rows,
             BLOCK_ROWS, BLOCK_COLS,
             block_codes.data_ptr<int64_t>(),
             block_coords.data_ptr<index_t>(),
@@ -243,7 +244,7 @@ template <typename index_t, typename scalar_t>
 at::Tensor pbr_colgroup_spmm_cuda_dispatch(
     int cols, int rows,
     int BLOCK_ROWS, int BLOCK_COLS,
-    int num_groups, int group_size,
+    int num_groups, const at::Tensor group_offsets,
     const at::Tensor col_codes,
     const at::Tensor col_coords,
     const at::Tensor col_offsets,
@@ -276,7 +277,7 @@ at::Tensor pbr_colgroup_spmm_cuda_dispatch(
 
     if (num_groups > 0 && num_pbr_blocks > 0) {
         launch_pbr_colgroup_spmm<index_t, scalar_t>(
-            num_groups, group_size, num_pbr_blocks, features, batch_size, cols, rows,
+            num_groups, group_offsets.data_ptr<index_t>(), num_pbr_blocks, features, batch_size, cols, rows,
             BLOCK_ROWS, BLOCK_COLS,
             col_codes.data_ptr<int64_t>(),
             col_coords.data_ptr<index_t>(),

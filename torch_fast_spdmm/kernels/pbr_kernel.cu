@@ -392,10 +392,16 @@ template void launch_pbr_spmm<int64_t, double>(const int, const int, const int, 
 //   num_groups — occupancy-aware; sm_count × blocks_per_SM (from occupancy query)
 //   feat_tiles — ceil(features / p), where p = SMEM_SIZE / (BLOCK_ROWS + BLOCK_COLS)
 //
-// Partitions PBR blocks by count: group g processes PBR blocks
-//   [g * group_size, min((g+1) * group_size, num_pbr_blocks))
-// No CPU-side scan or group_row_starts array — each CUDA block computes its
-// own range from group_idx and group_size directly.
+// Partitions PBR blocks by a host-precomputed group_offsets array (CSR-style,
+// size num_groups+1): group g processes PBR blocks
+//   [group_offsets[g], group_offsets[g+1])
+// group_offsets is built on the host by _build_group_offsets (__init__.py) --
+// either count-balanced (grouping='count', reproduces the original
+// group_idx*group_size arithmetic exactly) or nnz-balanced (grouping='nnz',
+// boundaries chosen so each group covers ~equal cumulative nnz via searchsorted
+// over block_offsets -- see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md H4/nnz-balanced
+// grouping experiment for why count-balance alone wasn't enough). No on-device
+// scan either way -- each CUDA block just indexes group_offsets[group_idx].
 //
 // Because groups can span a row-strip boundary, two groups may write to the
 // same output rows. Y is therefore written via atomicAdd (not plain store).
@@ -415,7 +421,7 @@ template <typename index_t, typename scalar_t,
 __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 pbr_spmm_rowgroup_kernel(
     const uint32_t  num_groups,
-    const uint32_t  group_size,
+    const index_t*  __restrict__ group_offsets,
     const uint32_t  num_pbr_blocks,
     const uint32_t  features,
     const uint32_t  batch_size,
@@ -444,8 +450,8 @@ pbr_spmm_rowgroup_kernel(
     if (base_f >= features) return;
     const uint32_t cur_p = min((uint32_t)p, features - base_f);
 
-    const uint32_t pbr_start = group_idx * group_size;
-    const uint32_t pbr_end   = min(pbr_start + group_size, num_pbr_blocks);
+    const uint32_t pbr_start = (uint32_t)group_offsets[group_idx];
+    const uint32_t pbr_end   = (uint32_t)group_offsets[group_idx + 1];
     if (pbr_start >= num_pbr_blocks) return;
 
     const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
@@ -545,7 +551,7 @@ pbr_spmm_rowgroup_kernel(
 template <typename index_t, typename scalar_t>
 void launch_pbr_rowgroup_spmm(
     const int  num_groups,
-    const int  group_size,
+    const index_t*  group_offsets,
     const int  num_pbr_blocks,
     const int  features,
     const int  batch_size,
@@ -575,7 +581,7 @@ void launch_pbr_rowgroup_spmm(
     #define RG_LAUNCH(BR, BC, TS) \
         pbr_spmm_rowgroup_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK> \
             <<<grid, block, 0, stream>>>( \
-                (uint32_t)num_groups,     (uint32_t)group_size, \
+                (uint32_t)num_groups,     group_offsets, \
                 (uint32_t)num_pbr_blocks, (uint32_t)features,   \
                 (uint32_t)batch_size,     (uint32_t)cols,        \
                 (uint32_t)rows,                                  \
@@ -597,10 +603,10 @@ void launch_pbr_rowgroup_spmm(
     #undef DISPATCH_SMEM_RG
 }
 
-template void launch_pbr_rowgroup_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
-template void launch_pbr_rowgroup_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
-template void launch_pbr_rowgroup_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
-template void launch_pbr_rowgroup_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int32_t, float>(const int, const int32_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int64_t, float>(const int, const int64_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int32_t, double>(const int, const int32_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_rowgroup_spmm<int64_t, double>(const int, const int64_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
 
 
 // ---------------------------------------------------------------------------
@@ -678,7 +684,7 @@ template <typename index_t, typename scalar_t,
 __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 pbr_spmm_colgroup_kernel(
     const uint32_t  num_groups,
-    const uint32_t  group_size,
+    const index_t*  __restrict__ group_offsets,  // see rowgroup kernel: count- or nnz-balanced
     const uint32_t  num_pbr_blocks,
     const uint32_t  features,
     const uint32_t  batch_size,
@@ -707,8 +713,8 @@ pbr_spmm_colgroup_kernel(
     if (base_f >= features) return;
     const uint32_t cur_p = min((uint32_t)p, features - base_f);
 
-    const uint32_t pbr_start = group_idx * group_size;
-    const uint32_t pbr_end   = min(pbr_start + group_size, num_pbr_blocks);
+    const uint32_t pbr_start = (uint32_t)group_offsets[group_idx];
+    const uint32_t pbr_end   = (uint32_t)group_offsets[group_idx + 1];
     if (pbr_start >= num_pbr_blocks) return;
 
     const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
@@ -779,7 +785,7 @@ pbr_spmm_colgroup_kernel(
 template <typename index_t, typename scalar_t>
 void launch_pbr_colgroup_spmm(
     const int  num_groups,
-    const int  group_size,
+    const index_t*  group_offsets,
     const int  num_pbr_blocks,
     const int  features,
     const int  batch_size,
@@ -809,7 +815,7 @@ void launch_pbr_colgroup_spmm(
     #define CG_LAUNCH(BR, BC, TS) \
         pbr_spmm_colgroup_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK> \
             <<<grid, block, 0, stream>>>( \
-                (uint32_t)num_groups,     (uint32_t)group_size, \
+                (uint32_t)num_groups,     group_offsets, \
                 (uint32_t)num_pbr_blocks, (uint32_t)features,   \
                 (uint32_t)batch_size,     (uint32_t)cols,        \
                 (uint32_t)rows,                                  \
@@ -831,10 +837,10 @@ void launch_pbr_colgroup_spmm(
     #undef DISPATCH_SMEM_CG
 }
 
-template void launch_pbr_colgroup_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
-template void launch_pbr_colgroup_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
-template void launch_pbr_colgroup_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
-template void launch_pbr_colgroup_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int32_t, float>(const int, const int32_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int64_t, float>(const int, const int64_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*,  const float*,  float*,  cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int32_t, double>(const int, const int32_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_colgroup_spmm<int64_t, double>(const int, const int64_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
 
 
 // ---------------------------------------------------------------------------
@@ -1184,7 +1190,7 @@ int get_pbr_tile_blocks_per_sm(int tile_rows, int tile_cols, int block_rows, int
 
 
 // ===========================================================================
-// Chunk kernel — diagnostic-only, isolates the "CTA count" variable
+// Chunk kernel — diagnostic-only, isolates the "grouping criterion" variable
 // ===========================================================================
 //
 // WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md found `block` launches one CUDA block
@@ -1195,22 +1201,28 @@ int get_pbr_tile_blocks_per_sm(int tile_rows, int tile_cols, int block_rows, int
 // strip/never) and add extra __syncthreads, confounding "fewer CTAs helped"
 // with "the reuse logic helped/hurt".
 //
-// This kernel changes ONLY the CTA count: each CUDA block processes exactly
-// CHUNK PBR blocks via a #pragma-unrolled loop, and the body of each
-// iteration is byte-for-byte the same per-block work `pbr_spmm_vec_kernel`
-// already does (own smem_X/smem_Y carve-out, own load, own atomicAdd flush --
-// zero reuse across chunk iterations). If this alone closes most of the gap
-// to cuSPARSE at scale, that confirms CTA-count/occupancy is the dominant
-// cause, isolated from every other design choice rowgroup/colgroup/tile make.
+// This kernel changes ONLY the grouping: each CUDA block processes the PBR
+// blocks in [group_offsets[group_idx], group_offsets[group_idx+1]) via a
+// runtime loop (deliberately NOT #pragma-unrolled -- H4 found a compile-time
+// unrolled CHUNK made things worse as it grew, via rising register pressure
+// and a 7.4x DRAM-traffic blowup for identical total work; a runtime loop
+// avoids that confound). Each iteration's body is byte-for-byte the same
+// per-block work `pbr_spmm_vec_kernel` already does (own smem_X/smem_Y
+// carve-out, own load, own atomicAdd flush -- zero reuse across iterations).
 //
-// No occupancy-guided sizing: chunk_size is a direct user/caller choice
-// (grid.x = ceil(num_pbr_blocks / CHUNK)), unlike rowgroup/colgroup/tile's
-// group_size, which is derived from an occupancy query.
+// group_offsets is built host-side by _build_group_offsets (__init__.py),
+// either count-balanced (grouping='count' -- H4's original chunk_size
+// behavior, reproduced via a fixed-stride offsets array) or nnz-balanced
+// (grouping='nnz' -- the new experiment: does balancing by nnz instead of
+// block count, with everything else held identical, close the gap to
+// cuSPARSE that count-balancing alone could not?).
 
 template <typename index_t, typename scalar_t,
           int BLOCK_ROWS, int BLOCK_COLS,
-          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE, int CHUNK>
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
 __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_chunk_kernel(
+    const uint32_t num_groups,
+    const index_t* __restrict__ group_offsets,
     const uint32_t num_pbr_blocks,
     const uint32_t features,
     const uint32_t batch_size,
@@ -1229,19 +1241,23 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_chunk_kernel(
 
     __shared__ __align__(16) scalar_t smem[TOTAL_SHARED];
 
+    const uint32_t group_idx = blockIdx.x;
     const uint32_t batch_idx = blockIdx.y;
     const uint32_t feat_block_idx = blockIdx.z;
     const uint32_t tx = threadIdx.x;
 
-    if (batch_idx >= batch_size) return;
+    if (group_idx >= num_groups || batch_idx >= batch_size) return;
+
+    const uint32_t group_start = (uint32_t)group_offsets[group_idx];
+    const uint32_t group_end   = (uint32_t)group_offsets[group_idx + 1];
 
     // Every thread in the CTA takes the same branch at each of these guards
-    // (b_idx depends only on blockIdx/ci; code/n_r/n_c are the same value for
-    // every thread), so the __syncthreads() calls below stay uniform across
-    // the block despite the `continue`s -- no divergence/deadlock risk.
-    #pragma unroll
-    for (uint32_t ci = 0; ci < CHUNK; ++ci) {
-        const uint32_t b_idx = blockIdx.x * CHUNK + ci;
+    // (b_idx depends only on blockIdx/loop state; code/n_r/n_c are the same
+    // value for every thread), so the __syncthreads() calls below stay
+    // uniform across the block despite the `continue`s -- no divergence/
+    // deadlock risk. Deliberately no #pragma unroll -- see comment above.
+    #pragma unroll 1
+    for (uint32_t b_idx = group_start; b_idx < group_end; ++b_idx) {
         if (b_idx >= num_pbr_blocks) continue;
 
         const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
@@ -1368,6 +1384,8 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_chunk_kernel(
 
 template <typename index_t, typename scalar_t>
 void launch_pbr_chunk_spmm(
+    const int num_groups,
+    const index_t* group_offsets,
     const int num_pbr_blocks,
     const int features,
     const int batch_size,
@@ -1375,7 +1393,6 @@ void launch_pbr_chunk_spmm(
     const int rows,
     const int runtime_block_rows,
     const int runtime_block_cols,
-    const int chunk_size,
     const int64_t* block_codes,
     const index_t* block_coords,
     const index_t* block_offsets,
@@ -1385,38 +1402,27 @@ void launch_pbr_chunk_spmm(
     cudaStream_t stream,
     int smem_size
 ) {
-    if (num_pbr_blocks == 0) return;
+    if (num_groups == 0 || num_pbr_blocks == 0) return;
 
     constexpr int THREADS_PER_BLOCK = 128;
     constexpr int FEAT_BLOCK_SIZE   = 512;
 
     const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
+    const dim3 grid((uint32_t)num_groups, (uint32_t)batch_size, (uint32_t)feat_blocks);
     const dim3 block(THREADS_PER_BLOCK);
 
-    #define CHUNK_LAUNCH(BR, BC, TS, CH)                                                          \
-        do {                                                                                      \
-            const dim3 grid((num_pbr_blocks + CH - 1) / CH, batch_size, feat_blocks);             \
-            pbr_spmm_chunk_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK,                \
-                                  FEAT_BLOCK_SIZE, CH><<<grid, block, 0, stream>>>(                \
-                num_pbr_blocks, features, batch_size, cols, rows,                                  \
-                block_codes, block_coords, block_offsets, block_data, X, Y);                       \
-        } while (0)
-
-    #define DISPATCH_CHUNK(BR, BC, TS)                       \
-        do {                                                 \
-            if      (chunk_size <= 2)  CHUNK_LAUNCH(BR, BC, TS, 2);  \
-            else if (chunk_size <= 4)  CHUNK_LAUNCH(BR, BC, TS, 4);  \
-            else if (chunk_size <= 8)  CHUNK_LAUNCH(BR, BC, TS, 8);  \
-            else if (chunk_size <= 16) CHUNK_LAUNCH(BR, BC, TS, 16); \
-            else if (chunk_size <= 32) CHUNK_LAUNCH(BR, BC, TS, 32); \
-            else                       CHUNK_LAUNCH(BR, BC, TS, 64); \
-        } while (0)
+    #define CHUNK_LAUNCH(BR, BC, TS)                                                              \
+        pbr_spmm_chunk_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK,                    \
+                              FEAT_BLOCK_SIZE><<<grid, block, 0, stream>>>(                        \
+            (uint32_t)num_groups, group_offsets, (uint32_t)num_pbr_blocks,                         \
+            (uint32_t)features, (uint32_t)batch_size, (uint32_t)cols, (uint32_t)rows,              \
+            block_codes, block_coords, block_offsets, block_data, X, Y)
 
     #define DISPATCH_SMEM_CHUNK(BR, BC)                        \
         do {                                                   \
-            if      (smem_size <= 512)  DISPATCH_CHUNK(BR, BC,  512); \
-            else if (smem_size <= 1024) DISPATCH_CHUNK(BR, BC, 1024); \
-            else                        DISPATCH_CHUNK(BR, BC, 2048); \
+            if      (smem_size <= 512)  CHUNK_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) CHUNK_LAUNCH(BR, BC, 1024); \
+            else                        CHUNK_LAUNCH(BR, BC, 2048); \
         } while (0)
 
     if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_CHUNK(2, 2);
@@ -1425,14 +1431,13 @@ void launch_pbr_chunk_spmm(
     else throw std::invalid_argument("Unsupported block size for PBR chunk SpMM. Only 2x2, 4x4, and 8x8 are supported.");
 
     #undef CHUNK_LAUNCH
-    #undef DISPATCH_CHUNK
     #undef DISPATCH_SMEM_CHUNK
 }
 
-template void launch_pbr_chunk_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t, int);
-template void launch_pbr_chunk_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
-template void launch_pbr_chunk_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
-template void launch_pbr_chunk_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int32_t, float>(const int, const int32_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int64_t, float>(const int, const int64_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int32_t, double>(const int, const int32_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_chunk_spmm<int64_t, double>(const int, const int64_t*, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
 
 
 // --- CSR remainder kernel (warp-per-row / CSR-Vector) ---

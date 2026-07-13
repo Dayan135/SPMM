@@ -21,10 +21,15 @@ void launch_pbr_spmm(
     int smem_size = 2048
 );
 
+// group_offsets: CSR-style boundary array (size num_groups+1) built host-side
+// by _build_group_offsets (__init__.py) -- either count-balanced (reproduces
+// the original group_idx*group_size arithmetic) or nnz-balanced (searchsorted
+// over the cumulative-nnz block_offsets array). See pbr_kernel.cu's rowgroup
+// kernel comment and WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
 template <typename index_t, typename scalar_t>
 void launch_pbr_rowgroup_spmm(
     const int  num_groups,
-    const int  group_size,
+    const index_t* group_offsets,
     const int  num_pbr_blocks,
     const int  features,
     const int  batch_size,
@@ -45,10 +50,13 @@ void launch_pbr_rowgroup_spmm(
 // Returns cudaOccupancyMaxActiveBlocksPerMultiprocessor for the rowgroup kernel.
 int get_pbr_rowgroup_blocks_per_sm(int block_rows, int smem_size);
 
+// group_offsets: same contract as launch_pbr_rowgroup_spmm, but boundaries are
+// indices into the col-sorted arrays (searchsorted over col_offsets for the
+// nnz-balanced case).
 template <typename index_t, typename scalar_t>
 void launch_pbr_colgroup_spmm(
     const int  num_groups,
-    const int  group_size,
+    const index_t* group_offsets,
     const int  num_pbr_blocks,
     const int  features,
     const int  batch_size,
@@ -98,12 +106,16 @@ void launch_pbr_tile_spmm(
 int get_pbr_tile_blocks_per_sm(int tile_rows, int tile_cols, int block_rows, int smem_size);
 
 // Diagnostic-only "chunk" kernel: identical per-block body to launch_pbr_spmm,
-// but CHUNK PBR blocks per CTA (compile-time unrolled loop, no smem reuse
-// across iterations) instead of one -- isolates the CTA-count/occupancy
-// variable from the smem-reuse machinery rowgroup/colgroup/tile also change.
-// See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
+// but runs a runtime loop over [group_offsets[g], group_offsets[g+1]) PBR
+// blocks per CTA instead of one, no smem reuse across iterations -- isolates
+// the grouping-criterion variable from the smem-reuse machinery rowgroup/
+// colgroup/tile also change. group_offsets: same contract as
+// launch_pbr_rowgroup_spmm (count- or nnz-balanced). See
+// WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
 template <typename index_t, typename scalar_t>
 void launch_pbr_chunk_spmm(
+    const int num_groups,
+    const index_t* group_offsets,
     const int num_pbr_blocks,
     const int features,
     const int batch_size,
@@ -111,7 +123,6 @@ void launch_pbr_chunk_spmm(
     const int rows,
     const int BLOCK_ROWS,
     const int BLOCK_COLS,
-    const int chunk_size,
     const int64_t* block_codes,
     const index_t* block_coords,
     const index_t* block_offsets,
