@@ -1408,7 +1408,8 @@ void launch_pbr_chunk_spmm(
             else if (chunk_size <= 4)  CHUNK_LAUNCH(BR, BC, TS, 4);  \
             else if (chunk_size <= 8)  CHUNK_LAUNCH(BR, BC, TS, 8);  \
             else if (chunk_size <= 16) CHUNK_LAUNCH(BR, BC, TS, 16); \
-            else                       CHUNK_LAUNCH(BR, BC, TS, 32); \
+            else if (chunk_size <= 32) CHUNK_LAUNCH(BR, BC, TS, 32); \
+            else                       CHUNK_LAUNCH(BR, BC, TS, 64); \
         } while (0)
 
     #define DISPATCH_SMEM_CHUNK(BR, BC)                        \

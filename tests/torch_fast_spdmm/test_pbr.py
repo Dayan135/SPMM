@@ -182,7 +182,7 @@ class TestPBRColgroupKernel(TestTorchNoGrad):
 @mark.parametrize('block_size', [8])
 @mark.parametrize('features', [128, 256], ids=['feat128', 'feat256'])
 @mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
-@mark.parametrize('chunk_size', [2, 4, 8, 16, 32])
+@mark.parametrize('chunk_size', [2, 4, 8, 16, 32, 64])
 class TestPBRChunkKernel(TestTorchNoGrad):
     """Correctness tests for the diagnostic-only chunk kernel against the block
     kernel reference. system_size=[8,16]/block_size=8 gives very few PBR blocks,

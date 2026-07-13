@@ -190,7 +190,7 @@ def pbr_batched_matmul_chunk_cuda(pbr_mat, x: torch.Tensor, chunk_size: int = 8,
     instead of one -- no smem reuse across the loop, no extra sync/flush logic.
     Isolates the CTA-count/occupancy effect from everything rowgroup/colgroup/tile
     also change. See WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md.
-    chunk_size: PBR blocks processed per CUDA block; dispatched to {2,4,8,16,32}.
+    chunk_size: PBR blocks processed per CUDA block; dispatched to {2,4,8,16,32,64}.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
     smem_size: 512 / 1024 / 2048 floats (same per-block smem split as 'block')
     """
