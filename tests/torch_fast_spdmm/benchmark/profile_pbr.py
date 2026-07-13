@@ -13,6 +13,11 @@ Matrix profiles (--matrix-profile):
   diag_dd0.017     — diagonal blocks + noise (64×64 blocks, diag_density=0.017)
   diag_dd0.033     — diagonal blocks + noise (64×64 blocks, diag_density=0.033)
   diag_dd0.05      — diagonal blocks + noise (64×64 blocks, diag_density=0.05)
+  diag_b0.3        — diag_b0.3 from test_benchmark.py (64-wide band, no off-diag noise)
+  diag_b1.0        — diag_b1.0 from test_benchmark.py (fully dense 64-wide band,
+                     no off-diag noise); the case where 'tile' lost 2.4x to 'block'
+                     at 262144 despite the 'grid' strategy producing perfectly
+                     dense tiles — see LAST_EXPERIMENTS.md Experiment 3
   fem2d            — 2D FEM stiffness matrix (grid-aligned reuse)
   fem2d_permuted   — same, with mesh nodes relabeled (breaks grid-aligned reuse;
                      stress case for the 'grid' vs 'greedy' tile strategies)
@@ -64,6 +69,8 @@ _MATRIX_PROFILES = {
     "diag_dd0.017":     ("diag",      {"block_size": 64, "diag_density": 0.017, "off_diag_density": 0.0000002}),
     "diag_dd0.033":     ("diag",      {"block_size": 64, "diag_density": 0.033, "off_diag_density": 0.0000002}),
     "diag_dd0.05":      ("diag",      {"block_size": 64, "diag_density": 0.05,  "off_diag_density": 0.0000002}),
+    "diag_b0.3":        ("diag",      {"block_size": 64, "diag_density": 0.3,   "off_diag_density": 0.0}),
+    "diag_b1.0":        ("diag",      {"block_size": 64, "diag_density": 1.0,   "off_diag_density": 0.0}),
     "fem2d":            ("fem",       {"permuted": False}),
     "fem2d_permuted":   ("fem",       {"permuted": True}),
 }
