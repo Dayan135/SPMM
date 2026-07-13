@@ -227,6 +227,77 @@ is the prerequisite before any further investment in tile-selection algorithms.
 
 ---
 
+## 4. nnz-balanced grouping (2026-07-13, branch `feat/pbr-nnzgroup`)
+
+### Motivation
+
+`WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` (H3/H4) found `block` launches ~5× more CUDA blocks than
+cuSPARSE's own nnz-balanced partition on `diag_b0.3`, but a diagnostic count-balanced `chunk` kernel
+(isolating CTA count as the only variable) showed reducing CTA count alone doesn't recover cuSPARSE's
+speed — it gets worse past a small chunk size, with DRAM traffic exploding 7.4× for identical total
+work. The natural next hypothesis: cuSPARSE's real advantage is that its partition is nnz-*balanced*,
+not just count-balanced — does switching the grouping *criterion* (not just reducing count) close the
+gap?
+
+### Implementation
+
+Unified `rowgroup_kernel`/`colgroup_kernel`/`chunk_kernel` (`pbr_kernel.cu`) behind a shared
+`group_offsets` CSR-style boundary array, replacing the scalar `group_size`/`chunk_size` argument.
+`chunk_kernel` additionally dropped its compile-time `#pragma unroll`'d `CHUNK` template param for a
+plain runtime loop (nnz-balanced groups have variable block count per CTA). New host-side
+`_build_group_offsets(offsets_np, target_groups, grouping)`: `'count'` reproduces the original
+`group_idx*group_size` arithmetic bit-for-bit; `'nnz'` builds boundaries via `np.searchsorted` over
+the cumulative-nnz prefix sum that `block_offsets`/`col_offsets` already are — no new C++ needed.
+Caught one real bug along the way: `_reorder_pbr_arrays`' offsets output was missing the trailing
+total-nnz sentinel (`num_blocks` entries instead of the documented `num_blocks+1`), silently breaking
+`col_offsets_np`-based nnz math specifically (rowgroup/chunk, which use the untouched row-major
+`block_offsets_np`, were unaffected) — fixed and reverified with 200 randomized cases plus a full
+remote regression run (3704 tests passing, including every `grouping='count'` case as a
+behavior-preservation guard).
+
+### Results: falsified twice, then a real mechanism found
+
+**Ablation 1 (`diag_b0.3`, low per-block nnz variance, CV=0.19):** `grouping='nnz'` produced nearly
+identical grid sizes/timings to `'count'` — expected, since there's little imbalance to correct.
+
+**Ablation 2 (`diag_skewed`, new profile — dense diagonal band + off-diagonal noise, genuine bimodal
+per-block nnz, CV=2.08):** same null result. `chunk64`: grid=4110 for both `count` and `nnz`, times
+22.4773ms vs 22.4812ms. Directly measured the partition quality to rule out "the algorithm isn't
+achieving balance": `'nnz'` grouping cut per-group nnz CV from 0.279 (count) to **0.043** (nnz) — a
+6.5× tighter balance — with **zero runtime effect**. This proves nnz-imbalance was never the
+bottleneck; a smarter block-reordering scheme (clustering nnz-similar blocks before partitioning)
+would target the same already-solved metric, so that direction was abandoned before being built.
+
+**Follow-up profiling (the actual mechanism):** added L1TEX-level global-load-request counters
+(isolates *requests issued* from *requests reaching DRAM*) and local-memory counters, `block` vs
+`chunk` at `chunk_size∈{2,4,8,16,32,64}`, `diag_b0.3`@262144/f512:
+
+| variant | time (ms) | DRAM read (MB) | L1TEX global-load requests (MB) | L2 hit rate | waves/SM |
+|---|---|---|---|---|---|
+| `block` | 13.01 | 1099.7 | 4826.3 | 94.59% | 290.6 |
+| `chunk64` | 16.74 | 8142.2 | 4827.1 | 59.98% | 4.5 |
+
+Local-memory (register spill) traffic = 0 throughout, ruling that out. L1TEX request volume is
+completely flat (~4.83 GB) across every variant — the actual logical work never changes. **L2 hit
+rate collapses monotonically, 94.6% → 60.0%**, and DRAM traffic tracks it almost exactly. Mechanism:
+`block`'s 262,144 tiny CTAs run with massive concurrency (290 waves), so many spatially-nearby
+diagonal-band blocks are in flight at once and L2 serves most of that traffic. Grouping blocks into
+fewer, fatter CTAs — by count or by nnz, doesn't matter — means each surviving CTA marches
+sequentially through a wider, spatially-dispersed swath of the matrix, with far fewer CTAs in flight
+to give L2 concurrent spatial overlap to exploit. Neither CTA-count nor nnz-balance targets spatial
+locality, so neither could have fixed this.
+
+### Implication
+
+`feat/pbr-nnzgroup` is shelved — no production kernel change recommended. Any future PBR-block
+grouping scheme needs to preserve *spatial* locality among the blocks one CTA processes sequentially
+(not just balance work count or nnz), or it pays this same L2-locality tax. `rowgroup`/`colgroup`'s
+row-strip/col-band locality is already partially protective (unlike `chunk`'s pure array-order
+grouping); this may partly explain why they run closer to `block` than `chunk` does at large group
+sizes. Full writeup: `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H5.
+
+---
+
 ## Open questions / next steps
 
 1. **Auto kernel selection** — pick block vs rowgroup based on expected compute per group

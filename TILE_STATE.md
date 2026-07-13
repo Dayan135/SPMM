@@ -77,5 +77,14 @@ Fix the implementation gap before touching tile-selection algorithms again:
    question (the biclique-cover / co-clustering discussion from 2026-07-12) — a better selector
    cannot fix a kernel that's already slower on perfectly-formed tiles.
 
+**Additional consideration from `feat/pbr-nnzgroup`'s findings (see `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md`
+H5):** grouping multiple PBR blocks per CUDA block — which is exactly what tile does — was found to
+collapse L2 cache hit rate (94.6% → 60.0% at the extreme) relative to `block`'s many-tiny-concurrent-
+CTAs design, independent of vectorization or grouping criterion. Tile's `grid`/`greedy` strategies
+already cluster spatially-adjacent blocks per tile (unlike `chunk`'s pure array-order grouping), which
+may be partially protective — but this L2-locality cost should be checked directly (same
+L1TEX-request-vs-DRAM-bytes-vs-L2-hit-rate methodology) once (1)+(2) are fixed, since it could still
+be eating into whatever reuse benefit vectorization recovers.
+
 `rowgroup`/`colgroup`/`block` are unaffected and remain the working baselines. Nothing here blocks
 other work on the branch or elsewhere in the repo.

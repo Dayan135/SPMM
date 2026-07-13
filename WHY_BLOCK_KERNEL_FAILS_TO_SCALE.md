@@ -2,17 +2,17 @@
 
 **Question:** the full benchmark sweep (commit `69041a9`) reported PBR's advantage over cuSPARSE
 *improving* with size (geomean 0.77 → 1.28, best-config-per-size). But that framing hid the real
-picture. This doc investigates the actual scaling behavior, three hypotheses deep.
+picture. This doc investigates the actual scaling behavior, five hypotheses deep.
 
-**Bottom line:** H1–H3 confirm and mechanistically explain the correlation — `block` launches ~5×
-more CUDA blocks than cuSPARSE needs on `diag_b0.3`, invisible while the GPU has slack (small N) but
-directly on the critical path once the grid saturates the SMs (large N). **H4 then built a
-purpose-designed kernel to test whether that mechanism is *sufficient* on its own — and it isn't.**
-Reducing CTA count in isolation (no other change) doesn't recover cuSPARSE's speed and gets *worse*
-past a small chunk size, with DRAM traffic exploding up to 7.4× for identical total work. The real
-gap is at least two mechanisms, not one: grid-size mismatch (confirmed) **and** cuSPARSE's genuinely
-nnz-*balanced* (not just block-*count*-balanced) work distribution, which our naive chunking doesn't
-replicate. See H4 for the full, honestly-reported (partially negative) result.
+**Bottom line (updated after H5):** `block` launches ~5× more CUDA blocks than cuSPARSE needs on
+`diag_b0.3` (H1–H3) — a real correlation, but two follow-up purpose-built kernels each ruled out a
+simpler version of "why": H4 showed reducing CTA count alone doesn't recover cuSPARSE's speed and
+gets *worse* past a small chunk size; H5 showed nnz-*balanced* grouping (branch `feat/pbr-nnzgroup`)
+doesn't either, even when directly verified to achieve near-perfect per-group work balance. **The
+actual mechanism, found by H5's follow-up profiling: coarser grouping — by any criterion — collapses
+L2 cache hit rate (94.6% → 60.0%) that `block`'s massive, spatially-narrow concurrency provides for
+free**, while the underlying memory-request volume never changes. This is a spatial-locality cost
+neither CTA-count nor nnz-balance can see or fix. See H5 for the full mechanism and evidence.
 
 ---
 
@@ -257,26 +257,98 @@ which a naive `#pragma unroll` chunking loop replicates. This is exactly the kin
 ablation should produce: it rules out an oversimplified version of the hypothesis and sharpens what
 to build next.
 
+## H5: nnz-balanced grouping (branch `feat/pbr-nnzgroup`) — also falsified, and the real mechanism found
+
+**Hypothesis (following directly from H4's conclusion):** if cuSPARSE's advantage comes from
+nnz-*balanced* (not just count-balanced) work partitioning, then rebuilding `chunk`'s grouping to
+balance by cumulative nnz instead of block count — everything else identical — should close some of
+the remaining gap.
+
+**Experiment:** unified `rowgroup`/`colgroup`/`chunk` behind a shared `group_offsets` boundary-array
+contract (`grouping='count'|'nnz'`; `'count'` reproduces the original arithmetic bit-for-bit, verified
+by 3704 passing tests including the full existing suite as a regression guard). `'nnz'` builds
+boundaries via `np.searchsorted` over the cumulative-nnz prefix sum `block_offsets`/`col_offsets`
+already are — no new C++ computation needed. Ablated on `chunk` first (zero-reuse, isolates the
+grouping-criterion variable exactly as H4 did for CTA count) on two matrices: `diag_b0.3` (low
+per-block nnz variance, CV=0.19) and a new `diag_skewed` profile (genuine bimodal per-block nnz,
+CV=2.08 — fully-dense diagonal band + off-diagonal noise).
+
+**Finding: falsified on both matrices, and directly disproven as a mechanism.** On `diag_b0.3`,
+`'nnz'` grouping produced nearly identical grid sizes and timings to `'count'` — expected, given how
+little imbalance there was to correct. But on `diag_skewed` (real skew), the result was the *same*:
+grid sizes and runtimes matched `'count'` within noise (e.g. `chunk64`: grid=4110 for both, times
+22.4773ms vs 22.4812ms).
+
+Crucially, a direct measurement ruled out "the algorithm just isn't achieving balance": on
+`diag_skewed`, `'nnz'` grouping cuts per-group nnz coefficient-of-variation from **0.279 (count) to
+0.043 (nnz)** — a 6.5× tighter balance, about as good as any partitioning scheme could achieve — with
+**zero effect on runtime**. This proves nnz-imbalance across CTAs was never the bottleneck for this
+kernel design; a smarter reordering scheme (clustering nnz-similar blocks before partitioning, which
+would target the same metric) would not have helped either, so that direction was abandoned before
+being built.
+
+**So what actually drives the DRAM-traffic-growth pattern H4 first observed?** A targeted profiling
+pass added L1TEX-level global-memory-request counters (isolates *requests issued* from *requests
+that reach DRAM*) plus local-memory (register-spill) counters, on `block` vs `chunk` at
+`chunk_size ∈ {2,4,8,16,32,64}`, `diag_b0.3` @ N=262144/f512:
+
+| variant | time (ms) | DRAM read (MB) | L1TEX global-load requests (MB) | L2 hit rate | waves/SM |
+|---|---|---|---|---|---|
+| `block` | 13.01 | 1099.7 | 4826.3 | **94.59%** | 290.6 |
+| `chunk2` | 12.97 | 1335.0 | 4859.7 | 93.44% | 145.3 |
+| `chunk4` | 12.97 | 3156.5 | 4842.2 | 84.49% | 72.7 |
+| `chunk8` | 14.97 | 5651.0 | 4834.1 | 72.22% | 36.3 |
+| `chunk16` | 15.73 | 6949.8 | 4830.8 | 65.84% | 18.2 |
+| `chunk32` | 16.41 | 7801.6 | 4828.0 | 61.62% | 9.1 |
+| `chunk64` | 16.74 | 8142.2 | 4827.1 | **59.98%** | 4.5 |
+
+Local-memory (register spill) traffic was **0 in every case** — definitively rules out register
+spilling. **L1TEX global-load *request* volume is completely flat (~4.83 GB) across every variant —
+the actual logical work never changes**, exactly as it should for a pure regrouping of the same
+computation. But **L2 cache hit rate collapses monotonically, 94.6% → 60.0%**, and DRAM traffic
+tracks it almost exactly (1.1 GB → 8.1 GB, matching H4's original 7.4× figure).
+
+**The mechanism:** `block`'s 262,144 tiny, narrow CUDA blocks run with massive concurrency (290
+waves) — many nearby-diagonal-band blocks are in flight on different SMs at the same time, and the
+GPU's shared L2 cache serves a huge fraction of that traffic from blocks that happen to touch
+adjacent regions concurrently (94.6% hit rate). Grouping PBR blocks into fewer, "fatter" CTAs — by
+count (`chunk`'s original design, `rowgroup`) or by nnz (this experiment) — means each surviving CTA
+marches *sequentially* through a much wider, spatially-dispersed swath of the matrix, and with
+drastically fewer CTAs in flight overall (4.5 waves/SM at `chunk64` vs 290.6 for `block`), there is
+far less concurrent spatial overlap left for L2 to exploit. **This cost is invisible to both the
+CTA-count hypothesis (H3/H4) and the nnz-balance hypothesis (H5) — neither targets spatial locality,
+only aggregate per-CTA work volume — which is exactly why neither grouping criterion moved the
+needle.**
+
 ## Conclusion
 
 The improving-with-scale story in the original sweep summary was an artifact of re-tuning the PBR
 config independently at every size. Held fixed, the real trend is degradation on several matrices.
-H1–H3 identified a real, measurable contributor: `block`'s one-CTA-per-PBR-block launch granularity
-is **~5× finer than cuSPARSE's nnz-balanced work partition** for `diag_b0.3`, latent while the GPU
-has spare capacity and on the critical path once the grid saturates the SMs (well before N=262144).
 
-**H4 then falsified the simple version of that story.** A kernel built specifically to change only
-CTA count — nothing else — does not recover cuSPARSE's speed, and actively gets worse past a small
-chunk size, with DRAM traffic exploding for identical total work. The honest picture: CTA count is a
-*real but insufficient* contributor. The rest of the gap is most plausibly cuSPARSE's genuinely
-nnz-*balanced* (not just block-*count*-balanced) partitioning — its `csr_partition_kernel` equalizes
-actual work per launched unit, which a naive count-based grouping does not — combined with a more
-register/cache-efficient per-nonzero compute path.
+Three mechanisms were hypothesized and tested, in order, each ruling out the simpler one before it:
 
-This is a **different root cause than the tile kernel's failure** (see `TILE_STATE.md` — that was
-missing vectorization, not this). It also sharpens the next lever worth trying: not "group by
-PBR-block count" (what `rowgroup`/`colgroup`/`tile`/`chunk` all do) but **group by nnz-count**,
-mirroring cuSPARSE's own `csr_partition_kernel`, so the number of launched CUDA blocks — and the
-work assigned to each — tracks actual nnz rather than block *occurrence* count. Any future attempt
-at this should be benchmarked against the `chunk` kernel's numbers above as the honest baseline, not
-against `block` alone, since H4 shows naive grouping is not automatically an improvement.
+1. **H1–H3**: `block` launches ~5× more CUDA blocks than cuSPARSE's nnz-balanced partition for
+   `diag_b0.3` — a real correlation, but H4 showed reducing CTA count alone (holding grouping
+   *criterion* at plain block-count) doesn't recover cuSPARSE's speed and gets worse past a small
+   chunk size.
+2. **H5 (nnz-balanced grouping, branch `feat/pbr-nnzgroup`)**: hypothesized cuSPARSE's advantage was
+   specifically its nnz-*balanced* partitioning. Directly falsified — even a 6.5× tighter per-group
+   nnz balance (verified by direct measurement) produced zero runtime change.
+3. **The real mechanism (also H5)**: coarser grouping — by any criterion — trades away L2 cache hit
+   rate (94.6% → 60.0%) that `block`'s massive, spatially-narrow concurrency provides "for free."
+   L1TEX-level request volume is flat throughout; only the fraction served by cache collapses. This
+   is a **spatial-locality cost**, orthogonal to both CTA-count and nnz-balance, and it's the actual
+   driver of the DRAM-traffic-growth pattern first observed in H4.
+
+**Practical implication:** any future kernel that groups multiple PBR blocks per CUDA block (whether
+by count, by nnz, or by any other work-balance criterion) needs to also preserve *spatial* locality
+among the blocks a single CTA processes sequentially — e.g. only grouping blocks that are already
+near each other in the matrix (which `rowgroup`/`colgroup`'s row-strip/col-band locality already does
+partially, unlike `chunk`'s pure array-order grouping) — or it will pay this same L2-locality tax
+regardless of how well-balanced the work is. This is a **different root cause than the tile kernel's
+failure** (see `TILE_STATE.md` — that was missing vectorization) though tile's spatial clustering
+(`grid`/`greedy` strategies) may already be *partially* protective against this specific cost, worth
+keeping in mind if tile is revisited. Given H4 and H5 both failed and the real mechanism (L2 locality)
+isn't something a boundary-array grouping change can fix, **`feat/pbr-nnzgroup` is being shelved** —
+`rowgroup`/`colgroup`/`block`/`chunk` all remain as working baselines; no production kernel change is
+recommended from this line of investigation.
