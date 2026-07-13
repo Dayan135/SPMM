@@ -100,6 +100,67 @@ factor `p`, three `__syncthreads` barriers, one `atomicAdd` flush) was always th
 the critical path until the grid was large enough to saturate the SMs. That crossover is the
 "advantage eroding with scale" the benchmark measured.
 
+## Raw evidence: full ncu breakdown, every kernel launch
+
+Complete per-kernel-launch data behind H3, `diag_b0.3`, all 4 (N, features) points, both engines.
+Source: `ncu_out/cusparse_scaling/diag_b0.3_{N}_f{features}_{block,cusparse}.csv` (raw ncu `--csv`
+output, `jobs/profile_cusparse_scaling/profile_20260712.sh`). `waves/SM` = `launch__waves_per_multiprocessor`
+(CTA-waves needed to run the whole grid given this GPU's SM count and this kernel's occupancy);
+`warps%`/`SM%`/`DRAM%` are `sm__warps_active`/`sm__throughput`/`dram__throughput`
+`.avg.pct_of_peak_sustained_{active,elapsed}`; hit rates are `l1tex__t_sector_hit_rate.pct` /
+`lts__t_sector_hit_rate.pct`.
+
+### N=1024, features=64
+
+| engine | kernel | grid | block | time (ms) | SM% | DRAM% | DRAM rd (MB) | DRAM wr (MB) | warps% | waves/SM | regs | smem (B) | L1 hit% | L2 hit% |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| block    | zero_init           | (64,1,1)    | (128,1,1) | 0.0023 |  0.77 |  0.21 |   0.00 |   0.00 |  8.21 |  0.07 | 16 |    0 |  0.00 | 98.93 |
+| block    | **pbr_kernel**      | (1024,1,1)  | (128,1,1) | 0.0122 | 37.85 |  6.55 |   0.64 |   0.09 | 62.64 |  1.14 | 40 | 8192 |  8.61 | 94.63 |
+| cusparse | zero_init           | (64,1,1)    | (128,1,1) | 0.0024 |  0.80 |  0.20 |   0.00 |   0.00 |  8.21 |  0.07 | 16 |    0 |  0.00 | 99.48 |
+| cusparse | scalar_mul          | (1,256,1)   | (32,4,1)  | 0.0027 |  7.08 |  0.20 |   0.00 |   0.00 | 23.06 |  0.26 | 31 |    0 |  0.00 | 98.82 |
+| cusparse | **csr_partition**   | (4,1,1)     | (256,1,1) | 0.0052 |  0.15 |  0.15 |   0.01 |   0.00 | 13.72 |  0.01 | 16 |    0 | 70.99 | 152.86 |
+| cusparse | **csrmm_alg2**      | (205,1,1)   | (128,1,1) | 0.0098 | 23.64 |  7.72 |   0.66 |   0.02 | 18.92 |  0.25 | 44 |    0 | 43.61 | 81.12 |
+
+### N=1024, features=512
+
+| engine | kernel | grid | block | time (ms) | SM% | DRAM% | DRAM rd (MB) | DRAM wr (MB) | warps% | waves/SM | regs | smem (B) | L1 hit% | L2 hit% |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| block    | zero_init           | (512,1,1)   | (128,1,1) | 0.0035 |  4.17 | 30.26 |   0.00 |   0.94 | 30.50 |  0.52 | 16 |    0 |  0.00 | 101.74 |
+| block    | **pbr_kernel**      | (1024,1,1)  | (128,1,1) | 0.0598 | 25.29 | 10.40 |   4.31 |   1.36 | 70.80 |  1.14 | 40 | 8192 |  3.38 | 94.64 |
+| cusparse | zero_init           | (512,1,1)   | (128,1,1) | 0.0036 |  4.16 | 30.32 |   0.00 |   0.95 | 30.41 |  0.52 | 16 |    0 |  0.00 | 99.88 |
+| cusparse | scalar_mul          | (4,256,1)   | (32,4,1)  | 0.0037 | 19.66 | 36.97 |   0.00 |   1.22 | 52.99 |  1.04 | 31 |    0 |  0.00 | 99.81 |
+| cusparse | **csr_partition**   | (4,1,1)     | (256,1,1) | 0.0052 |  0.14 |  0.15 |   0.01 |   0.00 | 13.61 |  0.01 | 16 |    0 | 70.24 | 90.32 |
+| cusparse | **csrmm_alg2**      | (205,4,1)   | (128,1,1) | 0.0173 | 55.69 | 34.21 |   4.02 |   1.36 | 68.00 |  1.00 | 44 |    0 | 40.05 | 85.53 |
+
+### N=262144, features=64
+
+| engine | kernel | grid | block | time (ms) | SM% | DRAM% | DRAM rd (MB) | DRAM wr (MB) | warps% | waves/SM | regs | smem (B) | L1 hit% | L2 hit% |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| block    | zero_init           | (16384,1,1) | (128,1,1) | 0.0772 |  6.03 | 93.89 |   0.01 |  65.94 | 89.84 |  16.65 | 16 |    0 |  0.00 | 99.99 |
+| block    | **pbr_kernel**      | (262144,1,1)| (128,1,1) | **1.7188** | 67.31 | 14.44 | 159.63 |  66.54 | 88.06 | **290.63** | 40 | 8192 |  8.29 | 93.80 |
+| cusparse | zero_init           | (16384,1,1) | (128,1,1) | 0.0771 |  6.01 | 93.94 |   0.01 |  65.93 | 89.90 |  16.65 | 16 |    0 |  0.00 | 99.99 |
+| cusparse | scalar_mul          | (1,65535,1) | (32,4,1)  | 0.0772 | 55.66 | 93.77 |   0.01 |  65.94 | 73.01 |  66.60 | 31 |    0 |  0.00 | 99.99 |
+| cusparse | **csr_partition**   | (820,1,1)   | (256,1,1) | 0.0138 | 24.06 | 11.06 |   1.05 |   0.33 | 80.51 |   1.67 | 16 |    0 | 75.69 | 57.29 |
+| cusparse | **csrmm_alg2**      | (52429,1,1) | (128,1,1) | **0.6112** | 95.38 | 41.59 | 165.01 |  66.65 | 77.87 | **63.94** | 44 |    0 | 28.91 | 84.41 |
+
+### N=262144, features=512
+
+| engine | kernel | grid | block | time (ms) | SM% | DRAM% | DRAM rd (MB) | DRAM wr (MB) | warps% | waves/SM | regs | smem (B) | L1 hit% | L2 hit% |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| block    | zero_init           | (131072,1,1)| (128,1,1) | 0.6040 |  6.08 | 97.39 |   0.02 | 536.00 | 92.61 | 133.20 | 16 |    0 |  0.00 | 100.00 |
+| block    | **pbr_kernel**      | (262144,1,1)| (128,1,1) | **13.0037** | 30.28 | 13.80 | 1099.41 | 536.24 | 91.00 | **290.63** | 40 | 8192 |  3.30 | 94.59 |
+| cusparse | zero_init           | (131072,1,1)| (128,1,1) | 0.6055 |  6.08 | 97.10 |   0.04 | 535.72 | 92.52 | 133.20 | 16 |    0 |  0.00 | 100.02 |
+| cusparse | scalar_mul          | (4,65535,1) | (32,4,1)  | 0.6047 | 27.77 | 97.29 |   0.02 | 535.99 | 79.53 | 266.40 | 31 |    0 |  0.00 | 100.00 |
+| cusparse | **csr_partition**   | (820,1,1)   | (256,1,1) | 0.0137 | 23.63 |  8.56 |   1.05 |   0.01 | 80.54 |   1.67 | 16 |    0 | 75.69 | 56.91 |
+| cusparse | **csrmm_alg2**      | (52429,4,1) | (128,1,1) | **4.1004** | 58.40 | 48.79 | 1202.64 | 620.48 | 76.02 | **255.75** | 44 |    0 | 22.48 | 86.52 |
+
+**Reading the evidence:**
+- **Grid.x is the smoking gun.** `pbr_kernel`'s grid never varies with features (1024 or 262144 — always exactly `num_pbr_blocks`), while `csrmm_alg2`'s grid.x is fixed by nnz-partitioning (205 or 52429) and only its grid.y grows with `feat_tiles` (1→4). At N=262144, `pbr_kernel` needs **290.63 waves/SM** vs `csrmm_alg2`'s **63.94–255.75** — 1.1–4.5× more, and it's the wave count, not raw grid size, that gates wall time once both are oversubscribed.
+- **DRAM traffic is comparable or better for us, so it's not a bandwidth story.** At N=262144/f512, `pbr_kernel` reads *less* (1099 MB vs cuSPARSE's 1203 MB) and both write about the same (~536–620 MB) — yet `pbr_kernel` takes 13.00ms vs `csrmm_alg2`'s 4.10ms. The bottleneck is occupancy/launch geometry, not memory volume.
+- **`sm__throughput` tells the same story from the compute side.** At N=262144/f64, `csrmm_alg2` hits 95.38% SM throughput (essentially compute-saturated, doing real work every cycle) vs `pbr_kernel`'s 67.31% — cuSPARSE is extracting far more useful work per cycle from the SMs it occupies.
+- **The zero-init kernel is identical between engines to within noise** (0.0771–0.0772ms and 0.6040–0.6055ms at matched N/features) — confirms it's not a differentiator, consistent with H2's rejection of the remainder/overhead-asymmetry story.
+- **At N=1024, `waves/SM < 1.2` for every kernel** — there's no oversubscription yet, so the grid-size mismatch is free; `pbr_kernel` even wins head-to-head at f64 (0.0122ms vs `csr_partition`+`csrmm_alg2`'s combined 0.0150ms). The crossover only appears once grids grow enough to force multiple serialized waves per SM.
+
 ## Supporting check: do rowgroup/colgroup (built to amortize exactly this) help?
 
 **Experiment:** `rowgroup`/`colgroup` group multiple PBR blocks per CUDA block specifically to
