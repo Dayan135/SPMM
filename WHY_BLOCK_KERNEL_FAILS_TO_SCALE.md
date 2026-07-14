@@ -27,6 +27,14 @@ zero on `scattered_1x8` (single populated row per PBR block), where `block` is i
 `mio_throttle` spike (~21.5%) that `block` does, meaning the effect isn't even `block`-specific there.
 See `STALL_REASONS.md` for the full matrix/size/feature grid.
 
+**Attempted fix, negative result (`STALL_REASONS.md`, branch `feat/pbr-block-stall-fix`):** merged
+`block`'s Step B (compute) and Step C (atomic commit) to remove an apparently-redundant `smem_Y`
+store/reload and one `__syncthreads()`. Correctness held (3704/3704 tests pass), but profiling showed
+`mio_throttle` got *worse* in 9/10 cases and `sm__throughput` dropped in all 10 — removing the
+synchronization let `p` grow, batching more shared-memory traffic into fewer, larger uninterrupted
+bursts and increasing instantaneous MIO-pipe pressure despite lower total instruction count. Reverted;
+`mio_throttle`/`barrier` reduction remains unsolved. Full data and the "why" in `STALL_REASONS.md`.
+
 ---
 
 ## H1: The "best-tuned-per-size" comparison is masking real degradation

@@ -82,9 +82,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
     // p is floored to a power of 2 so inner-loop /current_p and %current_p
     // become bit-shift and mask ops.  Correct when features is a power-of-2
     // multiple of p, which holds for all benchmarked feature counts.
-    // Divides by n_c alone (not n_r+n_c): smem holds only smem_X now (see Step B/C
-    // merge below), so the whole TOTAL_SHARED buffer is available to it.
-    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / n_c, features));
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
     const uint32_t p      = 1u << p_log2;
     const uint32_t p_mask = p - 1u;
 
@@ -97,6 +95,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
         const uint32_t current_p = min(p, feat_end - base_f);
 
         scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
 
         // STEP A: Cooperative Load
         const uint32_t total_x_elements = n_c * current_p;
@@ -110,12 +109,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 
         __syncthreads();
 
-        // STEP B+C (merged): each thread computes its own (row, feature) sum and
-        // atomicAdds it directly from the register -- no smem_Y round trip. Step
-        // B/C used to be split via smem_Y, but both loops visit the identical
-        // work_idx sequence per thread (same thread writes and reads its own
-        // slot, no cross-thread dependency), so the intermediate store/reload
-        // and the syncthreads between them were unnecessary.
+        // STEP B: FLATTENED WORKER POOL
         const uint32_t total_work = n_r * current_p;
 
         for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
@@ -138,8 +132,20 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
                 }
             }
 
+            smem_Y[work_idx] = sum;
+        }
+
+        __syncthreads();
+
+        // STEP C: Cooperative Atomic Commit
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             const uint32_t global_r = row_origin + actual_r;
-            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], sum);
+
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
         }
 
         __syncthreads();
@@ -224,9 +230,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
     // --- 2. DYNAMIC P CALCULATION (vp floored to power of 2 → bit-op division) ---
     // vp_log2 / vp_mask replace /vp and %vp in inner loops; correct when
     // features is a power-of-2 multiple of p (all benchmarked feature counts).
-    // Divides by n_c alone (not n_r+n_c): smem holds only smem_X now (see Step B/C
-    // merge below), so the whole TOTAL_SHARED buffer is available to it.
-    const uint32_t vp_log2 = 31u - __clz(min(TOTAL_SHARED / n_c, features) / L);
+    const uint32_t vp_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features) / L);
     const uint32_t vp_mask = (1u << vp_log2) - 1u;
     const uint32_t p       = (1u << vp_log2) * L;
 
@@ -240,6 +244,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
         const uint32_t vp = current_p / L;                     // vectors per column
 
         scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
 
         // STEP A: Cooperative vectorized load of X -> smem_X
         const uint32_t total_xv = n_c * vp;
@@ -255,12 +260,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
 
         __syncthreads();
 
-        // STEP B+C (merged): each thread computes its own float4/double2 sum and
-        // atomicAdds it directly from the register -- no smem_Y round trip. Step
-        // B/C used to be split via smem_Y, but both loops visit the identical
-        // vwork sequence per thread (same thread writes and reads its own slot,
-        // no cross-thread dependency), so the intermediate store/reload and the
-        // syncthreads between them were unnecessary.
+        // STEP B: FLATTENED WORKER POOL (one float4/double2 per thread)
         const uint32_t total_vwork = n_r * vp;
         for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
             const uint32_t pr    = vwork >> vp_log2;
@@ -289,10 +289,24 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
                 }
             }
 
+            *reinterpret_cast<vec_t*>(&smem_Y[pr * current_p + f_off]) = acc.v;
+        }
+
+        __syncthreads();
+
+        // STEP C: Cooperative atomic commit (vector load from smem, L scalar atomics)
+        for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
+            const uint32_t pr    = vwork >> vp_log2;
+            const uint32_t f_off = (vwork & vp_mask) * L;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             const uint32_t global_r = row_origin + actual_r;
+
+            lane_u yu;
+            yu.v = *reinterpret_cast<const vec_t*>(&smem_Y[pr * current_p + f_off]);
             #pragma unroll
             for (int l = 0; l < L; ++l) {
-                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], acc.s[l]);
+                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
             }
         }
 

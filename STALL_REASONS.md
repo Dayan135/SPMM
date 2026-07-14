@@ -8,9 +8,11 @@ Extends H6's stall-reason check (`WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H6, previo
 Each is "% of cycles a warp was stalled, unable to issue, for this reason" (`smsp__warp_issue_stalled_*`),
 or a pipe/occupancy percentage:
 
-- **`mio_throttle`** — stalled because the shared-memory/atomic execution pipe is saturated. In
-  `block`, this is the pipe `atomicAdd` (the Y-accumulation flush) and shared-memory ops both go
-  through — high value = atomic/smem contention.
+- **`mio_throttle`** — stalled because the shared-memory execution pipe (MIO) is saturated.
+  **Correction (2026-07-14, verified via `ncu --query-metrics`):** global `atomicAdd` is on a
+  *separate* pipe (`_pipe_lsu`), not MIO — only `block`'s `smem_X`/`smem_Y` loads and stores drive
+  this metric, not the Y-accumulation `atomicAdd` itself. High value = shared-memory instruction
+  pressure, not atomic contention.
 - **`barrier`** — stalled at a `__syncthreads()` waiting for other threads in the block to catch up.
   High value = lots of time synchronizing, not computing.
 - **`long_scoreboard`** — stalled waiting on a long-latency global-memory (DRAM) load. High value is
@@ -112,3 +114,65 @@ be the real lever instead.
 `block`'s `mio_throttle` is exactly 0.00 for every scattered matrix at N=1024 — even `scattered_8x1`,
 which shows the diag-like `mio_throttle`-heavy profile at N=262144 — consistent with too few
 concurrent CTAs at this size for atomic contention to build up.
+
+## Attempted fix (2026-07-14, branch `feat/pbr-block-stall-fix`): negative result
+
+### Hypothesis
+
+`block`'s Step B (compute into `smem_Y`) and Step C (`atomicAdd` from `smem_Y`) iterate the identical
+per-thread work sequence — the same thread writes and later reads its own `smem_Y` slot, with no
+cross-thread dependency. Reading the kernel source suggested the `__syncthreads()` between them and
+the entire `smem_Y` store/reload were unnecessary: merge the two loops so each thread `atomicAdd`s
+directly from its own register, drop `smem_Y`, and let `smem_X` use the whole shared-memory buffer
+(growing the feature-tile width `p`, since only one buffer needs to fit now instead of two).
+
+Verified first via `ncu --query-metrics` that global `atomicAdd` is on the LSU pipe, not MIO — so this
+targets real MIO-classified traffic (the now-corrected glossary above), not a misattributed atomic
+cost.
+
+### Result: regression, not a win
+
+Implemented in `pbr_spmm_vec_kernel`/`pbr_spmm_zero_idle_kernel`. All 3704 correctness tests pass
+unchanged (pure refactor, same accumulated sum). Re-profiled the identical N=262144 stall-reason grid
+before vs. after:
+
+| matrix/feat | time before→after | SM% before→after | `mio_throttle` before→after | `barrier` before→after |
+|---|---|---|---|---|
+| `diag_b0.1`/128 | 2.013→2.005ms (−0.4%) | 54.8→52.9 | 10.8→**13.6** | 19.9→18.8 |
+| `diag_b0.1`/512 | 8.021→8.191ms (+2.1%) | 33.1→26.9 | 17.7→**26.5** | 25.3→20.2 |
+| `diag_b0.3`/128 | 3.336→3.351ms (+0.5%) | 44.3→41.8 | 17.8→**22.3** | 14.1→15.7 |
+| `diag_b0.3`/512 | 12.99→13.73ms (+5.7%) | 30.3→24.1 | 21.3→**26.7** | 20.1→24.0 |
+| `scattered_1x8`/128 | 0.129→0.135ms (+4.5%) | 49.7→47.7 | 0.02→0.05 | 25.4→22.4 |
+| `scattered_1x8`/512 | 0.496→0.496ms (~0%) | 26.6→22.1 | 0.29→**11.7** | 36.6→23.5 |
+| `scattered_2x2`/128 | 0.091→0.091ms (~0%) | 67.5→65.6 | 0.41→0.69 | 29.5→26.2 |
+| `scattered_2x2`/512 | 0.354→0.354ms (~0%) | 30.3→28.4 | 22.6→27.6 | 9.9→10.3 |
+| `scattered_8x1`/128 | 0.288→0.288ms (~0%) | 38.2→35.4 | 18.0→24.8 | 21.1→19.7 |
+| `scattered_8x1`/512 | 1.090→1.125ms (+3.2%) | 26.3→22.1 | 22.3→**28.6** | 25.3→23.7 |
+
+`mio_throttle` **increased** in 9 of 10 cases (sometimes drastically — `scattered_1x8`/512 went from
+0.29% to 11.7%), `sm__throughput` **decreased in all 10**, and wall-clock time is flat-to-worse
+everywhere (never meaningfully better). `barrier` did drop in most cases as predicted, but the MIO
+regression outweighed it.
+
+### Why: growing `p` backfired
+
+Removing `smem_Y` freed shared memory, so `p` (features handled per iteration before the next
+`__syncthreads()`) roughly doubled for blocks where `n_r ≈ n_c`. Total shared-memory instruction count
+across a full kernel invocation should still have gone down (fewer iterations, and the `smem_Y`
+round-trip is gone entirely) — but each surviving iteration now issues about twice as many
+back-to-back `smem_X` load/read instructions with no synchronization point in between to let the MIO
+issue queue drain. The barrier count dropping did remove real synchronization overhead, but batching
+more shared-memory traffic into fewer, larger uninterrupted bursts made the MIO queue fill up more
+often per unit time than before — a genuine case of "less total work, worse instantaneous pipe
+pressure." This is exactly the kind of effect flagged as an open, unresolved question during plan
+review (whether removing synchronization changes contention for the better or worse) — it went the
+other way.
+
+### Disposition
+
+Reverted (`torch_fast_spdmm/kernels/pbr_kernel.cu` restored to the pre-fix version) on
+`feat/pbr-block-stall-fix`; the branch is kept for the record but not merged. No production kernel
+change resulted from this investigation — `mio_throttle`/`barrier` reduction remains an open problem.
+A follow-up that was **not** attempted here (flagged for future work if revisited): cap `p` at its old
+value even with `smem_Y` removed, to isolate whether the store/reload removal helps in isolation from
+the iteration-count/burst-size change it was bundled with in this attempt.
