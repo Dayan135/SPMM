@@ -82,39 +82,74 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
     // p is floored to a power of 2 so inner-loop /current_p and %current_p
     // become bit-shift and mask ops.  Correct when features is a power-of-2
     // multiple of p, which holds for all benchmarked feature counts.
+    // (p_mask itself is unused now that STEP A/B/C index via the per-warp
+    // sub_mask below -- kept out of this kernel; p_log2/p still drive the
+    // grid-stride loop and the warp split.)
     const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
     const uint32_t p      = 1u << p_log2;
-    const uint32_t p_mask = p - 1u;
 
     const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
     const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    // Warp-local reuse: partition each feature tile across the 4 warps in
+    // the CTA instead of sharing one block-wide smem_X/smem_Y buffer. Every
+    // warp's slice is a disjoint range of features, so (unlike partitioning
+    // by row) no column of X is ever needed by more than one warp -- zero
+    // redundant reloading, and the __syncthreads() that used to guarantee
+    // cross-warp visibility of smem_X/smem_Y becomes a per-warp
+    // __syncwarp(), since no other warp ever touches this warp's sub-buffer.
+    constexpr uint32_t WARPS_PER_BLOCK = THREADS_PER_BLOCK / 32;
+    const uint32_t warp_id = tx >> 5;
+    const uint32_t lane    = tx & 31u;
 
     // --- 3. GRID-STRIDE LOOP OVER FEATURES ---
     for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
 
         const uint32_t current_p = min(p, feat_end - base_f);
 
-        scalar_t* smem_X = smem;
-        scalar_t* smem_Y = smem + (n_c * current_p);
+        // current_p (== p, see note above) is always a power of 2, and so
+        // is WARPS_PER_BLOCK (4) -- splitting divides evenly, no ragged
+        // remainder to special-case. When the tile is narrower than
+        // WARPS_PER_BLOCK, only warp 0 handles the whole (unsplit) tile --
+        // identical math to the original single-buffer code, just run on 32
+        // threads instead of 128; warps 1-3 sit out that iteration. Folding
+        // both cases into one sub_p_log2/n_active pair (rather than two
+        // separate code paths) keeps STEP A/B/C written once.
+        const bool splittable      = (p_log2 >= 2);
+        const uint32_t sub_p_log2  = splittable ? (p_log2 - 2) : p_log2;
+        const uint32_t sub_p       = 1u << sub_p_log2;
+        const uint32_t sub_mask    = sub_p - 1u;
+        const uint32_t n_active    = splittable ? WARPS_PER_BLOCK : 1u;
+        const uint32_t f_base_w    = splittable ? (warp_id << sub_p_log2) : 0u;
 
-        // STEP A: Cooperative Load
-        const uint32_t total_x_elements = n_c * current_p;
-        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
-            const uint32_t c_idx   = i >> p_log2;
-            const uint32_t f_offset = i & p_mask;
+        if (!splittable && warp_id != 0) continue;  // only warp 0 participates
+
+        // Per-warp private sub-buffers, packed contiguously: all n_active
+        // smem_X slices first, then all n_active smem_Y slices. Total
+        // footprint == (n_r+n_c)*current_p, identical to the original
+        // block-wide allocation -- never exceeds the static TOTAL_SHARED
+        // budget.
+        scalar_t* smem_X_w = smem + warp_id * (n_c * sub_p);
+        scalar_t* smem_Y_w = smem + n_active * (n_c * sub_p) + warp_id * (n_r * sub_p);
+
+        // STEP A: warp-local cooperative load (32 lanes)
+        const uint32_t total_x_elements = n_c * sub_p;
+        for (uint32_t i = lane; i < total_x_elements; i += 32) {
+            const uint32_t c_idx   = i >> sub_p_log2;
+            const uint32_t f_offset = i & sub_mask;
 
             const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
-            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+            smem_X_w[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_base_w + f_offset];
         }
 
-        __syncthreads();
+        __syncwarp();
 
-        // STEP B: FLATTENED WORKER POOL
-        const uint32_t total_work = n_r * current_p;
+        // STEP B: FLATTENED WORKER POOL (warp-local)
+        const uint32_t total_work = n_r * sub_p;
 
-        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
-            const uint32_t pr    = work_idx >> p_log2;
-            const uint32_t f_in_s = work_idx & p_mask;
+        for (uint32_t work_idx = lane; work_idx < total_work; work_idx += 32) {
+            const uint32_t pr    = work_idx >> sub_p_log2;
+            const uint32_t f_in_s = work_idx & sub_mask;
 
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
@@ -127,28 +162,29 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
             for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
                 if ((row_code >> c) & 1) {
                     const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
-                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    sum += __ldg(&block_data[local_data_ptr]) * smem_X_w[pc * sub_p + f_in_s];
                     local_data_ptr++;
                 }
             }
 
-            smem_Y[work_idx] = sum;
+            smem_Y_w[work_idx] = sum;
         }
 
-        __syncthreads();
+        __syncwarp();
 
-        // STEP C: Cooperative Atomic Commit
-        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
-            const uint32_t pr    = work_idx >> p_log2;
-            const uint32_t f_in_s = work_idx & p_mask;
+        // STEP C: Cooperative Atomic Commit (warp-local staging; the
+        // atomicAdd itself is still cross-CTA, unrelated to this change)
+        for (uint32_t work_idx = lane; work_idx < total_work; work_idx += 32) {
+            const uint32_t pr    = work_idx >> sub_p_log2;
+            const uint32_t f_in_s = work_idx & sub_mask;
 
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             const uint32_t global_r = row_origin + actual_r;
 
-            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_base_w + f_in_s], smem_Y_w[work_idx]);
         }
 
-        __syncthreads();
+        __syncwarp();
     }
 }
 
@@ -184,6 +220,10 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
     const uint32_t tx = threadIdx.x;
 
     if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    constexpr uint32_t WARPS_PER_BLOCK = THREADS_PER_BLOCK / 32;
+    const uint32_t warp_id = tx >> 5;
+    const uint32_t lane    = tx & 31u;
 
     const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
     const uint32_t row_origin = block_coords[b_idx * 2];
@@ -228,10 +268,10 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
     }
 
     // --- 2. DYNAMIC P CALCULATION (vp floored to power of 2 → bit-op division) ---
-    // vp_log2 / vp_mask replace /vp and %vp in inner loops; correct when
-    // features is a power-of-2 multiple of p (all benchmarked feature counts).
+    // vp_log2 drives the grid-stride loop and the warp split below (via
+    // sub_vp_mask); the block-wide vp_mask this comment used to describe is
+    // gone now that STEP A/B/C index per-warp.
     const uint32_t vp_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features) / L);
-    const uint32_t vp_mask = (1u << vp_log2) - 1u;
     const uint32_t p       = (1u << vp_log2) * L;
 
     const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
@@ -243,28 +283,48 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
         const uint32_t current_p = min(p, feat_end - base_f);  // multiple of L
         const uint32_t vp = current_p / L;                     // vectors per column
 
-        scalar_t* smem_X = smem;
-        scalar_t* smem_Y = smem + (n_c * current_p);
+        // Warp-local partition, in units of L-wide vectors: each warp gets a
+        // disjoint sub_vp-wide vector slice (sub_vp*L scalar features) with
+        // its own private smem_X/smem_Y sub-buffer -- same rationale as the
+        // scalar kernel (see pbr_spmm_zero_idle_kernel above): splitting by
+        // feature range means no column of X is ever needed by more than one
+        // warp, so __syncwarp() alone is sufficient, no redundant reloading.
+        // Falls back to warp 0 handling the whole (unsplit) vp-wide tile
+        // when vp < WARPS_PER_BLOCK.
+        const bool splittable       = (vp_log2 >= 2);
+        const uint32_t sub_vp_log2  = splittable ? (vp_log2 - 2) : vp_log2;
+        const uint32_t sub_vp       = 1u << sub_vp_log2;
+        const uint32_t sub_vp_mask  = sub_vp - 1u;
+        const uint32_t sub_p        = sub_vp * L;
+        const uint32_t n_active     = splittable ? WARPS_PER_BLOCK : 1u;
+        const uint32_t f_base_w     = splittable ? (warp_id << sub_vp_log2) * L : 0u;
 
-        // STEP A: Cooperative vectorized load of X -> smem_X
-        const uint32_t total_xv = n_c * vp;
-        for (uint32_t i = tx; i < total_xv; i += THREADS_PER_BLOCK) {
-            const uint32_t c_idx   = i >> vp_log2;
-            const uint32_t f_off   = (i & vp_mask) * L;
+        if (!splittable && warp_id != 0) continue;  // only warp 0 participates
+
+        // Per-warp private sub-buffers -- total footprint == (n_r+n_c)*current_p,
+        // identical to the original block-wide allocation.
+        scalar_t* smem_X_w = smem + warp_id * (n_c * sub_p);
+        scalar_t* smem_Y_w = smem + n_active * (n_c * sub_p) + warp_id * (n_r * sub_p);
+
+        // STEP A: warp-local cooperative vectorized load of X -> smem_X_w
+        const uint32_t total_xv = n_c * sub_vp;
+        for (uint32_t i = lane; i < total_xv; i += 32) {
+            const uint32_t c_idx   = i >> sub_vp_log2;
+            const uint32_t f_off   = (i & sub_vp_mask) * L;
             const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
 
             const vec_t xv = *reinterpret_cast<const vec_t*>(
-                &X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_off]);
-            *reinterpret_cast<vec_t*>(&smem_X[c_idx * current_p + f_off]) = xv;
+                &X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_base_w + f_off]);
+            *reinterpret_cast<vec_t*>(&smem_X_w[c_idx * sub_p + f_off]) = xv;
         }
 
-        __syncthreads();
+        __syncwarp();
 
-        // STEP B: FLATTENED WORKER POOL (one float4/double2 per thread)
-        const uint32_t total_vwork = n_r * vp;
-        for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
-            const uint32_t pr    = vwork >> vp_log2;
-            const uint32_t f_off = (vwork & vp_mask) * L;
+        // STEP B: warp-local flattened worker pool (one float4/double2 per lane)
+        const uint32_t total_vwork = n_r * sub_vp;
+        for (uint32_t vwork = lane; vwork < total_vwork; vwork += 32) {
+            const uint32_t pr    = vwork >> sub_vp_log2;
+            const uint32_t f_off = (vwork & sub_vp_mask) * L;
 
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
@@ -281,7 +341,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
                     const scalar_t coef = __ldg(&block_data[local_data_ptr]);
 
                     lane_u xu;
-                    xu.v = *reinterpret_cast<const vec_t*>(&smem_X[pc * current_p + f_off]);
+                    xu.v = *reinterpret_cast<const vec_t*>(&smem_X_w[pc * sub_p + f_off]);
                     #pragma unroll
                     for (int l = 0; l < L; ++l) acc.s[l] += coef * xu.s[l];
 
@@ -289,28 +349,29 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
                 }
             }
 
-            *reinterpret_cast<vec_t*>(&smem_Y[pr * current_p + f_off]) = acc.v;
+            *reinterpret_cast<vec_t*>(&smem_Y_w[pr * sub_p + f_off]) = acc.v;
         }
 
-        __syncthreads();
+        __syncwarp();
 
-        // STEP C: Cooperative atomic commit (vector load from smem, L scalar atomics)
-        for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
-            const uint32_t pr    = vwork >> vp_log2;
-            const uint32_t f_off = (vwork & vp_mask) * L;
+        // STEP C: warp-local cooperative atomic commit (vector load from
+        // smem, L scalar atomics; still cross-CTA, unrelated to this change)
+        for (uint32_t vwork = lane; vwork < total_vwork; vwork += 32) {
+            const uint32_t pr    = vwork >> sub_vp_log2;
+            const uint32_t f_off = (vwork & sub_vp_mask) * L;
 
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             const uint32_t global_r = row_origin + actual_r;
 
             lane_u yu;
-            yu.v = *reinterpret_cast<const vec_t*>(&smem_Y[pr * current_p + f_off]);
+            yu.v = *reinterpret_cast<const vec_t*>(&smem_Y_w[pr * sub_p + f_off]);
             #pragma unroll
             for (int l = 0; l < L; ++l) {
-                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
+                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_base_w + f_off + l], yu.s[l]);
             }
         }
 
-        __syncthreads();
+        __syncwarp();
     }
 }
 
