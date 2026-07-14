@@ -40,6 +40,24 @@ bottleneck (a stall reason, an instruction count) does not reliably improve wall
 the freed cycles get reallocated to a different bottleneck.* Any automated Critic must know to check
 for this whack-a-mole pattern specifically, not just "did the target metric improve."
 
+### 0.1 Cost model is deployment-specific — this matters more than it sounds
+
+Fact (b) above assumed the common case (metered/scarce cloud GPU, ~free LLM tokens by comparison).
+**In this deployment, the reverse holds: GPU access (an institutional/lab Slurm cluster) is cheap or
+already-paid-for, while LLM API calls are the real out-of-pocket cost.** This is not a minor tuning
+knob — it inverts which parts of the pipeline exist to save money, so §4, §7, and §13 below are
+written with an explicit "under GPU-cheap / under LLM-cheap" split wherever the two configurations
+diverge. Concretely, under the LLM-cheap-GPU-expensive assumption the design leans on cheap LLM
+pre-filtering (Debate, staged tier-1/tier-2 evaluation) to protect GPU-hours; under this deployment's
+actual GPU-cheap/LLM-expensive regime, the correct move is the opposite: **minimize LLM call volume
+and reasoning depth, and let GPU evaluation (which is now the cheap resource) do more of the
+filtering directly** — brute-force the enumerable grid rather than paying an LLM to reason about
+which region to prioritize, cut or shrink the Debate stage since it no longer buys GPU savings, and
+concentrate LLM spend on the two things only an LLM can do here: proposing genuinely novel
+kernel-body mechanisms (Hypothesis Generator) and writing the actual CUDA diffs (Candidate
+Synthesizer). The one thing that does **not** change with the cost model: the Critic's mechanism
+check. That safeguard is about correctness of conclusions, not cost, and is required either way.
+
 ---
 
 ## 1. Overall system architecture
@@ -207,6 +225,14 @@ verification strategy, confidence estimation, failure modes.
   Curator consult *before* generation, not after).
 
 ### 2.4 Debate (Optimist vs. Skeptic)
+
+> **Cost-model note (see §0.1)**: this stage is justified as a way to spend cheap LLM tokens to avoid
+> wasting expensive GPU-hours. Under this deployment's actual cost model (GPU cheap, LLM expensive),
+> that trade is reversed — Debate now spends the expensive resource to save the cheap one. Recommended
+> under this deployment: drop Debate entirely for the enumerable/discrete grid (just run the candidate
+> on GPU — it's cheaper than debating whether to), and keep it, bounded to a single round, only for the
+> open-ended kernel-body-edit hypotheses where a bad idea would otherwise cost a real Candidate
+> Synthesizer + correctness-build cycle, not just a GPU benchmark.
 
 - **Objective**: cheaply (no tool calls, no GPU) stress-test a candidate hypothesis before spending any
   real evaluation cost — this directly encodes the exact dynamic the user demonstrated by hand this
@@ -500,16 +526,23 @@ the three different sub-problems the search space actually contains:
 
 1. **Discrete/enumerable grid** (kernel choice, block size, `smem_size`, grouping, tile shape):
    handled by direct enumeration + **Bayesian optimization** once enough of the grid has real
-   measurements to fit a surrogate model. No LLM reasoning needed for *generating* a valid point;
-   LLM reasoning (the Hypothesis Generator) is only invoked to decide *which region* of the grid is
-   worth prioritizing next, informed by the ledger.
+   measurements to fit a surrogate model. No LLM reasoning needed for *generating* a valid point.
+   Under the default (GPU-scarce) cost model, LLM reasoning (the Hypothesis Generator) decides *which
+   region* of the grid to prioritize next. **Under this deployment's actual GPU-cheap/LLM-expensive
+   cost model (§0.1), skip that LLM-directed prioritization entirely — just brute-force-enumerate the
+   grid (or let the zero-cost BO surrogate pick points) and spend zero LLM tokens on this sub-problem.**
 2. **Open-ended kernel-body mechanism search** (the four stall-reduction attempts this session are
    the archetype): handled by retrieval-grounded **Tree-of-Thoughts hypothesis branching**, filtered
    by cheap **Debate**, and validated by the **Critic's mechanism check** — because here the "candidate"
    isn't a point in a known space, it's a novel causal claim about the hardware, and the corpus shows
    plausible-sounding claims (e.g. "atomicAdd shares the MIO pipe with shared memory") can be
    confidently wrong until independently verified (this session's own `ncu --query-metrics` check
-   found the opposite: atomics are on the LSU pipe, not MIO).
+   found the opposite: atomics are on the LSU pipe, not MIO). **This is where LLM spend should
+   concentrate under a GPU-cheap/LLM-expensive cost model** — it's the one sub-problem GPU brute force
+   cannot substitute for. Even here, prefer a single best-guess hypothesis per cycle over full
+   Tree-of-Thoughts branching (2-4 parallel branches) to keep LLM call volume down; let the (now-cheap)
+   GPU evaluation itself be the tie-breaker between close candidates rather than paying for more
+   LLM-side deliberation.
 3. **Recombination across partial successes**: an **evolutionary** step, used sparingly (only when the
    ledger contains ≥2 genuinely distinct partially-successful mechanisms) — e.g. splicing `tile`'s
    spatial-clustering selection logic with a vectorized inner loop (the exact fix `TILE_STATE.md`
@@ -771,12 +804,14 @@ conceptual explanation and the literal control-flow the LangGraph implementation
 
 ### Phased implementation roadmap
 
-**Phase 0 — MVP (no LLM-generated code, prove the harness)**: implement the Orchestrator, Static
+**Phase 0 — MVP (no LLM calls at all, prove the harness)**: implement the Orchestrator, Static
 Verifier, Correctness Evaluator, and Performance Evaluator (tier 1 only) around the *existing*,
 already-enumerable parameter grid (kernel choice × block size × `smem_size` × grouping × tile shape).
-No Hypothesis Generator yet — candidates come from a fixed enumeration. This validates the SSH/Slurm
-automation, the parameter database, and the staged-evaluation cost savings *before* any LLM
-reasoning risk is introduced.
+No Hypothesis Generator yet — candidates come from a fixed enumeration (or the full grid, brute-force,
+under the GPU-cheap cost model in §0.1). This validates the SSH/Slurm automation and the parameter
+database *before* any LLM reasoning or spend is introduced. Under a GPU-cheap/LLM-expensive
+deployment, this phase alone — pure automation of the existing manual sweep — is worth shipping and
+running to completion before spending a single LLM token on Phase 2's open-ended search.
 
 **Phase 1 — add the Knowledge layer + Bayesian optimization**: ingest the existing markdown corpus,
 stand up the structured+semantic memory split, add the Meta-Optimizer's BO loop over the now-partially-
