@@ -142,8 +142,15 @@ def sync_and_build(*, git_ref: str, host: str = REMOTE_HOST, timeout_s: int = 18
     this is the direct fix for the stale-remote-build bug hit by hand this
     session (a shared clone left unrebuilt after a revert silently corrupted
     a later measurement)."""
-    ssh(f"cd {REMOTE_REPO_DIR} && git fetch origin && git checkout {git_ref} && "
-        f"git pull origin {git_ref} || true", host=host, timeout=120).check("git sync")
+    # No `|| true` anywhere in this chain: a swallowed failure here (fetch,
+    # checkout, or pull) would silently leave the remote clone on stale code
+    # while rev-parse still reports *a* commit hash -- exactly the
+    # stale-remote-build bug hit by hand during the stall-reduction
+    # investigation (a shared clone left unrebuilt after a revert corrupted a
+    # later measurement). Every step must succeed or this raises.
+    ssh(f"cd {REMOTE_REPO_DIR} && git fetch origin", host=host, timeout=120).check("git fetch")
+    ssh(f"cd {REMOTE_REPO_DIR} && git checkout {git_ref}", host=host, timeout=60).check("git checkout")
+    ssh(f"cd {REMOTE_REPO_DIR} && git pull origin {git_ref}", host=host, timeout=60).check("git pull")
 
     commit = ssh(f"cd {REMOTE_REPO_DIR} && git rev-parse HEAD", host=host).check("rev-parse").stdout.strip()
 
