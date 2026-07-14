@@ -331,23 +331,53 @@ Instruction-mix ncu profiling (`sm__inst_executed_pipe_{fma,alu}.sum`, thread-le
 | `block` | 512 | 0.74 | **8.19** | 30.25% |
 | cuSPARSE | 512 | 1.30 | **2.78** | 58.31% |
 
-Confirmed decisively. `block`'s ALU pipe executes almost as many instructions as its FMA pipe (should
-be far below 1 for a matmul kernel). At the thread level, `block` executes **8–13× more integer
-instructions per floating-point instruction** than cuSPARSE, whose ratio (2.78) doesn't move with
-feature count at all — exactly what a well-amortized design should look like. `block`'s ratio
-improves somewhat at f512 (more FMA work amortized against the same fixed per-launch decode cost),
-but is still ~2.9× worse than cuSPARSE even there.
+`block`'s ALU pipe executes almost as many instructions as its FMA pipe (should be far below 1 for a
+matmul kernel). At the thread level, `block` executes **8–13× more integer instructions per
+floating-point instruction** than cuSPARSE, whose ratio (2.78) doesn't move with feature count at
+all — exactly what a well-amortized design should look like. `block`'s ratio improves somewhat at
+f512 (more FMA work amortized against the same fixed per-launch decode cost), but is still ~2.9×
+worse than cuSPARSE even there. This is real, wasted instruction volume — but see the follow-up
+below: it does not, by itself, explain the `sm__throughput` gap.
 
-### Implication
+### Follow-up: stall-reason verification (2026-07-14) — corrects the original "Implication"
 
-The redundant per-thread decode is a textbook compute-once/broadcast antipattern: every thread
-independently re-derives values (`n_r`, `n_c`, `packed_active_rows`, `packed_row_offsets`,
-`packed_cols_physical`, `packed_cols_logical`, `p`/`vp_log2`) that are identical across the whole CTA.
-Fix: one thread (or one per warp via `__shfl_sync`) computes these once, shared via smem or warp
-shuffle — cutting redundant integer-instruction volume by roughly the thread-block size (128×)
-instead of the current 1:1 duplication. Unlike H3–H5 (all launch-configuration/grouping questions
-that turned out not to be the primary lever), this is a genuine kernel-body fix that directly targets
-the measured cause. Full writeup: `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H6.
+The write-up above originally claimed the instruction-mix ratio "directly explains" the
+`sm__throughput` gap. That claim was never checked against actual warp stall reasons — it inferred
+causation from instruction *counts* alone. Prompted to verify it, ran `ncu` with
+`smsp__warp_issue_stalled_*.pct` metrics (note the `-ed` suffix — `smsp__warp_issue_stall_*` without
+it doesn't exist and is likely why earlier attempts in this project logged these as "n/a") plus
+`sm__pipe_{alu,fma}_cycles_active.avg.pct_of_peak_sustained_elapsed`, `block` vs cuSPARSE,
+`diag_b0.3`@262144/f512:
+
+| stall reason | `block` | cuSPARSE |
+|---|---|---|
+| `mio_throttle` (shared-mem/atomic pipe) | **21.29%** | 0.21% |
+| `barrier` (`__syncthreads()`) | **20.10%** | 0% |
+| `long_scoreboard` (DRAM latency) | 17.55% | **78.39%** |
+| `short_scoreboard` (shared-mem/fast dependency) | 12.82% | 2.83% |
+| `wait` (fixed-latency execution dependency) | 4.52% | 8.33% |
+| `math_pipe_throttle` (ALU/FMA pipe) | **0.83%** | 0.32% |
+| ALU pipe utilization | 17.23% | 20.79% |
+| warps active (occupancy) | 91.00% | 76.04% |
+
+`math_pipe_throttle` — the metric that directly measures "stalled waiting on the ALU pipe" — is
+0.83% for `block`, with the ALU pipe itself only 17.23% utilized. **The redundant decode is real
+wasted work, but it is not what warps are stalling on**; it executes in otherwise-idle cycles. The
+stall-verified dominant causes are instead `mio_throttle` (atomicAdd/shared-mem pipe contention from
+`block`'s per-(row,feature) Y flush) and `barrier` (`__syncthreads()` waits in the load→compute→flush
+structure) — both near-zero for cuSPARSE, which is instead healthily `long_scoreboard`-bound (78.4%).
+
+### Implication (corrected)
+
+The redundant per-thread decode (every thread re-deriving `n_r`, `n_c`, `packed_active_rows`,
+`packed_row_offsets`, `packed_cols_physical`, `packed_cols_logical`, `p`/`vp_log2` identically across
+a CTA) is still a genuine compute-once/broadcast antipattern worth fixing — it wastes issue slots and
+register pressure. But per the stall-reason data above, it is **not** the lever that closes the
+`sm__throughput` gap to cuSPARSE. The concrete, stall-verified next lever is reducing `atomicAdd`
+contention (`mio_throttle`) and `__syncthreads()` count (`barrier`) in `block`'s Y-flush structure.
+Unlike H3–H5 (launch-configuration/grouping questions that turned out not to be the primary lever),
+this is still a genuine kernel-body fix — just targeting a different mechanism than originally
+claimed. Full writeup: `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H6.
 
 ---
 

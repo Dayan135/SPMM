@@ -4,18 +4,21 @@
 *improving* with size (geomean 0.77 → 1.28, best-config-per-size). But that framing hid the real
 picture. This doc investigates the actual scaling behavior, six hypotheses deep.
 
-**Bottom line (updated after H6): two separate, now fully-identified causes.** (1) *Why grouping
-can't fix it*: any kernel that consolidates PBR blocks into fewer, coarser CUDA blocks — by CTA count
-(H3/H4) or by nnz-balance (H5) — trades away L2 cache hit rate (94.6% → 60.0%) that `block`'s massive,
-narrow concurrency provides for free, while the underlying memory-request volume never changes. This
-is a spatial-locality cost neither CTA-count nor nnz-balance can see or fix, and it's why
-`rowgroup`/`colgroup`/`chunk`/`tile` all fail to close the gap. (2) *Why `block` itself trails
-cuSPARSE, independent of grouping*: instruction-mix profiling (H6) found `block` executes **8–13×
-more integer instructions per floating-point instruction** than cuSPARSE — a redundant per-thread
-bitmask-decode step (every one of 128 threads in a CTA independently repeats the same ~20 integer
-ops) that should be computed once and shared. This directly explains the SM-throughput gap
-(67%/30% vs cuSPARSE's 95%/58%) and, unlike H3–H5, is a concrete, fixable kernel-body inefficiency.
-See H6 for the full instruction-level evidence.
+**Bottom line (updated after stall-reason verification): two separate, verified causes.**
+(1) *Why grouping can't fix it*: any kernel that consolidates PBR blocks into fewer, coarser CUDA
+blocks — by CTA count (H3/H4) or by nnz-balance (H5) — trades away L2 cache hit rate (94.6% → 60.0%)
+that `block`'s massive, narrow concurrency provides for free, while the underlying memory-request
+volume never changes. This is why `rowgroup`/`colgroup`/`chunk`/`tile` all fail to close the gap.
+(2) *Why `block` itself trails cuSPARSE, independent of grouping*: H6 found `block` executes 8–13×
+more integer instructions per floating-point instruction than cuSPARSE (real, wasted work from a
+redundant per-thread bitmask-decode step) — but a follow-up **warp stall-reason breakdown**
+(`smsp__warp_issue_stalled_*`, not run when H6 was first written) shows that instruction volume is
+**not** what warps are actually stalling on (`math_pipe_throttle` = 0.83%, negligible). The
+stall-verified dominant causes are **`atomicAdd`/shared-memory-pipe contention (`mio_throttle`:
+21.29% vs cuSPARSE's 0.21%) and synchronization overhead (`barrier`: 20.10% vs cuSPARSE's 0%)** —
+cuSPARSE, by contrast, is almost purely bound by memory latency (`long_scoreboard`: 78.4%), the
+"healthy" profile for a lean kernel. See H6 for the full evidence and the correction to its original
+(instruction-count-only) claim.
 
 ---
 
@@ -350,26 +353,53 @@ identical `diag_b0.3` matrix, N=262144, f64 and f512.
 | `block` | 512 | 0.74 | **8.19** | 30.25% |
 | cuSPARSE | 512 | 1.30 | **2.78** | 58.31% |
 
-**Finding: confirmed, decisively.** `block`'s ALU pipe executes almost as many instructions as its
+**Instruction volume: confirmed.** `block`'s ALU pipe executes almost as many instructions as its
 FMA pipe (0.74–0.99:1) — for a matmul kernel, that ratio should be far below 1. At the thread level,
 `block` executes **8–13× more integer instructions per floating-point instruction** than cuSPARSE
 does (12.80/8.19 vs cuSPARSE's constant 2.78 at both feature counts — cuSPARSE's ratio doesn't move
-with features, exactly as expected for a well-amortized design). `block`'s ratio *does* improve
-somewhat at f512 vs f64 (more FMA work gets amortized against the same fixed per-launch decode cost),
-but even then it's still ~2.9× worse than cuSPARSE's baseline ratio. This directly explains the
-`sm__throughput` gap: a large fraction of `block`'s occupied cycles are spent on ALU/integer
-instructions that produce no arithmetic result, not on the FMA work that actually computes the
-matmul.
+with features, exactly as expected for a well-amortized design). This is real, wasted instruction
+volume from the redundant per-thread decode (every one of 128 threads independently re-derives `n_r`,
+`n_c`, `packed_active_rows`, `packed_row_offsets`, `packed_cols_physical`, `packed_cols_logical`,
+`p`/`vp_log2` — values identical across the whole CTA — instead of one thread computing them once and
+broadcasting via shared memory or `__shfl_sync`).
 
-**Root cause, concretely:** the redundant per-thread decode is a textbook "compute-once,
-broadcast-across-the-block" antipattern — every thread independently re-derives values (`n_r`, `n_c`,
-`packed_active_rows`, `packed_row_offsets`, `packed_cols_physical`, `packed_cols_logical`, `p`/
-`vp_log2`) that are identical across the whole CTA. The fix is mechanical: have one thread (or one
-thread per warp, via `__shfl_sync`) compute these once and either write them to shared memory for all
-threads to read, or broadcast via warp shuffle — cutting the redundant integer-instruction volume by
-roughly the thread-block size (128×) rather than the current 1:1 duplication. This is a genuine kernel
-rewrite, not a launch-configuration change, and unlike every grouping-based attempt (H4/H5) it
-directly targets the actual measured cause rather than a correlated symptom.
+**But this section originally claimed that volume "directly explains the `sm__throughput` gap" — that
+claim was not yet verified and turned out to be wrong.** Instruction *count* only shows how much
+non-arithmetic work is issued; it says nothing about whether that work is what's making warps *stall*.
+The direct test is the warp stall-reason breakdown (`smsp__warp_issue_stalled_*`), run after this
+section was first written (`ncu`'s per-pipe-throttle metrics require the exact metric names — they
+use `stalled`, not `stall` — a naming mismatch, not `--set full`, is likely why this project's own
+`LAST_EXPERIMENTS.md` "Open questions" had flagged these as returning `n/a` and never obtained them
+before):
+
+| stall reason (% of warp-cycles) | `block` | cuSPARSE |
+|---|---|---|
+| `mio_throttle` (shared-mem/atomic pipe backpressure) | **21.29%** | 0.21% |
+| `barrier` (`__syncthreads()` wait) | **20.10%** | 0% |
+| `long_scoreboard` (global memory/DRAM latency) | 17.55% | **78.39%** |
+| `short_scoreboard` (shared-mem/fast dependency) | 12.82% | 2.83% |
+| `wait` (fixed-latency execution dependency) | 4.52% | 8.33% |
+| `math_pipe_throttle` (waiting for the ALU/FMA pipe) | **0.83%** | 0.32% |
+| ALU pipe utilization | 17.23% | 20.79% |
+| warps active (occupancy) | 91.00% | 76.04% |
+
+**`math_pipe_throttle` — the metric that directly tests "are warps stalled waiting on the ALU
+pipe" — is 0.83% for `block`, i.e. negligible.** The ALU pipe is only 17.23% utilized, well short of
+saturation, so the extra redundant integer instructions execute in otherwise-idle cycles rather than
+creating a hard bottleneck. **The redundant decode is real wasted work, but it is not what the data
+shows warps stalling on.**
+
+**Root cause, corrected:** the dominant, stall-verified difference is `mio_throttle` (21.29% vs
+0.21%) and `barrier` (20.10% vs 0%) — both roughly zero for cuSPARSE. `mio_throttle` covers the
+shared-memory/atomic execution pipe, directly implicating `block`'s per-(row,feature) `atomicAdd` Y
+flush under contention — the exact mechanism this doc's predecessor, `LAST_EXPERIMENTS.md`'s original
+"Open questions" item 3, flagged wanting to measure and never had the correct metric names to obtain
+until now. `barrier` is the three `__syncthreads()` calls per feature-tile pass in `block`'s
+load→compute→flush structure; cuSPARSE's kernel needs essentially none. cuSPARSE, in contrast, is
+almost purely `long_scoreboard`-bound (78.4%) — the expected, "healthy" profile for a lean SpMM kernel
+with nothing else in the way. **The redundant decode should still be fixed (it's genuine wasted
+instruction issue slots and register pressure), but the concrete next lever, per this corrected
+evidence, is reducing atomicAdd contention and synchronization count — not the decode step.**
 
 ## Conclusion
 
@@ -389,12 +419,22 @@ Four mechanisms were hypothesized and tested, in order, each ruling out the simp
    hit rate (94.6% → 60.0%) that `block`'s massive, spatially-narrow concurrency provides "for free."
    L1TEX-level request volume is flat throughout; only the fraction served by cache collapses. This
    explains why *grouping* can't fix the gap, but not why `block` itself trails cuSPARSE.
-4. **H6 (the actual per-kernel-body cause)**: instruction-mix profiling found `block` executes
-   8–13× more integer instructions per floating-point instruction than cuSPARSE, from a redundant
-   decode step every thread in a CTA independently repeats instead of computing once and sharing.
-   This directly explains the `sm__throughput` gap and is a fixable, concrete kernel inefficiency —
-   unlike H3–H5, which were all launch-configuration/grouping questions that turned out not to be
-   the primary lever.
+4. **H6 (the actual per-kernel-body cause), corrected after stall-reason verification**:
+   instruction-mix profiling found `block` executes 8–13× more integer instructions per
+   floating-point instruction than cuSPARSE, from a redundant decode step every thread in a CTA
+   independently repeats instead of computing once and sharing — real, wasted work. The original
+   write-up claimed this "directly explains" the `sm__throughput` gap, but that was never checked
+   against actual warp stall reasons. It doesn't hold up: `smsp__warp_issue_stalled_*` profiling
+   (see H6 above) shows `math_pipe_throttle` — the metric that directly measures stalls waiting on
+   the ALU/FMA pipe — at only 0.83% for `block`, with the ALU pipe itself at 17.23% utilization
+   (well short of saturated). The redundant instructions execute in slack cycles; they are not what
+   warps stall on. The stall-verified dominant causes are instead `mio_throttle` (21.29% vs
+   cuSPARSE's 0.21% — atomicAdd/shared-memory pipe contention from `block`'s per-(row,feature) Y
+   flush) and `barrier` (20.10% vs 0% — `__syncthreads()` waits in the load→compute→flush
+   structure), while cuSPARSE is `long_scoreboard`-dominated (78.4%), the healthy profile for a lean
+   memory-bound kernel. Unlike H3–H5, this is still a concrete, fixable kernel-body inefficiency —
+   just a different one than originally claimed: reduce atomicAdd contention and synchronization
+   count, not the decode step.
 
 **Practical implication:** any future kernel that groups multiple PBR blocks per CUDA block (whether
 by count, by nnz, or by any other work-balance criterion) needs to also preserve *spatial* locality
