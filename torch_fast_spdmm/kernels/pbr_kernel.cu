@@ -89,6 +89,19 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
     const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
     const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
 
+    // --- 2b. ADAPTIVE SMEM BYPASS DECISION ---
+    // n_r is derived from block_codes[b_idx] alone, so every thread in this
+    // CTA computes the identical value -- this branch is CTA-uniform, not
+    // per-thread-divergent. When n_r <= 1 there is at most one populated row
+    // in the block, so each smem_X column would be read back by exactly one
+    // row: the cooperative-load-then-__syncthreads() dance buys zero reuse
+    // and is pure overhead relative to reading X straight from global memory
+    // (the same access pattern cuSPARSE uses -- see STALL_REASONS.md's
+    // finding that cuSPARSE issues zero shared-memory instructions ever).
+    // See STALL_REASONS_ADAPTIVE_BYPASS.md for the threshold justification
+    // and profiling data.
+    const bool bypass_smem_x = (n_r <= 1);
+
     // --- 3. GRID-STRIDE LOOP OVER FEATURES ---
     for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
 
@@ -97,17 +110,21 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
         scalar_t* smem_X = smem;
         scalar_t* smem_Y = smem + (n_c * current_p);
 
-        // STEP A: Cooperative Load
-        const uint32_t total_x_elements = n_c * current_p;
-        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
-            const uint32_t c_idx   = i >> p_log2;
-            const uint32_t f_offset = i & p_mask;
+        // STEP A: Cooperative Load -- skipped entirely in the bypass path
+        // (no smem_X reuse to amortize, so no load and no sync needed before
+        // Step B, which will read X directly per-thread instead).
+        if (!bypass_smem_x) {
+            const uint32_t total_x_elements = n_c * current_p;
+            for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+                const uint32_t c_idx   = i >> p_log2;
+                const uint32_t f_offset = i & p_mask;
 
-            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
-            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+                const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+                smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+            }
+
+            __syncthreads();
         }
-
-        __syncthreads();
 
         // STEP B: FLATTENED WORKER POOL
         const uint32_t total_work = n_r * current_p;
@@ -123,12 +140,30 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 
             scalar_t sum = 0;
 
-            #pragma unroll
-            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
-                if ((row_code >> c) & 1) {
-                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
-                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
-                    local_data_ptr++;
+            if (bypass_smem_x) {
+                // Bypass path: read X directly from global memory via __ldg,
+                // the same route cuSPARSE uses. `c` is already the physical
+                // in-block column offset here (the row_code bit position),
+                // so no packed_cols_logical remapping is needed -- that
+                // packing only exists to index the compacted smem_X layout.
+                #pragma unroll
+                for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                    if ((row_code >> c) & 1) {
+                        const scalar_t x_val = __ldg(&X[(batch_idx * cols * features)
+                                                         + ((col_origin + c) * features)
+                                                         + base_f + f_in_s]);
+                        sum += __ldg(&block_data[local_data_ptr]) * x_val;
+                        local_data_ptr++;
+                    }
+                }
+            } else {
+                #pragma unroll
+                for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                    if ((row_code >> c) & 1) {
+                        const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                        sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                        local_data_ptr++;
+                    }
                 }
             }
 
@@ -237,6 +272,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
     const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
     const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
 
+    // --- 2b. ADAPTIVE SMEM BYPASS DECISION (see scalar kernel for rationale) ---
+    const bool bypass_smem_x = (n_r <= 1);
+
     // --- 3. GRID-STRIDE LOOP OVER FEATURES (in units of L) ---
     for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
 
@@ -246,19 +284,22 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
         scalar_t* smem_X = smem;
         scalar_t* smem_Y = smem + (n_c * current_p);
 
-        // STEP A: Cooperative vectorized load of X -> smem_X
-        const uint32_t total_xv = n_c * vp;
-        for (uint32_t i = tx; i < total_xv; i += THREADS_PER_BLOCK) {
-            const uint32_t c_idx   = i >> vp_log2;
-            const uint32_t f_off   = (i & vp_mask) * L;
-            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+        // STEP A: Cooperative vectorized load of X -> smem_X -- skipped in
+        // the bypass path (no reuse to amortize; Step B reads X directly).
+        if (!bypass_smem_x) {
+            const uint32_t total_xv = n_c * vp;
+            for (uint32_t i = tx; i < total_xv; i += THREADS_PER_BLOCK) {
+                const uint32_t c_idx   = i >> vp_log2;
+                const uint32_t f_off   = (i & vp_mask) * L;
+                const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
 
-            const vec_t xv = *reinterpret_cast<const vec_t*>(
-                &X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_off]);
-            *reinterpret_cast<vec_t*>(&smem_X[c_idx * current_p + f_off]) = xv;
+                const vec_t xv = *reinterpret_cast<const vec_t*>(
+                    &X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_off]);
+                *reinterpret_cast<vec_t*>(&smem_X[c_idx * current_p + f_off]) = xv;
+            }
+
+            __syncthreads();
         }
-
-        __syncthreads();
 
         // STEP B: FLATTENED WORKER POOL (one float4/double2 per thread)
         const uint32_t total_vwork = n_r * vp;
@@ -274,18 +315,39 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
             #pragma unroll
             for (int l = 0; l < L; ++l) acc.s[l] = 0;
 
-            #pragma unroll
-            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
-                if ((row_code >> c) & 1) {
-                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
-                    const scalar_t coef = __ldg(&block_data[local_data_ptr]);
+            if (bypass_smem_x) {
+                // Bypass path: vectorized __ldg straight from global X, same
+                // physical-column addressing as the scalar kernel's bypass
+                // (no packed_cols_logical remap needed -- `c` is already the
+                // in-block physical column offset).
+                #pragma unroll
+                for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                    if ((row_code >> c) & 1) {
+                        const scalar_t coef = __ldg(&block_data[local_data_ptr]);
 
-                    lane_u xu;
-                    xu.v = *reinterpret_cast<const vec_t*>(&smem_X[pc * current_p + f_off]);
-                    #pragma unroll
-                    for (int l = 0; l < L; ++l) acc.s[l] += coef * xu.s[l];
+                        lane_u xu;
+                        xu.v = __ldg(reinterpret_cast<const vec_t*>(
+                            &X[(batch_idx * cols * features) + ((col_origin + c) * features) + base_f + f_off]));
+                        #pragma unroll
+                        for (int l = 0; l < L; ++l) acc.s[l] += coef * xu.s[l];
 
-                    local_data_ptr++;
+                        local_data_ptr++;
+                    }
+                }
+            } else {
+                #pragma unroll
+                for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                    if ((row_code >> c) & 1) {
+                        const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                        const scalar_t coef = __ldg(&block_data[local_data_ptr]);
+
+                        lane_u xu;
+                        xu.v = *reinterpret_cast<const vec_t*>(&smem_X[pc * current_p + f_off]);
+                        #pragma unroll
+                        for (int l = 0; l < L; ++l) acc.s[l] += coef * xu.s[l];
+
+                        local_data_ptr++;
+                    }
                 }
             }
 
