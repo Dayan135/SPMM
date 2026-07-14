@@ -379,6 +379,15 @@ Unlike H3–H5 (launch-configuration/grouping questions that turned out not to b
 this is still a genuine kernel-body fix — just targeting a different mechanism than originally
 claimed. Full writeup: `WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md` H6.
 
+**Further follow-up (`STALL_REASONS.md`, 2026-07-14):** reran the same stall-reason profiling across
+`diag_b0.1`, `scattered_1x8`, `scattered_8x1`, `scattered_2x2` (plus the original `diag_b0.3`) at
+N∈{1024, 262144}, f∈{128, 512}. The `mio_throttle`+`barrier` mechanism reproduces on `diag_b0.1` but
+is matrix-shape-dependent, not universal: it collapses to ~0% on `scattered_1x8` (single populated
+row per PBR block — `block` is `long_scoreboard`+`barrier`-dominated there instead), and on
+`scattered_8x1` cuSPARSE itself shows the same `mio_throttle` spike (~21.5%) that `block` does — so
+for that matrix shape the effect isn't even specific to `block`'s kernel design. Full data and tables:
+`STALL_REASONS.md`.
+
 ---
 
 ## Open questions / next steps

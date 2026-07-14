@@ -20,6 +20,13 @@ cuSPARSE, by contrast, is almost purely bound by memory latency (`long_scoreboar
 "healthy" profile for a lean kernel. See H6 for the full evidence and the correction to its original
 (instruction-count-only) claim.
 
+**Update (`STALL_REASONS.md`): the `mio_throttle`/`barrier` mechanism above does not generalize to
+every matrix shape.** It reproduces on a second diag density (`diag_b0.1`), but collapses almost to
+zero on `scattered_1x8` (single populated row per PBR block), where `block` is instead
+`long_scoreboard`+`barrier`-dominated — and on `scattered_8x1`, cuSPARSE itself shows the same
+`mio_throttle` spike (~21.5%) that `block` does, meaning the effect isn't even `block`-specific there.
+See `STALL_REASONS.md` for the full matrix/size/feature grid.
+
 ---
 
 ## H1: The "best-tuned-per-size" comparison is masking real degradation
