@@ -99,15 +99,23 @@ _MATRIX_PROFILES = {
 }
 
 
+
+# Scattered "density" anchored at N=1024 and scaled by 1024/size (same convention
+# as test_benchmark.py's _sd) so a fixed hardcoded density doesn't produce zero
+# blocks at small N while still staying sparse (not O(N^2) nnz) at large N.
+_SCATTERED_DENSITY_AT_1024 = 0.005
+
+
 def build_matrix(size: int, matrix_profile: str):
     """Build the raw scipy matrix for a --matrix-profile. Shared with
     profile_cusparse.py so both drivers profile the identical matrix."""
     kind, cfg = _MATRIX_PROFILES[matrix_profile]
     if kind == "scattered":
+        density = _SCATTERED_DENSITY_AT_1024 * 1024 / size
         mat = generate_scattered_block_matrix(
             system_size=size,
             block_size=cfg["block_size"],
-            profiles=[(cfg["rows_per_block"], cfg["cols_per_block"], 0.00001)],
+            profiles=[(cfg["rows_per_block"], cfg["cols_per_block"], density)],
         ).astype(np.float32)
     elif kind == "diag":
         mat = generate_diag_blocks_plus_noise(
