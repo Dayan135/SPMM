@@ -176,3 +176,39 @@ change resulted from this investigation — `mio_throttle`/`barrier` reduction r
 A follow-up that was **not** attempted here (flagged for future work if revisited): cap `p` at its old
 value even with `smem_Y` removed, to isolate whether the store/reload removal helps in isolation from
 the iteration-count/burst-size change it was bundled with in this attempt.
+
+## Three more attempts, in parallel (2026-07-14): all negative/wash
+
+Asked "why doesn't cuSPARSE have this problem" first: `ncu`'s `sm__sass_inst_executed_op_shared.sum`
+shows cuSPARSE executes **zero** shared-memory instructions on every matrix tested — it reads `X`
+straight from global memory (L1/L2 cache), never staging into shared memory the way `block` does.
+That reframes the problem: `mio_throttle` isn't a bug in `block`, it's the structural cost of `block`'s
+core design choice (stage `X` in shared memory so multiple rows in a PBR block can reuse it) vs.
+cuSPARSE's choice (no staging, trust the cache). Three follow-up attempts were run in parallel, each
+on its own branch, each independently built/tested/profiled on the remote GPU:
+
+| branch | idea | verdict |
+|---|---|---|
+| `feat/pbr-smemy-capped-p` | Redo the `smem_Y` merge from the attempt above, but keep `p` capped at its old value (isolate the store/reload removal from the burst-size growth that sank the first attempt) | **Negative.** `mio_throttle`/`barrier` got *worse* on `diag_*` (the matrices the fix targeted), same direction as the reverted attempt, smaller magnitude. Scattered-matrix "wins" don't move wall-clock time (all deltas within ±2%, noise floor). |
+| `feat/pbr-adaptive-smem-bypass` | Skip `smem_X` staging entirely for low-reuse PBR blocks (`n_r<=1`, e.g. `scattered_1x8`), read `X` via `__ldg` straight from global — literally cuSPARSE's approach, applied selectively | **Wash.** `barrier` collapses to exactly 0.00% in *every* config tested — including `diag_b0.3`, which never triggers this bypass at all (0% of its blocks have `n_r<=1`), so this looks like a compiler/SASS side effect of adding the branch, not the bypass logic itself; mechanism unconfirmed. SM% improves substantially everywhere (up to +30pts on `scattered_1x8`), but `mio_throttle`/`long_scoreboard` absorb the freed cycles — wall-clock time ranges −5.0% to +12.9%, no config wins clearly. |
+| `feat/pbr-warp-sync` | Make shared-memory reuse warp-local instead of block-wide (per-warp `smem_X`/`smem_Y` sub-buffers, `__syncwarp()` instead of `__syncthreads()`) | **Wash.** `barrier` drops to exactly 0.00% in all 10 configs (this one *by design*, not a mystery — no block-wide sync remains). `mio_throttle`/`long_scoreboard` again absorb the freed cycles; net time averages +1.1%, ranging −5.0% to +12.1%. |
+
+All three pass full correctness (3704/3704 tests) and all three show the *same qualitative pattern*:
+whichever named stall reason is targeted, it goes down (often to exactly zero) — but the freed cycles
+get reallocated to `mio_throttle` and/or `long_scoreboard` rather than shortening the critical path,
+so wall-clock time never moves reliably in either direction. `scattered_1x8` under the adaptive-bypass
+attempt is the clearest illustration: SM utilization nearly doubles (26.6%→45.8% at f512) while time
+stays flat — consistent with `block` being fundamentally memory-latency-bound on this matrix already
+(`long_scoreboard`=49.9% at baseline), so improving issue-slot efficiency doesn't help when DRAM
+latency, not issue throughput, is the actual critical path.
+
+**Updated bottom line:** across four independent kernel-modification attempts now (the original
+`smem_Y` merge plus these three), suppressing `block`'s named stall reasons one at a time has not
+produced a single reliable wall-clock win. This suggests `mio_throttle`/`barrier` reduction, while a
+real and correctly-diagnosed phenomenon, is not on its own a productive lever for closing the gap to
+cuSPARSE — the kernel appears to have enough other latent latency (`long_scoreboard`, or contention
+this session's tooling doesn't isolate) that clearing one bottleneck just exposes the next one at
+roughly the same wall-clock cost. None of the four branches are recommended for merge; all are kept
+for the record. Full per-approach data: `STALL_REASONS_SMEMY_CAPPED.md` (branch
+`feat/pbr-smemy-capped-p`), `STALL_REASONS_ADAPTIVE_BYPASS.md` (branch
+`feat/pbr-adaptive-smem-bypass`), `STALL_REASONS_WARP_SYNC.md` (branch `feat/pbr-warp-sync`).
