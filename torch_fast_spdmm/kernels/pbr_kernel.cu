@@ -137,7 +137,11 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 
         __syncthreads();
 
-        // STEP C: Cooperative Atomic Commit
+        // STEP C: Cooperative Commit
+        // DIAGNOSTIC-ONLY ABLATION: plain store instead of atomicAdd, to isolate the
+        // atomic RMW's stall contribution from block's smem_X/smem_Y traffic (see
+        // STALL_REASONS.md's LSU-vs-MIO pipe correction). Produces WRONG output
+        // whenever >1 PBR block writes the same (row, feature) -- never merge this.
         for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
             const uint32_t pr    = work_idx >> p_log2;
             const uint32_t f_in_s = work_idx & p_mask;
@@ -145,7 +149,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
             const uint32_t global_r = row_origin + actual_r;
 
-            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+            Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s] = smem_Y[work_idx];
         }
 
         __syncthreads();
@@ -294,7 +298,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
 
         __syncthreads();
 
-        // STEP C: Cooperative atomic commit (vector load from smem, L scalar atomics)
+        // STEP C: Cooperative commit (vector load from smem, L scalar stores)
+        // DIAGNOSTIC-ONLY ABLATION: plain store instead of atomicAdd -- see the
+        // scalar kernel's Step C comment above. WRONG output by design; never merge.
         for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
             const uint32_t pr    = vwork >> vp_log2;
             const uint32_t f_off = (vwork & vp_mask) * L;
@@ -306,7 +312,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
             yu.v = *reinterpret_cast<const vec_t*>(&smem_Y[pr * current_p + f_off]);
             #pragma unroll
             for (int l = 0; l < L; ++l) {
-                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
+                Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l] = yu.s[l];
             }
         }
 
