@@ -205,7 +205,7 @@ def main() -> None:
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
     p.add_argument("--kernel",         type=str, default="block",
-                   choices=["block", "chunk", "rowgroup", "colgroup", "tile"],
+                   choices=["block", "chunk", "rowgroup", "colgroup", "tile", "scalar_diag"],
                    help="which PBR kernel to profile")
     p.add_argument("--tile-rows",      type=int, default=2, help="tile kernel only")
     p.add_argument("--tile-cols",      type=int, default=2, help="tile kernel only")
@@ -214,6 +214,9 @@ def main() -> None:
     p.add_argument("--chunk-size",     type=int, default=8, help="chunk kernel only")
     p.add_argument("--grouping",       type=str, default="count", choices=["count", "nnz"],
                    help="chunk/rowgroup/colgroup only")
+    p.add_argument("--scalar-variant", type=str, default="baseline",
+                   choices=["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC"],
+                   help="scalar_diag kernel only")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
@@ -231,6 +234,8 @@ def main() -> None:
                              tile_strategy=args.tile_strategy)
     elif args.kernel == "chunk":
         matmul_kwargs.update(chunk_size=args.chunk_size)
+    elif args.kernel == "scalar_diag":
+        matmul_kwargs.update(scalar_variant=args.scalar_variant)
 
     for _ in range(args.warmup):
         pbr_matmul(pbr_mat, x, **matmul_kwargs)

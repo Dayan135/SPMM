@@ -153,6 +153,701 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 }
 
 
+// ===========================================================================
+// Diagnostic-only zero_idle-kernel microbench variants (2026-07-16)
+// ===========================================================================
+// Each is pbr_spmm_zero_idle_kernel with exactly one change, used to isolate a
+// single candidate stall contributor. All are forced-scalar-dispatch only
+// (see launch_pbr_spmm_scalar_diag below) -- never selected by the normal
+// use_vec launcher path. Diagnostic only; several produce numerically WRONG
+// output by design (see per-kernel comment). Never merge into launch_pbr_spmm.
+
+// Variant: block_data's global read replaced by a compile-time constant, to
+// isolate whether that read (routed through the read-only cache via __ldg) is
+// itself a meaningful stall contributor. local_data_ptr++ kept unchanged so
+// the loop shape/instruction count is otherwise identical to baseline.
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kernel_constdata(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    uint32_t n_r = 0;
+    uint64_t col_mask = 0;
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint32_t packed_active_rows = 0;
+    uint64_t packed_row_offsets = 0;
+    uint32_t current_relative_offset = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            packed_active_rows |= (r << (n_r * 3));
+            packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+
+            n_r++;
+            col_mask |= row_mask;
+            current_relative_offset += __popcll(row_mask);
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_r == 0 || n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t packed_cols_logical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_logical |= (pc_idx << (c * 3));
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
+
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        __syncthreads();
+
+        const uint32_t total_work = n_r * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+
+            const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+            scalar_t sum = 0;
+
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_code >> c) & 1) {
+                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                    // DIAGNOSTIC: constant instead of __ldg(&block_data[local_data_ptr]).
+                    sum += (scalar_t)2 * smem_X[pc * current_p + f_in_s];
+                    local_data_ptr++;
+                }
+            }
+
+            smem_Y[work_idx] = sum;
+        }
+
+        __syncthreads();
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            const uint32_t global_r = row_origin + actual_r;
+
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+        }
+
+        __syncthreads();
+    }
+}
+
+// Variant: Step A's __syncthreads() (guards smem_X write-before-read across
+// threads) deleted. EXPECTED WRONG -- Step B can read a partially-populated
+// smem_X.
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kernel_nosyncA(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    uint32_t n_r = 0;
+    uint64_t col_mask = 0;
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint32_t packed_active_rows = 0;
+    uint64_t packed_row_offsets = 0;
+    uint32_t current_relative_offset = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            packed_active_rows |= (r << (n_r * 3));
+            packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+
+            n_r++;
+            col_mask |= row_mask;
+            current_relative_offset += __popcll(row_mask);
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_r == 0 || n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t packed_cols_logical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_logical |= (pc_idx << (c * 3));
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
+
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        // DIAGNOSTIC: sync deleted here (was __syncthreads() guarding smem_X).
+
+        const uint32_t total_work = n_r * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+
+            const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+            scalar_t sum = 0;
+
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_code >> c) & 1) {
+                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    local_data_ptr++;
+                }
+            }
+
+            smem_Y[work_idx] = sum;
+        }
+
+        __syncthreads();
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            const uint32_t global_r = row_origin + actual_r;
+
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+        }
+
+        __syncthreads();
+    }
+}
+
+// Variant: sync between Step B and Step C deleted, loops kept SEPARATE (naive
+// removal -- distinct from mergeBC below, which removes the need for this
+// sync altogether by fusing the loops). EXPECTED WRONG -- Step C can read a
+// partially-populated smem_Y.
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kernel_nosyncB(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    uint32_t n_r = 0;
+    uint64_t col_mask = 0;
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint32_t packed_active_rows = 0;
+    uint64_t packed_row_offsets = 0;
+    uint32_t current_relative_offset = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            packed_active_rows |= (r << (n_r * 3));
+            packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+
+            n_r++;
+            col_mask |= row_mask;
+            current_relative_offset += __popcll(row_mask);
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_r == 0 || n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t packed_cols_logical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_logical |= (pc_idx << (c * 3));
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
+
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        __syncthreads();
+
+        const uint32_t total_work = n_r * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+
+            const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+            scalar_t sum = 0;
+
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_code >> c) & 1) {
+                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    local_data_ptr++;
+                }
+            }
+
+            smem_Y[work_idx] = sum;
+        }
+
+        // DIAGNOSTIC: sync deleted here (was __syncthreads() guarding smem_Y,
+        // loops kept separate).
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            const uint32_t global_r = row_origin + actual_r;
+
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+        }
+
+        __syncthreads();
+    }
+}
+
+// Variant: sync at the end of the base_f loop iteration deleted (WAR hazard on
+// smem_X/smem_Y reuse across iterations). EXPECTED WRONG.
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kernel_nosyncC(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    uint32_t n_r = 0;
+    uint64_t col_mask = 0;
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint32_t packed_active_rows = 0;
+    uint64_t packed_row_offsets = 0;
+    uint32_t current_relative_offset = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            packed_active_rows |= (r << (n_r * 3));
+            packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+
+            n_r++;
+            col_mask |= row_mask;
+            current_relative_offset += __popcll(row_mask);
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_r == 0 || n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t packed_cols_logical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_logical |= (pc_idx << (c * 3));
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
+
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        __syncthreads();
+
+        const uint32_t total_work = n_r * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+
+            const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+            scalar_t sum = 0;
+
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_code >> c) & 1) {
+                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    local_data_ptr++;
+                }
+            }
+
+            smem_Y[work_idx] = sum;
+        }
+
+        __syncthreads();
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            const uint32_t global_r = row_origin + actual_r;
+
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+        }
+
+        // DIAGNOSTIC: sync deleted here (was __syncthreads() at the end of the
+        // base_f loop iteration -- WAR hazard on smem_X/smem_Y reuse across
+        // iterations).
+    }
+}
+
+// Variant: Step B and Step C fused into one loop -- each thread computes `sum`
+// and calls atomicAdd directly from its own register, no smem_Y, no sync
+// between them. Same code shape as commit 44bf132's change to this kernel,
+// but p's formula is kept UNCHANGED (TOTAL_SHARED / (n_r + n_c), not grown to
+// TOTAL_SHARED / n_c) to isolate the merge/sync-removal effect from the
+// p-growth confound that sank both prior (vec-kernel-only, never actually
+// dispatched at these feature counts) attempts. EXPECTED CORRECT -- no
+// cross-thread handoff happens at the smem_Y boundary; the real cross-block
+// merge happens only inside atomicAdd, unaffected either way.
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kernel_mergeBC(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    uint32_t n_r = 0;
+    uint64_t col_mask = 0;
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint32_t packed_active_rows = 0;
+    uint64_t packed_row_offsets = 0;
+    uint32_t current_relative_offset = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            packed_active_rows |= (r << (n_r * 3));
+            packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+
+            n_r++;
+            col_mask |= row_mask;
+            current_relative_offset += __popcll(row_mask);
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_r == 0 || n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t packed_cols_logical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_logical |= (pc_idx << (c * 3));
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    // p's formula kept as (n_r + n_c) -- unlike commit 44bf132, smem_Y is
+    // still logically reserved (unused) so p does not grow.
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        __syncthreads();
+
+        // STEP B+C (merged): each thread computes its own sum and atomicAdds
+        // directly from its register -- no smem_Y round trip, no sync needed
+        // between compute and commit (no cross-thread handoff at this
+        // boundary).
+        const uint32_t total_work = n_r * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+
+            const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+            scalar_t sum = 0;
+
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_code >> c) & 1) {
+                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    local_data_ptr++;
+                }
+            }
+
+            const uint32_t global_r = row_origin + actual_r;
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], sum);
+        }
+
+        __syncthreads();
+    }
+}
+
+
 // Vectorized variant: each thread owns `L` (= PbrVec lanes) contiguous features.
 // Requires features % L == 0 so the per-column feature run is L-aligned in both
 // global X and shared memory; the launcher guarantees this before dispatching.
@@ -382,6 +1077,111 @@ template void launch_pbr_spmm<int32_t, float>(const int, const int, const int, c
 template void launch_pbr_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
 template void launch_pbr_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
 template void launch_pbr_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+
+
+// Diagnostic-only launcher for the zero_idle-kernel microbench variants above.
+// Always dispatches to a scalar (non-vectorized) kernel, selected by `variant`
+// -- never checks use_vec, unlike launch_pbr_spmm. Never merge into
+// launch_pbr_spmm; this exists solely to force-select kernels that the normal
+// use_vec path would otherwise never reach at features%4==0.
+template <typename index_t, typename scalar_t>
+void launch_pbr_spmm_scalar_diag(
+    int variant,   // 0=baseline 1=constdata 2=nosyncA 3=nosyncB 4=nosyncC 5=mergeBC
+    const int num_pbr_blocks,
+    const int features,
+    const int batch_size,
+    const int cols,
+    const int rows,
+    const int runtime_block_rows,
+    const int runtime_block_cols,
+    const int64_t* block_codes,
+    const index_t* block_coords,
+    const index_t* block_offsets,
+    const scalar_t* block_data,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream,
+    int smem_size
+) {
+    if (num_pbr_blocks == 0) {
+        return;
+    }
+
+    constexpr int THREADS_PER_BLOCK = 128;
+    constexpr int FEAT_BLOCK_SIZE   = 512;
+
+    const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
+    const dim3 grid(num_pbr_blocks, batch_size, feat_blocks);
+    const dim3 block(THREADS_PER_BLOCK);
+
+    #define PBR_LAUNCH(BR, BC, TS)                                                                    \
+        do {                                                                                          \
+            switch (variant) {                                                                        \
+                case 1:                                                                                \
+                    pbr_spmm_zero_idle_kernel_constdata<index_t, scalar_t, BR, BC, TS,                \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+                case 2:                                                                                \
+                    pbr_spmm_zero_idle_kernel_nosyncA<index_t, scalar_t, BR, BC, TS,                  \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+                case 3:                                                                                \
+                    pbr_spmm_zero_idle_kernel_nosyncB<index_t, scalar_t, BR, BC, TS,                  \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+                case 4:                                                                                \
+                    pbr_spmm_zero_idle_kernel_nosyncC<index_t, scalar_t, BR, BC, TS,                  \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+                case 5:                                                                                \
+                    pbr_spmm_zero_idle_kernel_mergeBC<index_t, scalar_t, BR, BC, TS,                  \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+                default:                                                                                \
+                    pbr_spmm_zero_idle_kernel<index_t, scalar_t, BR, BC, TS,                          \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+            }                                                                                          \
+        } while (0)
+
+    #define DISPATCH_SMEM(BR, BC)                   \
+        do {                                        \
+            if      (smem_size <= 512)  PBR_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) PBR_LAUNCH(BR, BC, 1024); \
+            else                        PBR_LAUNCH(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM(2, 2);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM(4, 4);
+    else if (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM(8, 8);
+    else throw std::invalid_argument("Unsupported block size for PBR SpMM. Only 2x2, 4x4, and 8x8 are supported.");
+
+    #undef PBR_LAUNCH
+    #undef DISPATCH_SMEM
+}
+
+template void launch_pbr_spmm_scalar_diag<int32_t, float>(int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_spmm_scalar_diag<int64_t, float>(int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_spmm_scalar_diag<int32_t, double>(int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_spmm_scalar_diag<int64_t, double>(int, const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
 
 
 // ===========================================================================

@@ -21,6 +21,34 @@ void launch_pbr_spmm(
     int smem_size = 2048
 );
 
+// Diagnostic-only launcher for the zero_idle-kernel microbench variants
+// (2026-07-16): block_data-read-as-constant, each __syncthreads() removed
+// individually, and a Step B/C merge (atomicAdd straight from register, no
+// smem_Y). Always dispatches to a scalar (non-vectorized) kernel, selected by
+// `variant` (0=baseline 1=constdata 2=nosyncA 3=nosyncB 4=nosyncC 5=mergeBC)
+// -- never checks use_vec the way launch_pbr_spmm does. Several variants
+// produce numerically wrong output by design; see pbr_kernel.cu. Never merge
+// into launch_pbr_spmm.
+template <typename index_t, typename scalar_t>
+void launch_pbr_spmm_scalar_diag(
+    int variant,
+    const int num_pbr_blocks,
+    const int features,
+    const int batch_size,
+    const int cols,
+    const int rows,
+    const int BLOCK_ROWS,
+    const int BLOCK_COLS,
+    const int64_t* block_codes,
+    const index_t* block_coords,
+    const index_t* block_offsets,
+    const scalar_t* block_data,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream = 0,
+    int smem_size = 2048
+);
+
 // group_offsets: CSR-style boundary array (size num_groups+1) built host-side
 // by _build_group_offsets (__init__.py) -- either count-balanced (reproduces
 // the original group_idx*group_size arithmetic) or nnz-balanced (searchsorted

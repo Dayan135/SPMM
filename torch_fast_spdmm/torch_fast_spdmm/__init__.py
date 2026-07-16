@@ -139,6 +139,14 @@ def _build_chunk_cuda_dispatch():
         (torch.int64, torch.float64): core.pbr_chunk_spmm_cuda_i64_f64,
     }
 
+def _build_scalar_diag_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_scalar_diag_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_scalar_diag_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_scalar_diag_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_scalar_diag_spmm_cuda_i64_f64,
+    }
+
 def _build_rowgroup_cuda_dispatch():
     return {
         (torch.int32, torch.float32): core.pbr_rowgroup_spmm_cuda_i32_f32,
@@ -159,6 +167,16 @@ _CUDA_KERNEL_DISPATCH = None
 _CHUNK_CUDA_KERNEL_DISPATCH = None
 _ROWGROUP_CUDA_KERNEL_DISPATCH = None
 _COLGROUP_CUDA_KERNEL_DISPATCH = None
+_SCALAR_DIAG_CUDA_KERNEL_DISPATCH = None
+
+_SCALAR_DIAG_VARIANTS = {
+    'baseline':  0,
+    'constdata': 1,
+    'nosyncA':   2,
+    'nosyncB':   3,
+    'nosyncC':   4,
+    'mergeBC':   5,
+}
 
 
 # ===========================================================================
@@ -302,6 +320,56 @@ def pbr_batched_matmul_chunk_cuda(pbr_mat, x: torch.Tensor, chunk_size: int = 8,
         pbr_mat.block_cols,
         num_groups,
         group_offsets,
+        meta.codes,
+        meta.coords,
+        meta.offsets,
+        meta.data,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
+
+
+def pbr_batched_matmul_scalar_diag_cuda(pbr_mat, x: torch.Tensor, variant: str = 'baseline',
+                                         csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+    """
+    Diagnostic-only zero_idle-kernel microbench variants (2026-07-16). Always
+    forces the scalar (non-vectorized) kernel regardless of features%4 -- the
+    normal 'block' kernel's use_vec check would otherwise never dispatch to
+    pbr_spmm_zero_idle_kernel at the feature counts this project benchmarks.
+    Several variants produce numerically WRONG output by design -- diagnostic
+    only, never use for real computation. See pbr_kernel.cu.
+    variant: 'baseline'  -- unmodified pbr_spmm_zero_idle_kernel.
+             'constdata' -- block_data's global read replaced by a constant.
+             'nosyncA'   -- Step A's __syncthreads() deleted (WRONG).
+             'nosyncB'   -- sync between Step B/C deleted, loops kept separate (WRONG).
+             'nosyncC'   -- end-of-iteration sync deleted (WRONG).
+             'mergeBC'   -- Step B/C fused, atomicAdd directly from register,
+                            no smem_Y, no sync between them (expected correct).
+    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (for the CSR remainder)
+    smem_size: 512 / 1024 / 2048 floats (same per-block smem split as 'block')
+    """
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+
+    if variant not in _SCALAR_DIAG_VARIANTS:
+        raise ValueError(f"Unknown scalar_diag variant {variant!r}; expected one of {list(_SCALAR_DIAG_VARIANTS)}")
+
+    global _SCALAR_DIAG_CUDA_KERNEL_DISPATCH
+    if _SCALAR_DIAG_CUDA_KERNEL_DISPATCH is None:
+        _SCALAR_DIAG_CUDA_KERNEL_DISPATCH = _build_scalar_diag_cuda_dispatch()
+
+    kernel = _SCALAR_DIAG_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
+    return kernel(
+        _SCALAR_DIAG_VARIANTS[variant],
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
         meta.codes,
         meta.coords,
         meta.offsets,
@@ -740,7 +808,7 @@ def pbr_batched_matmul_tile_cuda(pbr_mat, x: torch.Tensor, tile_rows: int = 2, t
 def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
                kernel: str = 'block', tile_rows: int = 2, tile_cols: int = 2,
                tile_strategy: str = 'grid', chunk_size: int = 8,
-               grouping: str = 'count') -> torch.Tensor:
+               grouping: str = 'count', scalar_variant: str = 'baseline') -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
@@ -762,11 +830,17 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                             tile's added reuse machinery (see
                             WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). chunk_size/grouping are
                             only used when kernel='chunk'.
+               'scalar_diag' — diagnostic-only zero_idle-kernel microbench variants
+                            (see pbr_batched_matmul_scalar_diag_cuda); scalar_variant
+                            selects which. Several variants produce WRONG output by
+                            design -- never use for real computation.
     grouping:  'count' (default) — fixed block-count-balanced groups (original behavior
                for rowgroup/colgroup/chunk, reproduced bit-for-bit).
                'nnz' — nnz-balanced groups instead, mirroring cuSPARSE's own
                csr_partition_kernel (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). Only used
                when kernel is 'rowgroup', 'colgroup', or 'chunk'.
+    scalar_variant: 'baseline'|'constdata'|'nosyncA'|'nosyncB'|'nosyncC'|'mergeBC' --
+               only used when kernel='scalar_diag'.
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -788,6 +862,9 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         elif kernel == 'chunk':
             y = pbr_batched_matmul_chunk_cuda(pbr_mat, x, chunk_size=chunk_size, grouping=grouping,
                                                csr_mode=csr_mode, smem_size=smem_size)
+        elif kernel == 'scalar_diag':
+            y = pbr_batched_matmul_scalar_diag_cuda(pbr_mat, x, variant=scalar_variant,
+                                                     csr_mode=csr_mode, smem_size=smem_size)
         else:
             y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
