@@ -174,6 +174,23 @@ def _make_scalar_diag_runs():
 SCALAR_DIAG_RUNS = _make_scalar_diag_runs()
 PBR_RUNS = PBR_RUNS + SCALAR_DIAG_RUNS
 
+# Same sweep, but over the vectorized 'block' kernel (pbr_spmm_vec_kernel --
+# auto-selected since every features value here is %4==0) instead of the
+# forced-scalar zero_idle kernel. Same (block_size, min_nnz) configs, col-sorted
+# (col_major=True), fixed smem_size=2048. No mergeBC this round -- baseline only.
+def _make_vec_colmajor_runs():
+    runs = []
+    for bs, mn in _SCALAR_DIAG_BLOCK_CONFIGS:
+        cfg = {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": _SCALAR_DIAG_SMEM}
+        cfg_id = f"pbr_{bs}x{bs}_min{mn}_sm{_SCALAR_DIAG_SMEM}"
+        spec = {"kernel": "block", "col_major": True}
+        runs.append(pytest.param((spec, cfg), id=f"block_colmajor-{cfg_id}"))
+    return runs
+
+
+VEC_COLMAJOR_RUNS = _make_vec_colmajor_runs()
+PBR_RUNS = PBR_RUNS + VEC_COLMAJOR_RUNS
+
 # Adding a new baseline algorithm = one line here.
 BASELINE_ALGOS = [
     pytest.param(("cusparse",  torch.sparse.mm),  id="cusparse"),
@@ -322,6 +339,8 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run
     elif kernel_name == "scalar_diag":
         order = "colmajor" if kernel.get("col_major") else "rowmajor"
         variant = f"scalar_diag_{kernel['scalar_variant']}_{order}"
+    elif kernel_name == "block" and kernel.get("col_major"):
+        variant = "block_colmajor"
     algo_name = (
         f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
         f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{variant}"

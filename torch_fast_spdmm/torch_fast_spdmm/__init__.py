@@ -239,12 +239,20 @@ def _get_group_offsets(pbr_mat, cache_key, offsets_np, target_groups, grouping, 
     return cache[key]
 
 
-def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
+                             col_major: bool = False) -> torch.Tensor:
     """
     Python wrapper that routes the GPU tensors to the correct PyBind11 CUDA function.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback
     smem_size: shared-memory tile size (floats) for the PBR block kernel; must be
                one of 512, 1024, 2048.
+    col_major: False (default) -- PBR blocks in natural row-major order. True --
+               use the col-sorted arrays already built for the colgroup kernel at
+               .to('cuda') time (sorted by (col_origin, row_origin)). No kernel
+               change either way -- 'block'/'vec' don't care about block order,
+               only which arrays they're handed. features%4==0 (every feature
+               count this project benchmarks) auto-selects the vectorized
+               pbr_spmm_vec_kernel here, so this is the vec-kernel col-major sweep.
     """
     meta = getattr(pbr_mat, '_gpu_meta', None)
     if meta is None:
@@ -254,16 +262,21 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
     if _CUDA_KERNEL_DISPATCH is None:
         _CUDA_KERNEL_DISPATCH = _build_cuda_dispatch()
 
+    codes, coords, offsets, data = (
+        (meta.col_codes, meta.col_coords, meta.col_offsets, meta.col_data) if col_major
+        else (meta.codes, meta.coords, meta.offsets, meta.data)
+    )
+
     kernel = _CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
     return kernel(
         pbr_mat.cols,
         pbr_mat.rows,
         pbr_mat.block_rows,
         pbr_mat.block_cols,
-        meta.codes,
-        meta.coords,
-        meta.offsets,
-        meta.data,
+        codes,
+        coords,
+        offsets,
+        data,
         meta.rem_indptr,
         meta.rem_col_ind,
         meta.rem_vals,
@@ -855,8 +868,9 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                when kernel is 'rowgroup', 'colgroup', or 'chunk'.
     scalar_variant: 'baseline'|'constdata'|'nosyncA'|'nosyncB'|'nosyncC'|'mergeBC' --
                only used when kernel='scalar_diag'.
-    col_major: only used when kernel='scalar_diag' -- False (default) = row-major PBR
-               block order, True = col-sorted (see pbr_batched_matmul_scalar_diag_cuda).
+    col_major: used when kernel='scalar_diag' OR kernel='block' -- False (default) =
+               row-major PBR block order, True = col-sorted (see
+               pbr_batched_matmul_scalar_diag_cuda / pbr_batched_matmul_cuda).
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -883,7 +897,8 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                                                      col_major=col_major, csr_mode=csr_mode,
                                                      smem_size=smem_size)
         else:
-            y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+            y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size,
+                                         col_major=col_major)
     else:
         y = core.pbr_batched_matmul_cpu(pbr_mat, x)
 
