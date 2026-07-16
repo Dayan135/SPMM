@@ -177,18 +177,21 @@ PBR_RUNS = PBR_RUNS + SCALAR_DIAG_RUNS
 # Same sweep, but over the vectorized 'block' kernel (pbr_spmm_vec_kernel --
 # auto-selected since every features value here is %4==0) instead of the
 # forced-scalar zero_idle kernel. Same (block_size, min_nnz) configs, col-sorted
-# (col_major=True), fixed smem_size=2048. No mergeBC this round -- baseline only.
-def _make_vec_colmajor_runs():
+# (col_major=True). No mergeBC this round -- baseline only. smem_size is a
+# parameter (not fixed like _SCALAR_DIAG_SMEM) so the same configs can be
+# reswept at a different shared-memory tile size (e.g. 512) without duplicating
+# this function.
+def _make_vec_colmajor_runs(smem_size):
     runs = []
     for bs, mn in _SCALAR_DIAG_BLOCK_CONFIGS:
-        cfg = {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": _SCALAR_DIAG_SMEM}
-        cfg_id = f"pbr_{bs}x{bs}_min{mn}_sm{_SCALAR_DIAG_SMEM}"
+        cfg = {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": smem_size}
+        cfg_id = f"pbr_{bs}x{bs}_min{mn}_sm{smem_size}"
         spec = {"kernel": "block", "col_major": True}
         runs.append(pytest.param((spec, cfg), id=f"block_colmajor-{cfg_id}"))
     return runs
 
 
-VEC_COLMAJOR_RUNS = _make_vec_colmajor_runs()
+VEC_COLMAJOR_RUNS = _make_vec_colmajor_runs(2048) + _make_vec_colmajor_runs(512)
 PBR_RUNS = PBR_RUNS + VEC_COLMAJOR_RUNS
 
 # Adding a new baseline algorithm = one line here.
