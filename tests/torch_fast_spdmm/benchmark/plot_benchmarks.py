@@ -102,6 +102,19 @@ def _algo_order(algos) -> list[str]:
     return baselines + pbr
 
 
+def _palette(n: int) -> list:
+    """n distinct colors, safe for any n (tab10/tab20 top out at 10/20 -- beyond
+    that, cycle a continuous colormap instead of the zip-silently-truncates
+    bug this replaces: zip(algos, plt.cm.tab10.colors) only colored the first
+    10 of an arbitrarily long algorithm list, KeyError-ing on the rest)."""
+    if n <= 10:
+        return list(plt.cm.tab10.colors[:n])
+    if n <= 20:
+        return list(plt.cm.tab20.colors[:n])
+    cmap = plt.cm.get_cmap("nipy_spectral")
+    return [cmap(i / max(n - 1, 1)) for i in range(n)]
+
+
 # ── Plots ────────────────────────────────────────────────────────────────────
 
 def facet_grid(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
@@ -115,7 +128,7 @@ def facet_grid(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
     profiles = sorted(sub["profile"].unique())
     feats = sorted(sub["features"].unique())
     algos = _algo_order(sub["algorithm"])
-    colors = {a: c for a, c in zip(algos, plt.cm.tab10.colors)}
+    colors = {a: c for a, c in zip(algos, _palette(len(algos)))}
 
     fig, axes = plt.subplots(
         len(profiles), len(feats),
@@ -288,7 +301,7 @@ def smem_sweep(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
     profiles = sorted(sub["profile"].unique())
     feats = sorted(sub["features"].unique())
 
-    cfg_colors = {c: col for c, col in zip(cfgs, plt.cm.tab10.colors)}
+    cfg_colors = {c: col for c, col in zip(cfgs, _palette(len(cfgs)))}
 
     fig, axes = plt.subplots(
         len(profiles), len(feats),
