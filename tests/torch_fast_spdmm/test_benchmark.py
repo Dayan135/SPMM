@@ -146,6 +146,34 @@ def _make_pbr_runs():
 
 PBR_RUNS = _make_pbr_runs()
 
+# zero_idle-kernel ('scalar_diag') sweep: user-requested (block_size, min_nnz)
+# configs, col-sorted (col_major=True, reuses the colgroup kernel's pre-built
+# col-sorted arrays -- no kernel change needed), fixed smem_size=2048 (not
+# crossed with _SMEM_TIERS). 'baseline' (unmodified pbr_spmm_zero_idle_kernel,
+# forced scalar dispatch) and 'mergeBC' (Step B/C fused, p held fixed) --
+# see STALL_REASONS_ZEROIDLE_MICROBENCH.md.
+_SCALAR_DIAG_BLOCK_CONFIGS = [
+    (2, 2), (2, 3),           # 2x2 PBR blocks
+    (4, 4), (4, 8),           # 4x4 PBR blocks
+    (8, 2), (8, 12), (8, 20), # 8x8 PBR blocks
+]  # (block_size, min_nnz)
+_SCALAR_DIAG_SMEM = 2048
+
+
+def _make_scalar_diag_runs():
+    runs = []
+    for bs, mn in _SCALAR_DIAG_BLOCK_CONFIGS:
+        cfg = {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": _SCALAR_DIAG_SMEM}
+        cfg_id = f"pbr_{bs}x{bs}_min{mn}_sm{_SCALAR_DIAG_SMEM}"
+        for variant in ("baseline", "mergeBC"):
+            spec = {"kernel": "scalar_diag", "scalar_variant": variant, "col_major": True}
+            runs.append(pytest.param((spec, cfg), id=f"scalar_diag_{variant}_colmajor-{cfg_id}"))
+    return runs
+
+
+SCALAR_DIAG_RUNS = _make_scalar_diag_runs()
+PBR_RUNS = PBR_RUNS + SCALAR_DIAG_RUNS
+
 # Adding a new baseline algorithm = one line here.
 BASELINE_ALGOS = [
     pytest.param(("cusparse",  torch.sparse.mm),  id="cusparse"),
@@ -291,6 +319,9 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run
     variant = kernel_name
     if kernel_name == "tile":
         variant = f"tile_{kernel['tile_rows']}x{kernel['tile_cols']}_{kernel['tile_strategy']}"
+    elif kernel_name == "scalar_diag":
+        order = "colmajor" if kernel.get("col_major") else "rowmajor"
+        variant = f"scalar_diag_{kernel['scalar_variant']}_{order}"
     algo_name = (
         f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
         f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{variant}"
