@@ -18,19 +18,20 @@ def main() -> None:
     p.add_argument("--sizes", nargs="+", type=int, default=None, help="system sizes (default: all)")
     p.add_argument("--features", nargs="+", type=int, default=None, help="feature counts (default: [128, 512])")
     p.add_argument("--kernels", nargs="+", default=["block"], help="kernel variants to sweep (default: block)")
-    p.add_argument("--git-ref", default="feat/pbr-optimizer-phase0",
+    p.add_argument("--git-ref", default="research/pbr-cusparse-scalability-gap",
                    help="branch/commit to build+verify before benchmarking")
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--max-concurrent-jobs", type=int, default=3)
     p.add_argument("--skip-correctness", action="store_true",
                    help="skip the correctness gate (only for repeat runs against an already-verified build)")
+    p.add_argument("--quiet", action="store_true", help="suppress progress logging")
     args = p.parse_args()
 
     summary = run_sweep(
         matrices=args.matrices, sizes=args.sizes, features=args.features,
         kernels=tuple(args.kernels), git_ref=args.git_ref,
         batch_size=args.batch_size, max_concurrent_jobs=args.max_concurrent_jobs,
-        skip_correctness=args.skip_correctness,
+        skip_correctness=args.skip_correctness, verbose=not args.quiet,
     )
 
     print(f"Submitted: {summary['submitted']} new config points "
