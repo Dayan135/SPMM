@@ -106,12 +106,16 @@ _MATRIX_PROFILES = {
 _SCATTERED_DENSITY_AT_1024 = 0.005
 
 
-def build_matrix(size: int, matrix_profile: str):
+def build_matrix(size: int, matrix_profile: str, density_at_1024: float = _SCATTERED_DENSITY_AT_1024):
     """Build the raw scipy matrix for a --matrix-profile. Shared with
-    profile_cusparse.py so both drivers profile the identical matrix."""
+    profile_cusparse.py so both drivers profile the identical matrix.
+
+    density_at_1024: override for scattered profiles' density (same _sd(base, n)
+    scaling as test_benchmark.py) -- e.g. 0.005="d0.5pct", 0.02="d2pct", to match
+    a specific W&B sweep point for direct profiling follow-up."""
     kind, cfg = _MATRIX_PROFILES[matrix_profile]
     if kind == "scattered":
-        density = _SCATTERED_DENSITY_AT_1024 * 1024 / size
+        density = density_at_1024 * 1024 / size
         mat = generate_scattered_block_matrix(
             system_size=size,
             block_size=cfg["block_size"],
@@ -133,8 +137,9 @@ def build_matrix(size: int, matrix_profile: str):
 def build(size: int, features: int, block: int, min_nnz: int,
           matrix_profile: str, smem_size: int, kernel: str,
           tile_rows: int = 2, tile_cols: int = 2, tile_strategy: str = "grid",
-          chunk_size: int = 8, grouping: str = "count"):
-    mat = build_matrix(size, matrix_profile)
+          chunk_size: int = 8, grouping: str = "count",
+          density_at_1024: float = _SCATTERED_DENSITY_AT_1024):
+    mat = build_matrix(size, matrix_profile, density_at_1024)
 
     pbr_mat = csr_to_pbr(mat, block_rows=block, block_cols=block,
                          min_nnz_per_block=min_nnz)
@@ -217,6 +222,14 @@ def main() -> None:
     p.add_argument("--scalar-variant", type=str, default="baseline",
                    choices=["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC"],
                    help="scalar_diag kernel only")
+    p.add_argument("--col-major",      action="store_true",
+                   help="block/scalar_diag only -- use the col-sorted (col_origin, row_origin) "
+                        "PBR block arrays instead of natural row-major order. No kernel change, "
+                        "only which pre-built arrays get handed to the same kernel.")
+    p.add_argument("--density-pct",    type=float, default=_SCATTERED_DENSITY_AT_1024 * 100,
+                   help="scattered profiles only -- density at N=1024 as a percent, scaled by "
+                        "1024/size same as test_benchmark.py's _sd (e.g. 0.5 -> 'd0.5pct', "
+                        "2.0 -> 'd2pct') so a specific W&B sweep point can be reproduced exactly.")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
@@ -224,11 +237,14 @@ def main() -> None:
         args.size, args.features, args.block, args.min_nnz,
         args.matrix_profile, args.smem_size, args.kernel,
         args.tile_rows, args.tile_cols, args.tile_strategy, args.chunk_size, args.grouping,
+        density_at_1024=args.density_pct / 100,
     )
 
     matmul_kwargs = dict(smem_size=args.smem_size, kernel=args.kernel)
     if args.kernel in ("chunk", "rowgroup", "colgroup"):
         matmul_kwargs.update(grouping=args.grouping)
+    if args.kernel in ("block", "scalar_diag"):
+        matmul_kwargs.update(col_major=args.col_major)
     if args.kernel == "tile":
         matmul_kwargs.update(tile_rows=args.tile_rows, tile_cols=args.tile_cols,
                              tile_strategy=args.tile_strategy)
