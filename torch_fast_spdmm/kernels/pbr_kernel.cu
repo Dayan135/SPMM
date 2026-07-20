@@ -78,6 +78,26 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
         }
     }
 
+    // --- 1b. CACHE block_data IN SHARED MEMORY (once per kernel launch) ---
+    // block_data's values -- and the local_data_ptr sequence used to read
+    // them -- do not depend on base_f: they're a pure function of
+    // data_offset, packed_row_offsets, and this block's populated columns,
+    // none of which change across the base_f grid-stride loop below. Without
+    // this cache, every base_f iteration re-reads the same block_data values
+    // from global memory via __ldg (features/p redundant passes). total_nnz
+    // (= current_relative_offset, accumulated by the sparsity scan above) is
+    // at most BLOCK_ROWS*BLOCK_COLS (<=64 for the largest 8x8 PBR block) --
+    // small and compile-time-bounded, so a small static __shared__ buffer
+    // covers every case without per-thread register-count tracking (total_work
+    // can exceed THREADS_PER_BLOCK, so register caching can't cleanly cover
+    // the general case).
+    const uint32_t total_nnz = current_relative_offset;
+    __shared__ scalar_t s_block_data[BLOCK_ROWS * BLOCK_COLS];
+    for (uint32_t i = tx; i < total_nnz; i += THREADS_PER_BLOCK) {
+        s_block_data[i] = __ldg(&block_data[data_offset + i]);
+    }
+    __syncthreads();
+
     // --- 2. DYNAMIC P CALCULATION ---
     // p is floored to a power of 2 so inner-loop /current_p and %current_p
     // become bit-shift and mask ops.  Correct when features is a power-of-2
@@ -117,7 +137,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
             const uint32_t f_in_s = work_idx & p_mask;
 
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
-            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+            uint32_t local_data_ptr = (packed_row_offsets >> (pr * 7)) & 0x7F;
 
             const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
 
@@ -127,7 +147,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
             for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
                 if ((row_code >> c) & 1) {
                     const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
-                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    sum += s_block_data[local_data_ptr] * smem_X[pc * current_p + f_in_s];
                     local_data_ptr++;
                 }
             }
@@ -227,6 +247,19 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
         }
     }
 
+    // --- 1b. CACHE block_data IN SHARED MEMORY (once per kernel launch) ---
+    // Same rationale as the scalar kernel: block_data's values (and the
+    // local_data_ptr sequence) don't depend on base_f, so stage them into
+    // shared memory once instead of re-reading via __ldg on every base_f
+    // iteration. total_nnz (= current_relative_offset) is at most
+    // BLOCK_ROWS*BLOCK_COLS (<=64 for 8x8) -- small, compile-time-bounded.
+    const uint32_t total_nnz = current_relative_offset;
+    __shared__ scalar_t s_block_data[BLOCK_ROWS * BLOCK_COLS];
+    for (uint32_t i = tx; i < total_nnz; i += THREADS_PER_BLOCK) {
+        s_block_data[i] = __ldg(&block_data[data_offset + i]);
+    }
+    __syncthreads();
+
     // --- 2. DYNAMIC P CALCULATION (vp floored to power of 2 → bit-op division) ---
     // vp_log2 / vp_mask replace /vp and %vp in inner loops; correct when
     // features is a power-of-2 multiple of p (all benchmarked feature counts).
@@ -267,7 +300,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
             const uint32_t f_off = (vwork & vp_mask) * L;
 
             const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
-            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+            uint32_t local_data_ptr = (packed_row_offsets >> (pr * 7)) & 0x7F;
             const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
 
             lane_u acc;
@@ -278,7 +311,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
             for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
                 if ((row_code >> c) & 1) {
                     const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
-                    const scalar_t coef = __ldg(&block_data[local_data_ptr]);
+                    const scalar_t coef = s_block_data[local_data_ptr];
 
                     lane_u xu;
                     xu.v = *reinterpret_cast<const vec_t*>(&smem_X[pc * current_p + f_off]);
