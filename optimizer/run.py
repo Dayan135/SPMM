@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 
+from optimizer.ledger import Ledger
 from optimizer.orchestrator import run_sweep
 
 
@@ -20,6 +21,13 @@ def main() -> None:
     p.add_argument("--kernels", nargs="+", default=["block"], help="kernel variants to sweep (default: block)")
     p.add_argument("--git-ref", default="research/pbr-cusparse-scalability-gap",
                    help="branch/commit to build+verify before benchmarking")
+    p.add_argument("--db", default=None,
+                   help="ledger sqlite path (default: repo-root optimizer_ledger.sqlite3). "
+                        "IMPORTANT: config_key does not include the git commit/branch being measured, "
+                        "so sweeping a kernel-edit branch against the SAME ledger as the baseline would "
+                        "silently skip points already recorded there. Point kernel-edit experiments at "
+                        "their own --db (e.g. optimizer_ledger_<branch-suffix>.sqlite3) and compare with "
+                        "optimizer.compare instead.")
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--max-concurrent-jobs", type=int, default=3)
     p.add_argument("--skip-correctness", action="store_true",
@@ -27,9 +35,11 @@ def main() -> None:
     p.add_argument("--quiet", action="store_true", help="suppress progress logging")
     args = p.parse_args()
 
+    ledger = Ledger(args.db) if args.db else Ledger()
+
     summary = run_sweep(
         matrices=args.matrices, sizes=args.sizes, features=args.features,
-        kernels=tuple(args.kernels), git_ref=args.git_ref,
+        kernels=tuple(args.kernels), git_ref=args.git_ref, ledger=ledger,
         batch_size=args.batch_size, max_concurrent_jobs=args.max_concurrent_jobs,
         skip_correctness=args.skip_correctness, verbose=not args.quiet,
     )
