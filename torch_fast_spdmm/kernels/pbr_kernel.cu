@@ -9,6 +9,25 @@ template <typename scalar_t> struct PbrVec;
 template <> struct PbrVec<float>  { using type = float4;  static constexpr int lanes = 4; };
 template <> struct PbrVec<double> { using type = double2; static constexpr int lanes = 2; };
 
+// Paired-float atomic RMW via a 64-bit atomicCAS loop. Ampere (CC 8.6, the
+// project's RTX 3090 target) has no native atomicAdd for float2/float4 --
+// that only exists on Hopper (CC 9.0+) -- so combining two adjacent,
+// 8-byte-aligned floats into one wide RMW requires a manual CAS loop. Used to
+// halve the atomic instruction count in pbr_spmm_vec_kernel's Step C flush
+// (see STALL_REASONS_PAIRED_ATOMIC.md): 2 paired atomicAdd(float2) calls
+// instead of 4 independent scalar atomicAdd(float) calls, same total bytes
+// written, same addresses touched.
+__device__ __forceinline__ void atomicAddFloat2(float2* addr, float2 val) {
+    unsigned long long int* addr_u64 = reinterpret_cast<unsigned long long int*>(addr);
+    unsigned long long int old = *addr_u64, assumed;
+    do {
+        assumed = old;
+        float2 old_f2 = *reinterpret_cast<float2*>(&assumed);
+        float2 new_f2 = make_float2(old_f2.x + val.x, old_f2.y + val.y);
+        old = atomicCAS(addr_u64, assumed, *reinterpret_cast<unsigned long long int*>(&new_f2));
+    } while (assumed != old);
+}
+
 template <typename index_t, typename scalar_t,
           int BLOCK_ROWS, int BLOCK_COLS,
           int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
@@ -294,7 +313,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
 
         __syncthreads();
 
-        // STEP C: Cooperative atomic commit (vector load from smem, L scalar atomics)
+        // STEP C: Cooperative atomic commit (vector load from smem, paired
+        // atomics for float -- 2 atomicAdd(float2) instead of 4
+        // atomicAdd(float); double path unchanged, still L=2 scalar atomics).
         for (uint32_t vwork = tx; vwork < total_vwork; vwork += THREADS_PER_BLOCK) {
             const uint32_t pr    = vwork >> vp_log2;
             const uint32_t f_off = (vwork & vp_mask) * L;
@@ -304,9 +325,22 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
 
             lane_u yu;
             yu.v = *reinterpret_cast<const vec_t*>(&smem_Y[pr * current_p + f_off]);
-            #pragma unroll
-            for (int l = 0; l < L; ++l) {
-                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
+
+            scalar_t* const y_base =
+                &Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off];
+
+            if constexpr (L == 4) {
+                // f_off is always a multiple of L=4 and features is always
+                // even for every benchmarked config, so y_base and y_base+2
+                // are both 8-byte aligned -- lanes {0,1} and {2,3} each form
+                // a valid float2 RMW target.
+                atomicAddFloat2(reinterpret_cast<float2*>(y_base), make_float2(yu.s[0], yu.s[1]));
+                atomicAddFloat2(reinterpret_cast<float2*>(y_base + 2), make_float2(yu.s[2], yu.s[3]));
+            } else {
+                #pragma unroll
+                for (int l = 0; l < L; ++l) {
+                    atomicAdd(&y_base[l], yu.s[l]);
+                }
             }
         }
 
