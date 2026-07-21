@@ -22,13 +22,17 @@ void launch_pbr_spmm(
 );
 
 // Diagnostic-only launcher for the zero_idle-kernel microbench variants
-// (2026-07-16): block_data-read-as-constant, each __syncthreads() removed
-// individually, and a Step B/C merge (atomicAdd straight from register, no
-// smem_Y). Always dispatches to a scalar (non-vectorized) kernel, selected by
-// `variant` (0=baseline 1=constdata 2=nosyncA 3=nosyncB 4=nosyncC 5=mergeBC)
-// -- never checks use_vec the way launch_pbr_spmm does. Several variants
-// produce numerically wrong output by design; see pbr_kernel.cu. Never merge
-// into launch_pbr_spmm.
+// (2026-07-16, +mergeBC_alloc 2026-07-21): block_data-read-as-constant, each
+// __syncthreads() removed individually, a Step B/C merge (atomicAdd straight
+// from register, no smem_Y), and an allocation-ablation control for that
+// merge (same fused compute/commit, but an explicit dead smem_Y pointer kept
+// at baseline's offset/size, isolating whether the merge's win comes from
+// removing the smem_Y instructions vs. from incidentally freeing shared-
+// memory allocation/occupancy). Always dispatches to a scalar
+// (non-vectorized) kernel, selected by `variant` (0=baseline 1=constdata
+// 2=nosyncA 3=nosyncB 4=nosyncC 5=mergeBC 6=mergeBC_alloc) -- never checks
+// use_vec the way launch_pbr_spmm does. Several variants produce numerically
+// wrong output by design; see pbr_kernel.cu. Never merge into launch_pbr_spmm.
 template <typename index_t, typename scalar_t>
 void launch_pbr_spmm_scalar_diag(
     int variant,

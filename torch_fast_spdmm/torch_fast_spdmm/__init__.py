@@ -176,6 +176,7 @@ _SCALAR_DIAG_VARIANTS = {
     'nosyncB':   3,
     'nosyncC':   4,
     'mergeBC':   5,
+    'mergeBC_alloc': 6,
 }
 
 
@@ -363,6 +364,15 @@ def pbr_batched_matmul_scalar_diag_cuda(pbr_mat, x: torch.Tensor, variant: str =
              'nosyncC'   -- end-of-iteration sync deleted (WRONG).
              'mergeBC'   -- Step B/C fused, atomicAdd directly from register,
                             no smem_Y, no sync between them (expected correct).
+             'mergeBC_alloc' -- same fused compute/commit as 'mergeBC', but
+                            keeps an explicit (dead) smem_Y pointer at the same
+                            offset/size baseline reserves, to isolate whether
+                            'mergeBC's win comes from removing the smem_Y
+                            read/write instructions themselves vs. from
+                            incidentally freeing shared-memory allocation
+                            (occupancy). Expected correct, numerically
+                            identical to 'mergeBC'. See STALL_REASONS_
+                            MERGEBC_ALLOC_ABLATION.md.
     col_major: False (default) -- PBR blocks in natural row-major order
                (block_codes/coords/offsets/data). True -- use the col-sorted
                arrays already built for the colgroup kernel at .to('cuda')
@@ -866,7 +876,7 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                'nnz' — nnz-balanced groups instead, mirroring cuSPARSE's own
                csr_partition_kernel (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). Only used
                when kernel is 'rowgroup', 'colgroup', or 'chunk'.
-    scalar_variant: 'baseline'|'constdata'|'nosyncA'|'nosyncB'|'nosyncC'|'mergeBC' --
+    scalar_variant: 'baseline'|'constdata'|'nosyncA'|'nosyncB'|'nosyncC'|'mergeBC'|'mergeBC_alloc' --
                only used when kernel='scalar_diag'.
     col_major: used when kernel='scalar_diag' OR kernel='block' -- False (default) =
                row-major PBR block order, True = col-sorted (see

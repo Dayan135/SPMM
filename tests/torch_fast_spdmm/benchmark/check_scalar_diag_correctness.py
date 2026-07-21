@@ -1,5 +1,6 @@
 """Correctness check for the diagnostic-only zero_idle-kernel microbench
-variants (2026-07-16): baseline/constdata/nosyncA/nosyncB/nosyncC/mergeBC.
+variants (2026-07-16, +mergeBC_alloc 2026-07-21):
+baseline/constdata/nosyncA/nosyncB/nosyncC/mergeBC/mergeBC_alloc.
 
 Unlike test_pbr.py's parametrized correctness suite, this is NOT a pytest file
 -- 4 of the 6 variants are EXPECTED to fail (they read wrong data or race by
@@ -27,8 +28,8 @@ SIZE = 262144
 BLOCK = 8
 MIN_NNZ = 2
 
-VARIANTS = ["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC"]
-EXPECTED_CORRECT = {"baseline", "mergeBC"}
+VARIANTS = ["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC", "mergeBC_alloc"]
+EXPECTED_CORRECT = {"baseline", "mergeBC", "mergeBC_alloc"}
 
 TOL = 1e-4
 

@@ -215,7 +215,8 @@ def main() -> None:
     p.add_argument("--grouping",       type=str, default="count", choices=["count", "nnz"],
                    help="chunk/rowgroup/colgroup only")
     p.add_argument("--scalar-variant", type=str, default="baseline",
-                   choices=["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC"],
+                   choices=["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC",
+                            "mergeBC_alloc"],
                    help="scalar_diag kernel only")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()

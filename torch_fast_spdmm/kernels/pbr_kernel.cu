@@ -848,6 +848,168 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 }
 
 
+// ===========================================================================
+// mergeBC_alloc: allocation-ablation control for mergeBC (2026-07-21)
+// ===========================================================================
+// Isolates two effects Eran flagged as conflated in mergeBC's ~9-12% win:
+//   (a) removing the smem_Y store/reload INSTRUCTIONS themselves
+//   (b) smem_Y no longer being touched potentially FREEING shared-memory
+//       allocation, independently improving occupancy (more concurrent
+//       blocks/SM) -- a mechanism already confirmed in this project on
+//       feat/pbr-cache-block-data, in the opposite direction (adding a smem
+//       buffer regressed wall-clock via launch__occupancy_limit_shared_mem).
+//
+// This variant is byte-for-byte identical to pbr_spmm_zero_idle_kernel_mergeBC
+// above EXCEPT it re-declares (and leaves entirely unused) an smem_Y pointer
+// at the same offset baseline's smem_Y uses, to make the "reserved but dead"
+// allocation explicit in source. This is NOT expected to change codegen
+// versus mergeBC: __shared__ scalar_t smem[TOTAL_SHARED] is a compile-time-
+// sized static array (TOTAL_SHARED is a template int, fixed by smem_size at
+// dispatch time) -- its reservation does not depend on which runtime-computed
+// index range within it is actually written/read, and mergeBC already
+// computes p via the SAME `TOTAL_SHARED / (n_r + n_c)` divisor as baseline
+// (see its comment above), so mergeBC never grew p or shrank the reservation
+// in the first place. If ncu's launch__occupancy_limit_shared_mem /
+// launch__shared_mem_per_block_static agree across baseline/mergeBC/
+// mergeBC_alloc, that confirms mechanism (b) was never actually in play for
+// this kernel -- mergeBC's win is attributable to (a) alone. Mathematically
+// identical output to mergeBC (same computation, same atomicAdd target).
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kernel_mergeBC_alloc(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    uint32_t n_r = 0;
+    uint64_t col_mask = 0;
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint32_t packed_active_rows = 0;
+    uint64_t packed_row_offsets = 0;
+    uint32_t current_relative_offset = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            packed_active_rows |= (r << (n_r * 3));
+            packed_row_offsets |= ((uint64_t)current_relative_offset << (n_r * 7));
+
+            n_r++;
+            col_mask |= row_mask;
+            current_relative_offset += __popcll(row_mask);
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_r == 0 || n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t packed_cols_logical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_logical |= (pc_idx << (c * 3));
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    // Same divisor as baseline/mergeBC -- p (and therefore the occupied
+    // fraction of the TOTAL_SHARED array) is identical across all three
+    // variants; only the compute+commit strategy below differs.
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        // Reserved-but-dead: same offset/extent as baseline's smem_Y, never
+        // written or read here. Kept only to document, in source, that this
+        // byte range of `smem` is logically set aside exactly as it is in
+        // baseline -- it changes nothing about codegen (smem's declared
+        // size already covers this range regardless of whether the pointer
+        // below is ever named), which is precisely the point being tested.
+        scalar_t* smem_Y_unused = smem + (n_c * current_p);
+        (void)smem_Y_unused;
+
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        __syncthreads();
+
+        // STEP B+C (merged), identical to mergeBC: each thread computes its
+        // own sum and atomicAdds directly from its register -- no smem_Y
+        // round trip.
+        const uint32_t total_work = n_r * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr    = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            uint32_t local_data_ptr = data_offset + ((packed_row_offsets >> (pr * 7)) & 0x7F);
+
+            const uint64_t row_code = (code >> (actual_r * BLOCK_COLS)) & row_bits;
+
+            scalar_t sum = 0;
+
+            #pragma unroll
+            for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+                if ((row_code >> c) & 1) {
+                    const uint32_t pc = (packed_cols_logical >> (c * 3)) & 0x7;
+                    sum += __ldg(&block_data[local_data_ptr]) * smem_X[pc * current_p + f_in_s];
+                    local_data_ptr++;
+                }
+            }
+
+            const uint32_t global_r = row_origin + actual_r;
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], sum);
+        }
+
+        __syncthreads();
+    }
+}
+
+
 // Vectorized variant: each thread owns `L` (= PbrVec lanes) contiguous features.
 // Requires features % L == 0 so the per-column feature run is L-aligned in both
 // global X and shared memory; the launcher guarantees this before dispatching.
@@ -1086,7 +1248,7 @@ template void launch_pbr_spmm<int64_t, double>(const int, const int, const int, 
 // use_vec path would otherwise never reach at features%4==0.
 template <typename index_t, typename scalar_t>
 void launch_pbr_spmm_scalar_diag(
-    int variant,   // 0=baseline 1=constdata 2=nosyncA 3=nosyncB 4=nosyncC 5=mergeBC
+    int variant,   // 0=baseline 1=constdata 2=nosyncA 3=nosyncB 4=nosyncC 5=mergeBC 6=mergeBC_alloc
     const int num_pbr_blocks,
     const int features,
     const int batch_size,
@@ -1147,6 +1309,13 @@ void launch_pbr_spmm_scalar_diag(
                     break;                                                                             \
                 case 5:                                                                                \
                     pbr_spmm_zero_idle_kernel_mergeBC<index_t, scalar_t, BR, BC, TS,                  \
+                                              THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
+                                              stream>>>(                                              \
+                        num_pbr_blocks, features, batch_size, cols, rows,                             \
+                        block_codes, block_coords, block_offsets, block_data, X, Y);                  \
+                    break;                                                                             \
+                case 6:                                                                                \
+                    pbr_spmm_zero_idle_kernel_mergeBC_alloc<index_t, scalar_t, BR, BC, TS,            \
                                               THREADS_PER_BLOCK, FEAT_BLOCK_SIZE><<<grid, block, 0,   \
                                               stream>>>(                                              \
                         num_pbr_blocks, features, batch_size, cols, rows,                             \
