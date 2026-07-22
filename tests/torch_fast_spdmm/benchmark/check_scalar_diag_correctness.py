@@ -1,9 +1,9 @@
 """Correctness check for the diagnostic-only zero_idle-kernel microbench
-variants (2026-07-16, +mergeBC_alloc 2026-07-21):
-baseline/constdata/nosyncA/nosyncB/nosyncC/mergeBC/mergeBC_alloc.
+variants (2026-07-16, +mergeBC_alloc 2026-07-21, +nosyncAll 2026-07-22):
+baseline/constdata/nosyncA/nosyncB/nosyncC/mergeBC/mergeBC_alloc/nosyncAll.
 
 Unlike test_pbr.py's parametrized correctness suite, this is NOT a pytest file
--- 4 of the 6 variants are EXPECTED to fail (they read wrong data or race by
+-- 5 of the 8 variants are EXPECTED to fail (they read wrong data or race by
 design), so a hard assert_close would always throw. This script instead
 reports max abs/rel error and a pass/fail verdict per (matrix, features,
 variant), using the SAME matrices/sizes as the profiling job
@@ -28,7 +28,8 @@ SIZE = 262144
 BLOCK = 8
 MIN_NNZ = 2
 
-VARIANTS = ["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC", "mergeBC_alloc"]
+VARIANTS = ["baseline", "constdata", "nosyncA", "nosyncB", "nosyncC", "mergeBC", "mergeBC_alloc",
+            "nosyncAll"]
 EXPECTED_CORRECT = {"baseline", "mergeBC", "mergeBC_alloc"}
 
 TOL = 1e-4

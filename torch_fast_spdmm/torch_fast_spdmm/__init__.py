@@ -177,6 +177,7 @@ _SCALAR_DIAG_VARIANTS = {
     'nosyncC':   4,
     'mergeBC':   5,
     'mergeBC_alloc': 6,
+    'nosyncAll': 7,
 }
 
 
@@ -373,6 +374,13 @@ def pbr_batched_matmul_scalar_diag_cuda(pbr_mat, x: torch.Tensor, variant: str =
                             (occupancy). Expected correct, numerically
                             identical to 'mergeBC'. See STALL_REASONS_
                             MERGEBC_ALLOC_ABLATION.md.
+             'nosyncAll' -- nosyncA + nosyncB + nosyncC's removals combined
+                            into one kernel (all three __syncthreads() deleted
+                            simultaneously, loops kept separate -- NOT fused
+                            like 'mergeBC'). WRONG by design, same as its
+                            three constituent variants; added purely to widen
+                            race-detector coverage. See STALL_REASONS_
+                            NOSYNC_RACECHECK_FULLGRID.md.
     col_major: False (default) -- PBR blocks in natural row-major order
                (block_codes/coords/offsets/data). True -- use the col-sorted
                arrays already built for the colgroup kernel at .to('cuda')
@@ -876,7 +884,8 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                'nnz' — nnz-balanced groups instead, mirroring cuSPARSE's own
                csr_partition_kernel (see WHY_BLOCK_KERNEL_FAILS_TO_SCALE.md). Only used
                when kernel is 'rowgroup', 'colgroup', or 'chunk'.
-    scalar_variant: 'baseline'|'constdata'|'nosyncA'|'nosyncB'|'nosyncC'|'mergeBC'|'mergeBC_alloc' --
+    scalar_variant: 'baseline'|'constdata'|'nosyncA'|'nosyncB'|'nosyncC'|'mergeBC'|'mergeBC_alloc'|
+               'nosyncAll' --
                only used when kernel='scalar_diag'.
     col_major: used when kernel='scalar_diag' OR kernel='block' -- False (default) =
                row-major PBR block order, True = col-sorted (see
