@@ -25,6 +25,15 @@ correctness pass (the racecheck sweep is the one that needs the full
 10-matrix/6-feature grid; this check's job is just to confirm nothing new
 broke across the block/min_nnz dimension).
 
+Some (matrix, block_size, min_nnz) combos are VACUOUS -- min_nnz too high for
+that matrix's block sparsity pattern means zero PBR blocks get built, so the
+diagnostic kernel never actually launches and every variant (including
+constdata, which should never trivially match) reports max_abs=max_rel=0.
+These are detected via pbr_mat.accounted_blocks() == 0 and excluded entirely
+from the check (not counted as "passed", not counted as "unexpected") --
+otherwise they'd silently inflate both the pass count and the "unexpected"
+count with checks that never exercised any kernel.
+
 Usage:
     python -m benchmark.check_scalar_diag_correctness
 """
@@ -60,6 +69,7 @@ TOL = 1e-4
 def main() -> None:
     device = "cuda"
     rows = []
+    vacuous_configs = []
     for matrix in MATRICES:
         mat = build_matrix(SIZE, matrix)
 
@@ -69,6 +79,20 @@ def main() -> None:
             except Exception as e:
                 print(f"[skip] {matrix} block={block} min_nnz={min_nnz}: csr_to_pbr failed: {e}")
                 continue
+
+            # Vacuous config: min_nnz too high for this matrix's block sparsity
+            # pattern -> zero PBR blocks built -> the diagnostic kernel never
+            # actually launches, so every variant would trivially "match"
+            # (constdata included -- its max_abs would be exactly 0, which it
+            # never is when the kernel actually runs). Exclude from the
+            # correctness count entirely rather than let it silently inflate
+            # "passed" numbers for nothing exercised.
+            if pbr_mat.accounted_blocks() == 0:
+                vacuous_configs.append((matrix, block, min_nnz))
+                print(f"[vacuous] {matrix} block={block} min_nnz={min_nnz}: 0 PBR blocks built, "
+                      f"skipping (nothing to check)")
+                continue
+
             pbr_mat = pbr_mat.to(device)
 
             for features in FEATURES:
@@ -100,6 +124,11 @@ def main() -> None:
     n_unexpected = sum(1 for r in rows if r[-1] != "OK")
     print()
     print(f"{len(rows)} checks run, {n_unexpected} unexpected (pass != expected)")
+    print(f"{len(vacuous_configs)} vacuous (matrix, block, min_nnz) configs excluded "
+          f"(0 PBR blocks built, {len(vacuous_configs) * len(FEATURES) * len(VARIANTS)} checks "
+          f"would have been vacuously counted otherwise):")
+    for matrix, block, min_nnz in vacuous_configs:
+        print(f"    {matrix} block={block} min_nnz={min_nnz}")
 
 
 if __name__ == "__main__":

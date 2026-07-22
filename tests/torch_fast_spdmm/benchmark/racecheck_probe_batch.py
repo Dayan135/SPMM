@@ -20,6 +20,18 @@ enough to give races a realistic chance to manifest -- race *existence* is
 about thread/warp access patterns, not wall-clock scaling, so unlike the
 benchmark sweep this does not need to repeat across all 3 standard sizes).
 
+Some (block_size, min_nnz) combos are VACUOUS for a given matrix -- min_nnz
+too high for that matrix's block sparsity pattern means zero PBR blocks get
+built, so the kernel would never actually launch (same issue found and fixed
+in check_scalar_diag_correctness.py). Detected via
+`pbr_mat.accounted_blocks() == 0` and skipped (all 6 feature sub-configs at
+once) before entering the sanitizer-monitored region -- no point spending
+racecheck's substantial per-launch overhead on a config with zero kernel
+launches. 1680 is therefore an upper bound on real configs monitored; the
+actual count (nominal minus vacuous) is reported per-process in the
+`n_vacuous_skipped` line and totalled in
+STALL_REASONS_NOSYNC_RACECHECK_FULLGRID.md.
+
 Prints a `[CONFIG]`/`[CONFIG-DONE]` marker line around every sub-config's
 matmul call (flushed immediately) so a hazard report emitted by racecheck --
 which reports synchronously per kernel launch, interleaved with the target
@@ -99,6 +111,7 @@ def main() -> None:
 
     n_configs = 0
     n_failed = 0
+    n_vacuous = 0
     for bs, mn in _SCALAR_DIAG_BLOCK_CONFIGS:
         try:
             pbr_mat = csr_to_pbr(mat, block_rows=bs, block_cols=bs, min_nnz_per_block=mn)
@@ -106,6 +119,20 @@ def main() -> None:
             print(f"[CONFIG-SKIP] variant={args.variant} matrix={args.matrix} block={bs} "
                   f"min_nnz={mn}: csr_to_pbr failed: {e}", flush=True)
             continue
+
+        # Vacuous config: min_nnz too high for this matrix's block sparsity
+        # pattern -> zero PBR blocks built -> the scalar_diag kernel would
+        # never actually launch. No point spending racecheck budget
+        # (compute-sanitizer is expensive per kernel launch) monitoring zero
+        # launches -- same vacuous-config detection as
+        # check_scalar_diag_correctness.py (pbr_mat.accounted_blocks() == 0).
+        if pbr_mat.accounted_blocks() == 0:
+            n_vacuous += len(FEATURES)
+            print(f"[CONFIG-SKIP-VACUOUS] variant={args.variant} matrix={args.matrix} block={bs} "
+                  f"min_nnz={mn}: 0 PBR blocks built, skipping all {len(FEATURES)} feature "
+                  f"sub-configs (nothing would launch)", flush=True)
+            continue
+
         pbr_mat = pbr_mat.to("cuda")
 
         for features in FEATURES:
@@ -126,7 +153,7 @@ def main() -> None:
                       f"min_nnz={mn} feat={features} FAILED: {e}", flush=True)
 
     print(f"[racecheck_probe_batch] done variant={args.variant} matrix={args.matrix} "
-          f"n_configs={n_configs} n_failed={n_failed}", flush=True)
+          f"n_configs={n_configs} n_failed={n_failed} n_vacuous_skipped={n_vacuous}", flush=True)
 
 
 if __name__ == "__main__":
