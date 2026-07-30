@@ -32,7 +32,6 @@ def sparse_data_mat(sparse_random_block_mat):
 @mark.parametrize('mat_width', [8 * 8], ids=lambda x: f'mw={x}')
 @mark.parametrize('mat_height', [8 * 8], ids=lambda x: f'mh={x}')
 @mark.parametrize('block_prob', [0.4], ids=lambda x: f'bp={x}')
-@mark.parametrize('block_density', [0.4], ids=lambda x: f'bd={x}')
 @mark.parametrize('features', [16, 32, 64, 128, 256, 512], ids=lambda x: f'f={x}')
 class TestBlockMat(TestTorchNoGrad):
     def test_block_mat_sanity(self, sparse_mat, dense_mat):
