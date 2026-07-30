@@ -59,10 +59,22 @@ echo "[job] building (flock-serialized against concurrent installs from sibling 
 flock /home/dayanb/research/.pip_install.lock \
     pip install -e torch_fast_spdmm --no-build-isolation
 
+cd tests/torch_fast_spdmm
+
 # Verify the install actually resolved to THIS job's own source checkout, not
 # a sibling job's, before trusting any profiling data from this run. A
 # non-crashed pip install is not proof of a correct install -- the race can
 # resolve "successfully" while pointing the wrong direction.
+#
+# MUST run from tests/torch_fast_spdmm (same cwd profile_pbr.py itself runs
+# from), not $SLURM_SUBMIT_DIR (the repo root) -- diagnosed 2026-07-30: the
+# repo root contains a directory literally named torch_fast_spdmm (the
+# package's own top-level source dir), which shadows the real
+# editable-installed package as an empty namespace package when cwd is the
+# repo root (__file__ resolves to None, no attributes populated -- looked
+# exactly like cross-clone contamination but wasn't; a solo, uncontended
+# install showed the identical symptom). From tests/torch_fast_spdmm there's
+# no name collision and the check is reliable.
 EXPECTED_DIR="$SLURM_SUBMIT_DIR"
 IMPORTED_FILE=$(python -c "import torch_fast_spdmm; print(torch_fast_spdmm.__file__)")
 echo "[job] imported torch_fast_spdmm from: $IMPORTED_FILE"
@@ -75,8 +87,6 @@ case "$IMPORTED_FILE" in
         exit 1
         ;;
 esac
-
-cd tests/torch_fast_spdmm
 OUT_OCC="$SLURM_SUBMIT_DIR/ncu_out/cache_unified_smem/occupancy"
 OUT_STALL="$SLURM_SUBMIT_DIR/ncu_out/cache_unified_smem/stall_reasons"
 mkdir -p "$OUT_OCC" "$OUT_STALL"
