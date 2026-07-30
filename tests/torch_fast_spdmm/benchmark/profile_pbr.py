@@ -21,6 +21,12 @@ Matrix profiles (--matrix-profile):
                      bimodal per-block nnz
   fem2d            — 2D FEM stiffness matrix (grid-aligned reuse)
   fem2d_permuted   — same, with mesh nodes relabeled (breaks grid-aligned reuse)
+  pattern_diag_stripe    — fixed 8x8 diagonal-stripe pattern tiled across the grid
+  pattern_corner_cluster — fixed 8x8 dense 4x4-corner pattern tiled across the grid
+  pattern_checkerboard   — fixed 8x8 checkerboard pattern tiled across the grid
+  pattern_row_skewed     — fixed 8x8 pattern with one fully-dense row + one nonzero
+                           per remaining row -- maximal per-row density skew, the
+                           discriminating case for intra-block work-balance experiments
 
 Usage (under ncu):
     ncu --profile-from-start off --metrics <...> --csv \
@@ -39,12 +45,14 @@ import torch
 import torch.cuda.profiler as profiler
 
 from benchmark.matrices import (generate_scattered_block_matrix, generate_diag_blocks_plus_noise,
-                                generate_fem_2d, generate_permuted_fem_2d)
+                                generate_fem_2d, generate_permuted_fem_2d,
+                                generate_patterned_block_matrix, PBR_PATTERN_PRESETS)
 from torch_fast_spdmm import csr_to_pbr, pbr_info, pbr_matmul
 
 # Each entry: (kind, cfg)
 #   kind="scattered" → generate_scattered_block_matrix
 #   kind="diag"      → generate_diag_blocks_plus_noise
+#   kind="pattern"   → generate_patterned_block_matrix (fixed 8x8 mask, see PBR_PATTERN_PRESETS)
 _MATRIX_PROFILES = {
     "scattered_8x1":    ("scattered", {"block_size": 8, "rows_per_block": 8, "cols_per_block": 1}),
     "scattered_1x8":    ("scattered", {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8}),
@@ -60,6 +68,10 @@ _MATRIX_PROFILES = {
     "diag_skewed":      ("diag",      {"block_size": 64, "diag_density": 1.0,   "off_diag_density": 0.00002}),
     "fem2d":            ("fem",       {"permuted": False}),
     "fem2d_permuted":   ("fem",       {"permuted": True}),
+    "pattern_diag_stripe":    ("pattern", {"preset": "diag_stripe"}),
+    "pattern_corner_cluster": ("pattern", {"preset": "corner_cluster"}),
+    "pattern_checkerboard":   ("pattern", {"preset": "checkerboard"}),
+    "pattern_row_skewed":     ("pattern", {"preset": "row_skewed"}),
 }
 
 
@@ -86,6 +98,12 @@ def build_matrix(size: int, matrix_profile: str):
             block_size=cfg["block_size"],
             diag_density=cfg["diag_density"],
             off_diag_density=cfg["off_diag_density"],
+        ).astype(np.float32)
+    elif kind == "pattern":
+        density = _SCATTERED_DENSITY_AT_1024 * 1024 / size
+        mat = generate_patterned_block_matrix(
+            system_size=size, block_size=8,
+            patterns=[(PBR_PATTERN_PRESETS[cfg["preset"]], density)],
         ).astype(np.float32)
     else:  # fem
         gen = generate_permuted_fem_2d if cfg["permuted"] else generate_fem_2d
