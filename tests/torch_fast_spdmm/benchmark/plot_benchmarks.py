@@ -184,7 +184,7 @@ def _best_pbr_by_kernel(df: pd.DataFrame, kernel: str) -> pd.Series:
     """Best (min time_ms) PBR time per (system_size, profile, features) for one kernel.
 
     Selects across all block-config / smem variants for the given kernel
-    ('block' or 'rowgroup'), so each cell reports the best that kernel can do.
+    (currently just 'block'), so each cell reports the best that kernel can do.
     """
     pbr = df[df["algorithm"].str.startswith("pbr_") & (df["kernel"] == kernel)]
     return pbr.groupby(["system_size", "profile", "features"])["time_ms"].min()

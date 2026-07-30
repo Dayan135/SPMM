@@ -66,7 +66,7 @@ are missing in the local `fem` env: `conda run -n fem pip install wandb pandas m
 
 | Path | Purpose |
 |------|---------|
-| `torch_fast_spdmm/kernels/pbr_kernel.cu` | PBR SpMM CUDA kernels (`block`/`rowgroup`/`colgroup`/`tile`) |
+| `torch_fast_spdmm/kernels/pbr_kernel.cu` | PBR SpMM CUDA kernel (`block`: scalar `zero_idle` + vectorized variants) |
 | `torch_fast_spdmm/kernels/pbr_kernels.hpp` | Launch-function + occupancy-query declarations for the PBR kernels |
 | `torch_fast_spdmm/kernels/kernels.hpp` | CUDA error-check utilities |
 | `torch_fast_spdmm/kernels/csr_kernels.cu` | Naive CSR SpMM kernel (benchmark baseline / PBR remainder) |
@@ -92,35 +92,20 @@ are missing in the local `fem` env: `conda run -n fem pip install wandb pandas m
 | `tests/torch_fast_spdmm/benchmark/profile_pbr.py` | ncu profiling driver (scattered + diag) |
 | `tests/torch_fast_spdmm/benchmark/profile_cusparse.py` | ncu profiling driver for the cuSPARSE baseline |
 | `tests/torch_fast_spdmm/benchmark/csr_kernel_sweep.py` | CSR-kernel-fast vs fallback head-to-head experiment |
-| `LAST_EXPERIMENTS.md` | Detailed log of recent experiments and findings |
 
-## Current kernel state (as of 2026-07-08, branch `feat/pbr-tileblock`)
+## Current kernel state
 
-Three PBR kernels exist. Choose via `kernel=` arg in `pbr_matmul`:
+One PBR kernel family (`block`), dispatched from `pbr_matmul`/`pbr_batched_matmul_cuda`:
 
-- **`block`** — one CUDA block per PBR block; `atomicAdd` to Y; concurrent with CSR on a separate stream.
-- **`rowgroup`** — one CUDA block per block-count-balanced group of the naturally row-major-ordered PBR
-  block array; `atomicAdd` to Y; concurrent with CSR. `group_size = ceil(num_pbr_blocks / target_groups)`
-  — computed at call time (no CPU scan or GPU array). `target_groups = sm_count ×
-  get_pbr_rowgroup_blocks_per_sm(block_rows, smem_size)` — occupancy query uses `dynamicSMemSize=0`
-  (static `__shared__` only). smem_Y accumulates an entire row-strip before atomicAdd, reducing atomic
-  pressure vs the block kernel. (Renamed from `blockgroup` on 2026-07-08 — same implementation, clearer
-  name now that `colgroup`/`rowgroup` are a pair and "block" is reserved for a different, 2D kernel.)
-- **`colgroup`** — same count-balanced grouping, but on PBR blocks pre-sorted by `(col_origin,
-  row_origin)`. smem_X (not smem_Y) is reused across the group, amortising the X load per column band
-  instead of the Y flush per row strip.
+- **`pbr_spmm_zero_idle_kernel`** (scalar) and **`pbr_spmm_vec_kernel`** (vectorized, `float4`/`double2`
+  lanes) — one CUDA block per PBR block, `atomicAdd` to Y, concurrent with the CSR remainder kernel on a
+  separate stream. Both are structured as three steps per feature tile: Step A loads `X` into `smem_X`,
+  Step B computes into `smem_Y` (one thread per (row, feature) work-item), Step C flushes `smem_Y` to
+  global `Y` via `atomicAdd`.
 
-`rowgroup` solves the wide-row scalability problem the old capped-at-`num_strips` predecessor had: it
-always launches `target_groups` CUDA blocks regardless of strip count.
-
-ncu profiling (`ncu_out/blockgroup_colgroup/`, June 2026) showed `rowgroup` winning over `colgroup` in
-all 3 tested cases — the hypothesized colgroup win (X-load amortization at low features) didn't
-materialize. Neither kernel is a clear win over the other in general, since each only reuses one smem
-axis at a time. `feat/pbr-tileblock` is developing a generalized 2D **`tile`** kernel that reuses both
-smem_X and smem_Y simultaneously over a `tile_rows × tile_cols` group of PBR blocks (rowgroup/colgroup
-are degenerate (1,N)/(N,1) cases of this shape space) — see `LAST_EXPERIMENTS.md` once implemented.
-
-See `LAST_EXPERIMENTS.md` for rowgroup/block/colgroup profiling data that motivated this design.
+Earlier `rowgroup`/`colgroup`/`tile`/`chunk` kernel variants (grouping PBR blocks into fewer, "fatter"
+CUDA blocks to amortize `smem_X`/`smem_Y` reuse or atomic frequency) were investigated and removed —
+none beat `block` in the end; see git history prior to this cleanup for the investigation record.
 
 ## Commit scopes
 

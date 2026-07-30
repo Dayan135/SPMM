@@ -64,12 +64,6 @@ _METRIC_SHORT_NAMES = {
     "smsp__warp_issue_stalled_wait_per_warp_active.pct": "wait_pct",
 }
 
-_KERNEL_NAME_PREFIXES = {
-    "block": "pbr_spmm", "rowgroup": "pbr_spmm", "colgroup": "pbr_spmm",
-    "tile": "pbr_spmm", "chunk": "pbr_spmm",
-}
-
-
 def parse_ncu_csv(csv_text: str, kernel_name_prefix: str = "pbr_spmm") -> Optional[dict]:
     """Parse one ncu --csv capture, returning the metrics for the FIRST kernel
     launch whose name contains kernel_name_prefix (generalizes the regex-based
@@ -159,8 +153,7 @@ def run_performance_batch(configs: list[CandidateConfig], *, job_name: str,
         if not csv_path.exists():
             results[cfg.config_key()] = None
             continue
-        prefix = _KERNEL_NAME_PREFIXES.get(cfg.kernel, "pbr_spmm")
-        results[cfg.config_key()] = parse_ncu_csv(csv_path.read_text(), prefix)
+        results[cfg.config_key()] = parse_ncu_csv(csv_path.read_text(), "pbr_spmm")
     return results
 
 

@@ -26,15 +26,9 @@ CREATE TABLE IF NOT EXISTS experiments (
     matrix_profile    TEXT NOT NULL,
     size              INTEGER NOT NULL,
     features          INTEGER NOT NULL,
-    kernel            TEXT NOT NULL,
     block             INTEGER NOT NULL,
     min_nnz           INTEGER NOT NULL,
     smem_size         INTEGER NOT NULL,
-    tile_rows         INTEGER,
-    tile_cols         INTEGER,
-    tile_strategy     TEXT,
-    grouping          TEXT,
-    chunk_size        INTEGER,
     git_commit        TEXT,
     correctness_pass  INTEGER,
     metrics_json      TEXT,
@@ -86,15 +80,12 @@ class Ledger:
         with self._connect() as conn:
             cur = conn.execute(
                 """INSERT INTO experiments
-                   (config_key, matrix_profile, size, features, kernel, block, min_nnz,
-                    smem_size, tile_rows, tile_cols, tile_strategy, grouping, chunk_size,
-                    git_commit, correctness_pass, metrics_json, verdict, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   (config_key, matrix_profile, size, features, block, min_nnz,
+                    smem_size, git_commit, correctness_pass, metrics_json, verdict, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     config.config_key(), config.matrix_profile, config.size, config.features,
-                    config.kernel, config.block, config.min_nnz, config.smem_size,
-                    config.tile_rows, config.tile_cols, config.tile_strategy,
-                    config.grouping, config.chunk_size,
+                    config.block, config.min_nnz, config.smem_size,
                     git_commit, None if correctness_pass is None else int(correctness_pass),
                     None if metrics is None else json.dumps(metrics),
                     verdict, time.time(),

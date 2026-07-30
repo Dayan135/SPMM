@@ -4,7 +4,7 @@ from optimizer.ledger import Ledger
 
 def _cfg(**overrides):
     defaults = dict(matrix_profile="diag_b0.3", size=262144, features=512,
-                     kernel="block", block=8, min_nnz=2, smem_size=2048)
+                     block=8, min_nnz=2, smem_size=2048)
     defaults.update(overrides)
     return CandidateConfig(**defaults)
 
@@ -58,8 +58,8 @@ def test_negative_results_are_recorded_too(tmp_path):
 
 def test_best_per_matrix_picks_lowest_time(tmp_path):
     ledger = Ledger(tmp_path / "test.sqlite3")
-    fast = _cfg(kernel="block")
-    slow = _cfg(kernel="rowgroup")
+    fast = _cfg(smem_size=2048)
+    slow = _cfg(smem_size=1024)
     ledger.record(fast, git_commit="c1", correctness_pass=True,
                    metrics={"gpu_time_ns": 100.0}, verdict="measured")
     ledger.record(slow, git_commit="c1", correctness_pass=True,
@@ -68,12 +68,12 @@ def test_best_per_matrix_picks_lowest_time(tmp_path):
     best = ledger.best_per_matrix(metric="gpu_time_ns")
     key = "diag_b0.3/262144/512"
     assert key in best
-    assert best[key]["kernel"] == "block"
+    assert best[key]["smem_size"] == 2048
 
 
 def test_best_per_matrix_ignores_failed_records(tmp_path):
     ledger = Ledger(tmp_path / "test.sqlite3")
-    ledger.record(_cfg(kernel="block"), git_commit="c1", correctness_pass=True,
+    ledger.record(_cfg(), git_commit="c1", correctness_pass=True,
                    metrics=None, verdict="failed_no_data")
     best = ledger.best_per_matrix()
     assert best == {}

@@ -5,7 +5,7 @@ from optimizer.ledger import Ledger
 
 def _cfg(**overrides):
     defaults = dict(matrix_profile="diag_b0.3", size=262144, features=512,
-                     kernel="block", block=8, min_nnz=2, smem_size=2048)
+                     block=8, min_nnz=2, smem_size=2048)
     defaults.update(overrides)
     return CandidateConfig(**defaults)
 
@@ -55,13 +55,13 @@ def test_compare_ignores_failed_records(tmp_path):
 
 
 def test_verdict_classification_thresholds():
-    row_win = ComparisonRow("k", "m", 1, 1, "block", 8, 2048,
+    row_win = ComparisonRow("k", "m", 1, 1, 8, 2048,
                              baseline_metrics={"gpu_time_ns": 100.0},
                              candidate_metrics={"gpu_time_ns": 90.0})  # -10%
-    row_regression = ComparisonRow("k", "m", 1, 1, "block", 8, 2048,
+    row_regression = ComparisonRow("k", "m", 1, 1, 8, 2048,
                                     baseline_metrics={"gpu_time_ns": 100.0},
                                     candidate_metrics={"gpu_time_ns": 110.0})  # +10%
-    row_wash = ComparisonRow("k", "m", 1, 1, "block", 8, 2048,
+    row_wash = ComparisonRow("k", "m", 1, 1, 8, 2048,
                               baseline_metrics={"gpu_time_ns": 100.0},
                               candidate_metrics={"gpu_time_ns": 101.0})  # +1%
     assert row_win.verdict() == "WIN"
@@ -74,7 +74,7 @@ def test_whack_a_mole_visible_in_metric_deltas():
     pattern found in every prior kernel-edit attempt -- must still be visible
     per-metric, not hidden by the single time-based verdict."""
     row = ComparisonRow(
-        "k", "diag_b0.3", 262144, 512, "block", 8, 2048,
+        "k", "diag_b0.3", 262144, 512, 8, 2048,
         baseline_metrics={"gpu_time_ns": 100.0, "barrier_pct": 20.0, "mio_throttle_pct": 5.0},
         candidate_metrics={"gpu_time_ns": 100.5, "barrier_pct": 0.0, "mio_throttle_pct": 25.0},
     )

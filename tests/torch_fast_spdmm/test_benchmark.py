@@ -58,7 +58,7 @@ def _sd(base_density, n):
 # (generator_func, size -> kwargs, family_name). Adding a family = one line.
 MATRIX_FAMILIES = [
     # Block-diagonal (64-wide dense bands, no off-block noise) — dense super-blocks
-    # of 8x8 = 64 PBR 8x8 blocks each; ideal territory for the 2D tile kernel.
+    # of 8x8 = 64 PBR 8x8 blocks each.
     # Densities are the original {0.1,0.5,1.0} tripled and clamped at 1.0
     # (0.5*3 and 1.0*3 both saturate -> single 1.0 entry).
     (generate_diag_blocks_plus_noise,
@@ -120,28 +120,14 @@ _PBR_BLOCK_CONFIGS = [
 ]  # (block_size, min_nnz)
 _SMEM_TIERS = [512, 1024, 2048]
 
-# Tile ("block of blocks") kernel: all 9 shapes x {grid, greedy}. v1 supports
-# 8x8 PBR blocks only, so tile is paired only with the 8x8 configs below.
-_TILE_SHAPES     = [(1, 1), (1, 2), (2, 1), (1, 4), (4, 1), (2, 2), (2, 4), (4, 2), (4, 4)]
-_TILE_STRATEGIES = ["grid", "greedy"]
-
-# Combined (kernel_spec, pbr_cfg) runs — VALID pairings only, so pytest collects
-# exactly the runnable cases (no ~100k skipped tile/non-8x8 cross-product items):
-#   block / rowgroup / colgroup — every (block_size, min_nnz, smem) config
-#   tile (shape x strategy)      — 8x8 configs only
+# One run per (block_size, min_nnz, smem) config — only the block kernel exists now.
 def _make_pbr_runs():
     runs = []
     for bs, mn in _PBR_BLOCK_CONFIGS:
         for sm in _SMEM_TIERS:
             cfg = {"block_rows": bs, "block_cols": bs, "min_nnz": mn, "smem_size": sm}
             cfg_id = f"pbr_{bs}x{bs}_min{mn}_sm{sm}"
-            for k in ("block", "rowgroup", "colgroup"):
-                runs.append(pytest.param(({"kernel": k}, cfg), id=f"{k}-{cfg_id}"))
-            if bs == 8:
-                for tr, tc in _TILE_SHAPES:
-                    for ts in _TILE_STRATEGIES:
-                        spec = {"kernel": "tile", "tile_rows": tr, "tile_cols": tc, "tile_strategy": ts}
-                        runs.append(pytest.param((spec, cfg), id=f"tile_{tr}x{tc}_{ts}-{cfg_id}"))
+            runs.append(pytest.param(cfg, id=cfg_id))
     return runs
 
 PBR_RUNS = _make_pbr_runs()
@@ -262,7 +248,7 @@ def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, al
 @mark.parametrize("features",   FEATURES)
 @mark.parametrize("mat_config", MATRIX_CONFIGS)
 def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run):
-    kernel, pbr_cfg = pbr_run
+    pbr_cfg = pbr_run
     scipy_mat, _, x, size, profile = _prepare(mat_config, features, dtype)
 
     pbr_mat = csr_to_pbr(
@@ -273,32 +259,26 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run
     )
     pbr_mat = pbr_mat.to("cuda")
 
-    # Warm-up (excluded from timing): one-time CUDA launch overhead and, for the
-    # tile kernel, the CPU-side tile-meta build (cached on pbr_mat after the first
-    # call). Steady-state matmul is what we measure — the grouping is a one-time
-    # preprocessing cost amortized across many matmuls on the same PBR matrix.
+    # Warm-up (excluded from timing): one-time CUDA launch overhead. Steady-state
+    # matmul is what we measure.
     try:
-        pbr_matmul(pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel)
+        pbr_matmul(pbr_mat, x, smem_size=pbr_cfg["smem_size"])
         torch.cuda.synchronize()
-        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel)
+        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"])
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
     finally:
         _cleanup()
 
-    kernel_name = kernel["kernel"]
-    variant = kernel_name
-    if kernel_name == "tile":
-        variant = f"tile_{kernel['tile_rows']}x{kernel['tile_cols']}_{kernel['tile_strategy']}"
     algo_name = (
         f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
-        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{variant}"
+        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_block"
     )
     bench_results.append({
         "commit":      _COMMIT,
         "algorithm":   algo_name,
-        "kernel":      kernel_name,
+        "kernel":      "block",
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),

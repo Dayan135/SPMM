@@ -118,8 +118,7 @@ def run_sweep(
                     csv_path = local_dir / f"{tag}.csv"
                     metrics = None
                     if csv_path.exists():
-                        prefix = performance._KERNEL_NAME_PREFIXES.get(cfg.kernel, "pbr_spmm")
-                        metrics = performance.parse_ncu_csv(csv_path.read_text(), prefix)
+                        metrics = performance.parse_ncu_csv(csv_path.read_text(), "pbr_spmm")
                     verdict = "measured" if metrics else "failed_no_data"
                     n_measured += verdict == "measured"
                     n_failed += verdict != "measured"

@@ -39,7 +39,6 @@ class ComparisonRow:
     matrix_profile: str
     size: int
     features: int
-    kernel: str
     block: int
     smem_size: int
     baseline_metrics: dict
@@ -87,7 +86,7 @@ def compare_ledgers(baseline_db: str, candidate_db: str) -> list[ComparisonRow]:
         rows.append(ComparisonRow(
             config_key=cand["config_key"],
             matrix_profile=cand["matrix_profile"], size=cand["size"], features=cand["features"],
-            kernel=cand["kernel"], block=cand["block"], smem_size=cand["smem_size"],
+            block=cand["block"], smem_size=cand["smem_size"],
             baseline_metrics=base.get("metrics") or {},
             candidate_metrics=cand.get("metrics") or {},
         ))
@@ -97,11 +96,11 @@ def compare_ledgers(baseline_db: str, candidate_db: str) -> list[ComparisonRow]:
 def print_comparison(rows: list[ComparisonRow]) -> None:
     if not rows:
         print("No matching config points found between the two ledgers -- nothing to compare.")
-        print("(Check both ledgers were populated by sweeping the SAME matrix/size/features/kernel grid.)")
+        print("(Check both ledgers were populated by sweeping the SAME matrix/size/features grid.)")
         return
 
-    for row in sorted(rows, key=lambda r: (r.matrix_profile, r.size, r.features, r.kernel)):
-        print(f"\n=== {row.matrix_profile} / {row.size} / f{row.features} / {row.kernel} "
+    for row in sorted(rows, key=lambda r: (r.matrix_profile, r.size, r.features)):
+        print(f"\n=== {row.matrix_profile} / {row.size} / f{row.features} "
               f"(block={row.block}, smem={row.smem_size}) -- {row.verdict()} ===")
         for metric in KEY_METRICS:
             b = row.baseline_metrics.get(metric)
