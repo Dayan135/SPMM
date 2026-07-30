@@ -47,46 +47,65 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 # The `fem` conda env is SHARED across all clone directories (SPMM,
 # SPMM-baseline-cache-cmp, SPMM-cache-block-data). `pip install -e` for a
 # given package name registers into the SAME site-packages
-# __editable__.torch_fast_spdmm-*.pth regardless of which source directory
-# it's building from -- concurrent installs from different clones race over
-# that ONE shared file (uninstall-old / install-new can interleave across
-# processes), which crashed a sibling job outright once already and could
-# otherwise silently leave the WRONG clone's code registered without
-# crashing. Serialize the install step specifically (everything else --
-# git checkout, the actual profiling loop -- still runs in parallel per job)
-# via flock against a lock file shared by ALL clones.
+# __editable__.torch_fast_spdmm-*.pth / __editable___..._finder.py
+# regardless of which source directory it's building from. flock alone is
+# NOT sufficient to isolate concurrent jobs: it only serializes the INSTALL
+# step itself, but the resulting registration is GLOBAL and shared for the
+# rest of every job's runtime -- diagnosed 2026-07-30 by direct empirical
+# test (concurrent 3-job run, each job's own one-time post-install identity
+# check passed at the time it ran, but a later sibling job's install still
+# silently overwrote the shared registration partway through, contaminating
+# every subsequent `ncu ... python -m benchmark.profile_pbr` subprocess call
+# for the REST of that job's ~1hr profiling loop -- confirmed via
+# torch_fast_spdmm.core.__file__ resolving to a DIFFERENT clone's .so than
+# the job's own, well after its own install had completed and its own
+# one-time check had passed).
+#
+# Real fix: PYTHONPATH, not flock. Prepend THIS job's own torch_fast_spdmm
+# source directory to PYTHONPATH -- unlike the shared site-packages
+# registration (which any sibling job's install can overwrite at any time),
+# PYTHONPATH is a per-process environment variable inherited by every `ncu`/
+# `python` subprocess this job spawns for its entire lifetime, and (verified
+# empirically) resolves BEFORE the shared editable-install finder is ever
+# consulted -- so it durably protects every one of this job's 810 profiling
+# subprocess calls regardless of what sibling jobs do to the shared
+# registration at any point during or after this job's own install. flock is
+# kept too (harmless, avoids the outright install-time crash from the first
+# attempt), but PYTHONPATH is what actually provides correctness.
 echo "[job] building (flock-serialized against concurrent installs from sibling clones)"
 flock /home/dayanb/research/.pip_install.lock \
     pip install -e torch_fast_spdmm --no-build-isolation
 
+export PYTHONPATH="$SLURM_SUBMIT_DIR/torch_fast_spdmm:${PYTHONPATH:-}"
+echo "[job] PYTHONPATH set to prioritize this job's own source: $PYTHONPATH"
+
 cd tests/torch_fast_spdmm
 
-# Verify the install actually resolved to THIS job's own source checkout, not
-# a sibling job's, before trusting any profiling data from this run. A
-# non-crashed pip install is not proof of a correct install -- the race can
-# resolve "successfully" while pointing the wrong direction.
-#
-# MUST run from tests/torch_fast_spdmm (same cwd profile_pbr.py itself runs
-# from), not $SLURM_SUBMIT_DIR (the repo root) -- diagnosed 2026-07-30: the
-# repo root contains a directory literally named torch_fast_spdmm (the
-# package's own top-level source dir), which shadows the real
-# editable-installed package as an empty namespace package when cwd is the
-# repo root (__file__ resolves to None, no attributes populated -- looked
-# exactly like cross-clone contamination but wasn't; a solo, uncontended
-# install showed the identical symptom). From tests/torch_fast_spdmm there's
-# no name collision and the check is reliable.
+# Verify BOTH the pure-Python wrapper AND the compiled extension resolve to
+# THIS job's own source checkout, not a sibling job's -- checking only the
+# wrapper's __file__ was insufficient (diagnosed 2026-07-30: it can resolve
+# correctly while torch_fast_spdmm.core -- the actual compiled kernel code
+# -- resolves to a different clone's .so). MUST run from tests/torch_fast_spdmm
+# (same cwd profile_pbr.py itself runs from), not $SLURM_SUBMIT_DIR (the repo
+# root) -- the repo root contains a directory literally named torch_fast_spdmm
+# (the package's own top-level source dir), which shadows the real package as
+# an empty namespace package when cwd is the repo root.
 EXPECTED_DIR="$SLURM_SUBMIT_DIR"
 IMPORTED_FILE=$(python -c "import torch_fast_spdmm; print(torch_fast_spdmm.__file__)")
+IMPORTED_CORE=$(python -c "import torch_fast_spdmm; print(torch_fast_spdmm.core.__file__)")
 echo "[job] imported torch_fast_spdmm from: $IMPORTED_FILE"
-case "$IMPORTED_FILE" in
-    "$EXPECTED_DIR"/*)
-        echo "[job] identity check OK: imported module is under this job's own checkout ($EXPECTED_DIR)"
-        ;;
-    *)
-        echo "[job] FATAL: imported torch_fast_spdmm from '$IMPORTED_FILE', which is NOT under this job's own checkout '$EXPECTED_DIR' -- install race contamination, aborting rather than profile the wrong kernel."
-        exit 1
-        ;;
-esac
+echo "[job] imported torch_fast_spdmm.core from: $IMPORTED_CORE"
+for f in "$IMPORTED_FILE" "$IMPORTED_CORE"; do
+    case "$f" in
+        "$EXPECTED_DIR"/*)
+            ;;
+        *)
+            echo "[job] FATAL: '$f' is NOT under this job's own checkout '$EXPECTED_DIR' -- install contamination, aborting rather than profile the wrong kernel."
+            exit 1
+            ;;
+    esac
+done
+echo "[job] identity check OK: both wrapper and compiled core module are under this job's own checkout ($EXPECTED_DIR)"
 OUT_OCC="$SLURM_SUBMIT_DIR/ncu_out/cache_unified_smem/occupancy"
 OUT_STALL="$SLURM_SUBMIT_DIR/ncu_out/cache_unified_smem/stall_reasons"
 mkdir -p "$OUT_OCC" "$OUT_STALL"
@@ -158,3 +177,17 @@ for matrix in $MATRICES; do
 done
 
 echo "[job] all profiles done $(date)"
+
+# Re-verify identity AFTER the full profiling loop too -- cheap extra
+# confidence that PYTHONPATH held for the whole ~1hr run, not just at the
+# start (belt-and-suspenders on top of the durable PYTHONPATH fix itself).
+FINAL_FILE=$(python -c "import torch_fast_spdmm; print(torch_fast_spdmm.__file__)")
+FINAL_CORE=$(python -c "import torch_fast_spdmm; print(torch_fast_spdmm.core.__file__)")
+echo "[job] POST-LOOP identity check: torch_fast_spdmm=$FINAL_FILE core=$FINAL_CORE"
+for f in "$FINAL_FILE" "$FINAL_CORE"; do
+    case "$f" in
+        "$EXPECTED_DIR"/*) ;;
+        *) echo "[job] FATAL POST-LOOP: '$f' drifted away from this job's own checkout '$EXPECTED_DIR' -- treat this run's data as untrustworthy."; exit 1 ;;
+    esac
+done
+echo "[job] POST-LOOP identity check OK"
