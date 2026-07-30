@@ -78,31 +78,49 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
         }
     }
 
-    // --- 1b. CACHE block_data IN SHARED MEMORY (once per kernel launch) ---
-    // block_data's values -- and the local_data_ptr sequence used to read
-    // them -- do not depend on base_f: they're a pure function of
-    // data_offset, packed_row_offsets, and this block's populated columns,
-    // none of which change across the base_f grid-stride loop below. Without
-    // this cache, every base_f iteration re-reads the same block_data values
-    // from global memory via __ldg (features/p redundant passes). total_nnz
-    // (= current_relative_offset, accumulated by the sparsity scan above) is
-    // at most BLOCK_ROWS*BLOCK_COLS (<=64 for the largest 8x8 PBR block) --
-    // small and compile-time-bounded, so a small static __shared__ buffer
-    // covers every case without per-thread register-count tracking (total_work
-    // can exceed THREADS_PER_BLOCK, so register caching can't cleanly cover
-    // the general case).
+    // --- 1b. CACHE block_data IN A SLICE OF THE SAME smem[] BUDGET ---
+    // (2026-07-30, feat/pbr-cache-block-data-unified-smem) Unlike the original
+    // feat/pbr-cache-block-data branch, s_block_data is NOT a separate,
+    // additive __shared__ array -- that made the cache a pure occupancy tax
+    // in every config (launch__occupancy_limit_shared_mem regressed
+    // unconditionally, see STALL_REASONS_CACHE_BLOCK_DATA.md), since the
+    // extra allocation never traded off against anything. Here it's carved
+    // out of the front of the SAME smem[TOTAL_SHARED] budget smem_X/smem_Y
+    // already share, so the static shared-memory footprint (and therefore
+    // occupancy) is UNCHANGED from baseline -- the cost of reserving room for
+    // block_data is instead paid entirely by a smaller `p` (more base_f
+    // grid-stride passes, more repeated smem_X staging), not by fewer
+    // concurrent blocks/SM. block_data's values -- and the local_data_ptr
+    // sequence used to read them -- do not depend on base_f (pure function of
+    // data_offset, packed_row_offsets, and this block's populated columns),
+    // so staging them once still removes the same redundant-__ldg traffic
+    // the original branch targeted; only WHERE the cache lives changed.
+    // total_nnz (= current_relative_offset) is at most BLOCK_ROWS*BLOCK_COLS
+    // (<=64 for the largest 8x8 PBR block).
+    //
+    // INVARIANT: TOTAL_SHARED must exceed total_nnz + (n_r + n_c) (the
+    // minimum smem_X/smem_Y needs at p=1) or smem[] overflows. Not expected
+    // to be hit at any config this project uses (total_nnz <= 64,
+    // TOTAL_SHARED in {512,1024,2048}) -- not handled specially, just
+    // documented; the `remaining`/`max(1u, ...)` guards below only protect
+    // against p underflowing past 1, not against a genuine smem[] overflow.
     const uint32_t total_nnz = current_relative_offset;
-    __shared__ scalar_t s_block_data[BLOCK_ROWS * BLOCK_COLS];
+    scalar_t* s_block_data = smem;
     for (uint32_t i = tx; i < total_nnz; i += THREADS_PER_BLOCK) {
         s_block_data[i] = __ldg(&block_data[data_offset + i]);
     }
     __syncthreads();
 
-    // --- 2. DYNAMIC P CALCULATION ---
+    // --- 2. DYNAMIC P CALCULATION, over the REMAINING budget after
+    // block_data's reservation ---
     // p is floored to a power of 2 so inner-loop /current_p and %current_p
     // become bit-shift and mask ops.  Correct when features is a power-of-2
     // multiple of p, which holds for all benchmarked feature counts.
-    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    // `remaining`/`max(1u, ...)` are guarded against underflow (TOTAL_SHARED,
+    // total_nnz are uint32_t) so a dense block on a small smem tier degrades
+    // p toward its floor (1) instead of wrapping around.
+    const uint32_t remaining = TOTAL_SHARED > total_nnz ? TOTAL_SHARED - total_nnz : 1u;
+    const uint32_t p_log2 = 31u - __clz(max(1u, min(remaining / (n_r + n_c), features)));
     const uint32_t p      = 1u << p_log2;
     const uint32_t p_mask = p - 1u;
 
@@ -114,8 +132,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 
         const uint32_t current_p = min(p, feat_end - base_f);
 
-        scalar_t* smem_X = smem;
-        scalar_t* smem_Y = smem + (n_c * current_p);
+        // Shifted past block_data's cached slice (unified budget -- see 1b above).
+        scalar_t* smem_X = smem + total_nnz;
+        scalar_t* smem_Y = smem + total_nnz + (n_c * current_p);
 
         // STEP A: Cooperative Load
         const uint32_t total_x_elements = n_c * current_p;
@@ -247,23 +266,44 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
         }
     }
 
-    // --- 1b. CACHE block_data IN SHARED MEMORY (once per kernel launch) ---
-    // Same rationale as the scalar kernel: block_data's values (and the
-    // local_data_ptr sequence) don't depend on base_f, so stage them into
-    // shared memory once instead of re-reading via __ldg on every base_f
-    // iteration. total_nnz (= current_relative_offset) is at most
-    // BLOCK_ROWS*BLOCK_COLS (<=64 for 8x8) -- small, compile-time-bounded.
+    // --- 1b. CACHE block_data IN A SLICE OF THE SAME smem[] BUDGET ---
+    // (2026-07-30, feat/pbr-cache-block-data-unified-smem) Same principle as
+    // the scalar kernel above (see its 1b comment for the full rationale):
+    // s_block_data is carved out of the front of smem[TOTAL_SHARED] instead
+    // of being a separate additive __shared__ array, so static shared-memory
+    // footprint/occupancy is unchanged from baseline -- the cost is paid by a
+    // smaller vp/p instead.
+    //
+    // ALIGNMENT: smem_X/smem_Y below are accessed via reinterpret_cast<vec_t*>
+    // (float4/double2), which requires 16-byte-aligned addresses -- unlike
+    // the scalar kernel, total_nnz can't be used directly as the offset (it's
+    // an arbitrary sparsity-scan-dependent count, not generally a multiple of
+    // L). total_nnz_aligned rounds up to the next multiple of L (4 for
+    // float's float4, 2 for double's double2), which multiplied by
+    // sizeof(scalar_t) is always a multiple of 16 bytes given smem[] itself
+    // is __align__(16). The padding elements between total_nnz and
+    // total_nnz_aligned are never written or read (s_block_data is only ever
+    // indexed up to total_nnz by local_data_ptr) -- wasted budget of at most
+    // L-1 elements, not a correctness issue.
+    //
+    // INVARIANT: TOTAL_SHARED must exceed total_nnz_aligned + (n_r + n_c) (the
+    // minimum smem_X/smem_Y needs at vp=1) or smem[] overflows -- same
+    // not-expected-to-be-hit-today caveat as the scalar kernel.
     const uint32_t total_nnz = current_relative_offset;
-    __shared__ scalar_t s_block_data[BLOCK_ROWS * BLOCK_COLS];
+    const uint32_t total_nnz_aligned = ((total_nnz + L - 1) / L) * L;
+    scalar_t* s_block_data = smem;
     for (uint32_t i = tx; i < total_nnz; i += THREADS_PER_BLOCK) {
         s_block_data[i] = __ldg(&block_data[data_offset + i]);
     }
     __syncthreads();
 
-    // --- 2. DYNAMIC P CALCULATION (vp floored to power of 2 → bit-op division) ---
+    // --- 2. DYNAMIC P CALCULATION (vp floored to power of 2 → bit-op division),
+    // over the REMAINING budget after block_data's reservation ---
     // vp_log2 / vp_mask replace /vp and %vp in inner loops; correct when
     // features is a power-of-2 multiple of p (all benchmarked feature counts).
-    const uint32_t vp_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features) / L);
+    // Same underflow guards as the scalar kernel's `remaining`/`max(1u, ...)`.
+    const uint32_t remaining = TOTAL_SHARED > total_nnz_aligned ? TOTAL_SHARED - total_nnz_aligned : (uint32_t)L;
+    const uint32_t vp_log2 = 31u - __clz(max(1u, min(remaining / (n_r + n_c), features) / L));
     const uint32_t vp_mask = (1u << vp_log2) - 1u;
     const uint32_t p       = (1u << vp_log2) * L;
 
@@ -276,8 +316,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
         const uint32_t current_p = min(p, feat_end - base_f);  // multiple of L
         const uint32_t vp = current_p / L;                     // vectors per column
 
-        scalar_t* smem_X = smem;
-        scalar_t* smem_Y = smem + (n_c * current_p);
+        // Shifted past block_data's cached (alignment-padded) slice.
+        scalar_t* smem_X = smem + total_nnz_aligned;
+        scalar_t* smem_Y = smem + total_nnz_aligned + (n_c * current_p);
 
         // STEP A: Cooperative vectorized load of X -> smem_X
         const uint32_t total_xv = n_c * vp;
