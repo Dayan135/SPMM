@@ -83,6 +83,126 @@ def generate_scattered_block_matrix(system_size: int, block_size: int, profiles:
     return sp.csr_matrix((final_data, (final_rows, final_cols)), shape=(system_size, system_size))
 
 
+def generate_patterned_block_matrix(system_size: int, block_size: int,
+                                    patterns: List[Tuple[np.ndarray, float]],
+                                    seed: int = None):
+    """
+    Generates a synthetic block-sparse matrix from one or more FIXED local
+    sparsity patterns tiled across the block grid, instead of a random subset
+    per block (see `generate_scattered_block_matrix`). Every occupied block
+    sharing a pattern has the exact same nonzero-cell layout -- useful for
+    isolating how a specific intra-block shape (e.g. one dense row vs many
+    sparse rows) affects kernel performance, independent of block-to-block
+    layout noise.
+
+    Args:
+        system_size (int): The global dimension (N) of the square matrix.
+            Must be perfectly divisible by `block_size`.
+        block_size (int): The dimension of the internal dense blocks.
+        patterns (list of (mask, density) tuples):
+            - mask (np.ndarray): A `block_size x block_size` boolean array;
+              True marks a nonzero cell. The same mask is reused, unmodified,
+              for every block this pattern is tiled into.
+            - density (float): The fraction of the *entire grid* (0.0 to 1.0)
+              that should be populated with this exact pattern.
+        seed (int, optional): Seeds an independent `np.random.default_rng`
+            for block-position sampling and nonzero values, for reproducible
+            matrices across runs.
+
+    Returns:
+        scipy.sparse.csr_matrix: A 32-bit floating point compressed sparse row matrix.
+
+    Raises:
+        ValueError: If a mask's shape doesn't match (block_size, block_size),
+            if a mask has no True cells, or if a pattern's density produces 0
+            blocks for the given system_size/block_size.
+    """
+    rng = np.random.default_rng(seed)
+    grid_dim = system_size // block_size
+    total_blocks = grid_dim * grid_dim
+    all_rows, all_cols, all_data = [], [], []
+
+    for (mask, density) in patterns:
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape != (block_size, block_size):
+            raise ValueError(
+                f"Pattern mask shape {mask.shape} does not match (block_size, block_size)="
+                f"({block_size}, {block_size})."
+            )
+        local_rows, local_cols = np.nonzero(mask)
+        n_nz = len(local_rows)
+        if n_nz == 0:
+            raise ValueError("Pattern mask has no True cells -- nothing to place.")
+
+        num_blocks = int(total_blocks * density)
+        if num_blocks == 0:
+            raise ValueError(
+                f"Pattern density={density} produced 0 blocks for system_size={system_size}, "
+                f"block_size={block_size}. Increase density or system_size."
+            )
+
+        # 1. Randomly sample block positions from the global grid
+        block_idx = rng.integers(0, total_blocks, size=num_blocks, dtype=np.int64)
+        grid_r = block_idx // grid_dim
+        grid_c = block_idx % grid_dim
+
+        # 2. Broadcast the fixed local pattern to every sampled block's global coordinates
+        global_r = (grid_r[:, None] * block_size) + local_rows[None, :]
+        global_c = (grid_c[:, None] * block_size) + local_cols[None, :]
+
+        # 3. Generate random float data, one value per (block, nonzero-cell) pair
+        data = rng.standard_normal(num_blocks * n_nz).astype(np.float32)
+
+        all_rows.append(global_r.flatten())
+        all_cols.append(global_c.flatten())
+        all_data.append(data)
+
+    final_rows = np.concatenate(all_rows)
+    final_cols = np.concatenate(all_cols)
+    final_data = np.concatenate(all_data)
+
+    return sp.csr_matrix((final_data, (final_rows, final_cols)), shape=(system_size, system_size))
+
+
+def _diag_stripe_mask(block_size: int) -> np.ndarray:
+    mask = np.zeros((block_size, block_size), dtype=bool)
+    np.fill_diagonal(mask, True)
+    return mask
+
+
+def _corner_cluster_mask(block_size: int, cluster: int = 4) -> np.ndarray:
+    mask = np.zeros((block_size, block_size), dtype=bool)
+    mask[:cluster, :cluster] = True
+    return mask
+
+
+def _checkerboard_mask(block_size: int) -> np.ndarray:
+    idx = np.arange(block_size)
+    return (idx[:, None] + idx[None, :]) % 2 == 0
+
+
+def _row_skewed_mask(block_size: int) -> np.ndarray:
+    """One fully-dense row plus one nonzero per remaining row -- the maximally
+    skewed per-row density case (max possible imbalance if a kernel assigns
+    one thread per row): row 0 has `block_size` active columns, every other
+    row has exactly 1."""
+    mask = np.zeros((block_size, block_size), dtype=bool)
+    mask[0, :] = True
+    for r in range(1, block_size):
+        mask[r, r % block_size] = True
+    return mask
+
+
+# Named 8x8 patterns for generate_patterned_block_matrix -- pick one (or a mix)
+# via `patterns=[(PBR_PATTERN_PRESETS[name], density), ...]`.
+PBR_PATTERN_PRESETS = {
+    "diag_stripe": _diag_stripe_mask(8),
+    "corner_cluster": _corner_cluster_mask(8),
+    "checkerboard": _checkerboard_mask(8),
+    "row_skewed": _row_skewed_mask(8),
+}
+
+
 def generate_random_sparse(system_size: int, density: float):
     nnz = int(system_size * system_size * density)
     

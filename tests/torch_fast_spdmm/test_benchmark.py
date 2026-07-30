@@ -24,6 +24,8 @@ from pytest import mark
 from benchmark.matrices import (
     generate_diag_blocks_plus_noise,
     generate_scattered_block_matrix,
+    generate_patterned_block_matrix,
+    PBR_PATTERN_PRESETS,
 )
 from test_utils import scipy_csr_to_torch_csr
 from torch_fast_spdmm import csr_to_pbr, pbr_matmul, spdmm_csr_naive
@@ -95,6 +97,27 @@ MATRIX_FAMILIES = [
     (generate_scattered_block_matrix,
      lambda n: {"system_size": n, "block_size": 8, "profiles": [(2, 4, _sd(0.02, n))]},
      "scattered_2x4_d2pct"),
+    # Fixed 8x8 patterns tiled across the grid (same nonzero-cell layout in
+    # every occupied block, unlike scattered_*'s per-block-random subset) --
+    # for isolating how a specific intra-block shape affects kernel speedup.
+    # pattern_row_skewed is the discriminating case for work-balance kernel
+    # experiments (one fully-dense row + one nonzero per remaining row).
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["diag_stripe"], _sd(0.02, n))]},
+     "pattern_diag_stripe"),
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["corner_cluster"], _sd(0.02, n))]},
+     "pattern_corner_cluster"),
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["checkerboard"], _sd(0.02, n))]},
+     "pattern_checkerboard"),
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.02, n))]},
+     "pattern_row_skewed"),
 ]
 
 # Optional per-matrix gate: one SLURM task per (size, matrix) so each task is
