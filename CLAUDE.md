@@ -130,8 +130,8 @@ Earlier `rowgroup`/`colgroup`/`tile`/`chunk` kernel variants (grouping PBR block
 CUDA blocks to amortize `smem_X`/`smem_Y` reuse or atomic frequency) were investigated and removed —
 none beat `block` in the end; see git history prior to this cleanup for the investigation record.
 
-Two experimental intra-block work-distribution kernels (branch `feat/pbr-balance-experiments`), select
-via `kernel='chunkcols'|'nnzflat'` in `pbr_matmul`. Both target Step B's per-thread imbalance (one
+Two experimental intra-block work-distribution kernels, select via `kernel='chunkcols'|'nnzflat'` in
+`pbr_matmul`. Both target Step B's per-thread imbalance (one
 thread owns a whole row's active columns today, up to `BLOCK_COLS`), scalar-only, rows not compacted
 (smem_Y sized `BLOCK_ROWS*p`):
 
