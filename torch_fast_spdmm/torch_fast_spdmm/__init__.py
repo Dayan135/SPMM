@@ -66,7 +66,27 @@ def _build_cuda_dispatch():
         (torch.int64, torch.float64): core.pbr_spmm_cuda_i64_f64,
     }
 
+def _build_chunkcols_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_chunkcols_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_chunkcols_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_chunkcols_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_chunkcols_spmm_cuda_i64_f64,
+    }
+
+
+def _build_nnzflat_cuda_dispatch():
+    return {
+        (torch.int32, torch.float32): core.pbr_nnzflat_spmm_cuda_i32_f32,
+        (torch.int64, torch.float32): core.pbr_nnzflat_spmm_cuda_i64_f32,
+        (torch.int32, torch.float64): core.pbr_nnzflat_spmm_cuda_i32_f64,
+        (torch.int64, torch.float64): core.pbr_nnzflat_spmm_cuda_i64_f64,
+    }
+
+
 _CUDA_KERNEL_DISPATCH = None
+_CHUNKCOLS_CUDA_KERNEL_DISPATCH = None
+_NNZFLAT_CUDA_KERNEL_DISPATCH = None
 
 
 def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
@@ -103,12 +123,80 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
     )
 
 
-def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_batched_matmul_chunkcols_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0,
+                                       smem_size: int = 2048) -> torch.Tensor:
+    """Experimental: bounds per-thread row-work at CHUNK_K=4 active columns
+    instead of the block kernel's up-to-BLOCK_COLS. See pbr_kernel.cu."""
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+
+    global _CHUNKCOLS_CUDA_KERNEL_DISPATCH
+    if _CHUNKCOLS_CUDA_KERNEL_DISPATCH is None:
+        _CHUNKCOLS_CUDA_KERNEL_DISPATCH = _build_chunkcols_cuda_dispatch()
+
+    kernel = _CHUNKCOLS_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
+        meta.codes,
+        meta.coords,
+        meta.offsets,
+        meta.data,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
+
+
+def pbr_batched_matmul_nnzflat_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0,
+                                     smem_size: int = 2048) -> torch.Tensor:
+    """Experimental: one thread per (nonzero, feature) work-item, nonzeros
+    visited column-major. See pbr_kernel.cu."""
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+
+    global _NNZFLAT_CUDA_KERNEL_DISPATCH
+    if _NNZFLAT_CUDA_KERNEL_DISPATCH is None:
+        _NNZFLAT_CUDA_KERNEL_DISPATCH = _build_nnzflat_cuda_dispatch()
+
+    kernel = _NNZFLAT_CUDA_KERNEL_DISPATCH[(meta.coords.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols,
+        pbr_mat.rows,
+        pbr_mat.block_rows,
+        pbr_mat.block_cols,
+        meta.codes,
+        meta.coords,
+        meta.offsets,
+        meta.data,
+        meta.rem_indptr,
+        meta.rem_col_ind,
+        meta.rem_vals,
+        x,
+        csr_mode,
+        smem_size,
+    )
+
+
+def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
+               kernel: str = 'block') -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
     csr_mode:  0=auto, 1=force_fast, 2=force_fallback (GPU only)
     smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
+    kernel:    'block'     — one CUDA block per PBR block; atomicAdd to Y (default)
+               'chunkcols' — experimental: bounds per-thread row-work at CHUNK_K=4
+                             active columns instead of up-to-BLOCK_COLS
+               'nnzflat'   — experimental: one thread per (nonzero, feature)
+                             work-item, column-sorted
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -117,7 +205,12 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         meta = getattr(pbr_mat, '_gpu_meta', None)
         if meta is None:
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
-        y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        if kernel == 'chunkcols':
+            y = pbr_batched_matmul_chunkcols_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        elif kernel == 'nnzflat':
+            y = pbr_batched_matmul_nnzflat_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+        else:
+            y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
     else:
         y = core.pbr_batched_matmul_cpu(pbr_mat, x)
 
@@ -282,4 +375,6 @@ __all__ = [
     'pbr_matmul',
     'pbr_batched_matmul_cpu',
     'pbr_batched_matmul_cuda',
+    'pbr_batched_matmul_chunkcols_cuda',
+    'pbr_batched_matmul_nnzflat_cuda',
 ]
