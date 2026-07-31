@@ -1,0 +1,12 @@
+------------------------------------
+Fri 31 Jul 2026 11:18:43 IDT
+SLURM_JOBID:		19661302
+SLURM_JOB_NODELIST:	ise-3090-03
+SLURM_SCRATCH_DIR:	
+Allocated Resouces:	cpu - 8 / mem - 32768 MB / gpu - 1
+SLURM_GPU_INDEX:	1
+Running as dayanb from erant account with erant QOS
+------------------------------------
+[job] profiling diag_b0.3_262144_512_8_2_2048_block
+[job] done diag_b0.3_262144_512_8_2_2048_block
+[job] batch complete

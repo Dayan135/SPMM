@@ -109,7 +109,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 
         __syncthreads();
 
-        // STEP B: FLATTENED WORKER POOL (quick-edit dry run)
+        // STEP B: FLATTENED WORKER POOL (quick-edit dry run v2)
         const uint32_t total_work = n_r * current_p;
 
         for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
