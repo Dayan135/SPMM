@@ -66,7 +66,7 @@ are missing in the local `fem` env: `conda run -n fem pip install wandb pandas m
 
 | Path | Purpose |
 |------|---------|
-| `torch_fast_spdmm/kernels/pbr_kernel.cu` | PBR SpMM CUDA kernel (`block`: scalar `zero_idle` + vectorized variants) |
+| `torch_fast_spdmm/kernels/pbr_kernel.cu` | PBR SpMM CUDA kernels (`block`: scalar `zero_idle` + vectorized; experimental `chunkcols`/`nnzflat`) |
 | `torch_fast_spdmm/kernels/pbr_kernels.hpp` | Launch-function + occupancy-query declarations for the PBR kernels |
 | `torch_fast_spdmm/kernels/kernels.hpp` | CUDA error-check utilities |
 | `torch_fast_spdmm/kernels/csr_kernels.cu` | Naive CSR SpMM kernel (benchmark baseline / PBR remainder) |
@@ -106,6 +106,20 @@ One PBR kernel family (`block`), dispatched from `pbr_matmul`/`pbr_batched_matmu
 Earlier `rowgroup`/`colgroup`/`tile`/`chunk` kernel variants (grouping PBR blocks into fewer, "fatter"
 CUDA blocks to amortize `smem_X`/`smem_Y` reuse or atomic frequency) were investigated and removed —
 none beat `block` in the end; see git history prior to this cleanup for the investigation record.
+
+Two experimental intra-block work-distribution kernels (branch `feat/pbr-balance-experiments`), select
+via `kernel='chunkcols'|'nnzflat'` in `pbr_matmul`. Both target Step B's per-thread imbalance (one
+thread owns a whole row's active columns today, up to `BLOCK_COLS`), scalar-only, rows not compacted
+(smem_Y sized `BLOCK_ROWS*p`):
+
+- **`chunkcols`** (`pbr_spmm_chunkcols_kernel`) — caps per-thread work at `CHUNK_K=4` active columns;
+  rows with more nonzeros split into multiple chunk-threads. Bounded increase in atomic count (multiple
+  chunks of one row share a `smem_Y` write, now `atomicAdd`).
+- **`nnzflat`** (`pbr_spmm_nnzflat_kernel`) — one thread per (nonzero, feature) work-item, nonzeros
+  visited column-major (reproduces colgroup's smem_X locality per-block, no host-side sort). Much larger
+  atomic count than chunkcols — a direct test of whether finer-grained balance is worth its atomic cost,
+  given prior findings (git history: `STALL_REASONS_NOATOMIC_ABLATION.md`, `STALL_REASONS_ROWGROUP_ATOMIC.md`)
+  that atomics are already a proven major cost in this kernel family.
 
 ## Commit scopes
 
