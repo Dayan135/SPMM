@@ -63,12 +63,13 @@ class CandidateConfig:
     block: int
     min_nnz: int
     smem_size: int
+    kernel: str = "block"  # 'block' | 'chunkcols' | 'nnzflat' -- see profile_pbr.py --kernel
 
     def config_key(self) -> str:
         """Stable string key identifying this exact config point, for ledger dedup."""
         return "|".join([
             self.matrix_profile, str(self.size), str(self.features),
-            str(self.block), str(self.min_nnz), str(self.smem_size),
+            str(self.block), str(self.min_nnz), str(self.smem_size), self.kernel,
         ])
 
     def cli_args(self) -> list[str]:
@@ -80,6 +81,7 @@ class CandidateConfig:
             "--min-nnz", str(self.min_nnz),
             "--smem-size", str(self.smem_size),
             "--matrix-profile", self.matrix_profile,
+            "--kernel", self.kernel,
         ]
 
     def as_dict(self) -> dict:
