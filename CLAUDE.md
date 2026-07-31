@@ -47,6 +47,28 @@ After any change to `.cu` or `.cpp` files, reinstall before running tests.
 pytest tests/torch_fast_spdmm/ -v
 ```
 
+## Quick kernel-edit iteration
+
+For trying one kernel-source change and seeing how it behaves, without waiting on a full
+`optimizer.run` sweep or the full correctness suite:
+
+```bash
+# 1. Edit kernel source (e.g. torch_fast_spdmm/kernels/pbr_kernel.cu), then commit + push --
+#    sync_and_build fetches by git ref, so the edit must be on origin first.
+git add -A && git commit -m "..." && git push
+
+# 2. Run from the LOCAL machine (not the cluster) -- it makes its own SSH/Slurm calls.
+python -m optimizer.quick <branch-or-commit> \
+    --matrix diag_b0.3 --size 262144 --features 512 \
+    --kernel block            # or any kernel= choice pbr_matmul supports (chunkcols/nnzflat/...)
+```
+
+This builds the given git ref on a GPU node, runs one `ncu`-profiled matmul, and prints the
+stall-reason breakdown + timing straight to the terminal — one command, no batch sweep to wait
+on. Skips the full correctness suite by default (fast iteration, not final validation); pass
+`--verify` to run it first. Optionally pass `--db <path>.sqlite3` to record the result into a
+ledger for later `optimizer.report`/`optimizer.compare`.
+
 ## Plotting (local)
 
 Benchmark plots are generated locally from W&B using the `fem` conda env,
@@ -92,6 +114,7 @@ are missing in the local `fem` env: `conda run -n fem pip install wandb pandas m
 | `tests/torch_fast_spdmm/benchmark/profile_pbr.py` | ncu profiling driver (scattered + diag) |
 | `tests/torch_fast_spdmm/benchmark/profile_cusparse.py` | ncu profiling driver for the cuSPARSE baseline |
 | `tests/torch_fast_spdmm/benchmark/csr_kernel_sweep.py` | CSR-kernel-fast vs fallback head-to-head experiment |
+| `optimizer/quick.py` | Single-config fast path for live kernel-edit iteration — see "Quick kernel-edit iteration" above |
 
 ## Current kernel state
 
