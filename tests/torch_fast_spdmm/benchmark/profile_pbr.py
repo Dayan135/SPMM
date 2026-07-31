@@ -146,6 +146,9 @@ def main() -> None:
                    help="shared-memory tile size in floats (512/1024/2048)")
     p.add_argument("--matrix-profile", type=str, default="scattered_8x1",
                    choices=list(_MATRIX_PROFILES))
+    p.add_argument("--kernel",         type=str, default="block",
+                   choices=["block", "chunkcols", "nnzflat"],
+                   help="which PBR kernel to profile")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
@@ -153,13 +156,15 @@ def main() -> None:
         args.size, args.features, args.block, args.min_nnz,
         args.matrix_profile, args.smem_size,
     )
+    print(f"  {'kernel':26s} = {args.kernel}")
+    print()
 
     for _ in range(args.warmup):
-        pbr_matmul(pbr_mat, x, smem_size=args.smem_size)
+        pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel)
     torch.cuda.synchronize()
 
     profiler.start()
-    pbr_matmul(pbr_mat, x, smem_size=args.smem_size)
+    pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel)
     torch.cuda.synchronize()
     profiler.stop()
 

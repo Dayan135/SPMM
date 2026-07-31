@@ -76,6 +76,7 @@ def main() -> None:
     p.add_argument("--block", type=int, default=8)
     p.add_argument("--min-nnz", type=int, default=2)
     p.add_argument("--smem-size", type=int, default=2048)
+    p.add_argument("--kernel", default="block", choices=["block", "chunkcols", "nnzflat"])
     p.add_argument("--verify", action="store_true",
                    help="run the full correctness suite before profiling (slower; off by default)")
     p.add_argument("--db", default=None, help="ledger sqlite path to record this run into (optional)")
@@ -83,7 +84,7 @@ def main() -> None:
 
     config = CandidateConfig(
         matrix_profile=args.matrix_profile, size=args.size, features=args.features,
-        block=args.block, min_nnz=args.min_nnz, smem_size=args.smem_size,
+        block=args.block, min_nnz=args.min_nnz, smem_size=args.smem_size, kernel=args.kernel,
     )
     ledger = Ledger(args.db) if args.db else None
     run_quick(args.git_ref, config, verify=args.verify, ledger=ledger)

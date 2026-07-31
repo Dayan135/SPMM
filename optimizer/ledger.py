@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS experiments (
     block             INTEGER NOT NULL,
     min_nnz           INTEGER NOT NULL,
     smem_size         INTEGER NOT NULL,
+    kernel            TEXT NOT NULL DEFAULT 'block',
     git_commit        TEXT,
     correctness_pass  INTEGER,
     metrics_json      TEXT,
@@ -81,11 +82,11 @@ class Ledger:
             cur = conn.execute(
                 """INSERT INTO experiments
                    (config_key, matrix_profile, size, features, block, min_nnz,
-                    smem_size, git_commit, correctness_pass, metrics_json, verdict, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    smem_size, kernel, git_commit, correctness_pass, metrics_json, verdict, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     config.config_key(), config.matrix_profile, config.size, config.features,
-                    config.block, config.min_nnz, config.smem_size,
+                    config.block, config.min_nnz, config.smem_size, config.kernel,
                     git_commit, None if correctness_pass is None else int(correctness_pass),
                     None if metrics is None else json.dumps(metrics),
                     verdict, time.time(),
