@@ -331,7 +331,8 @@ void launch_pbr_spmm(
     const scalar_t* X,
     scalar_t* Y,
     cudaStream_t stream,
-    int smem_size
+    int smem_size,
+    bool force_scalar
 ) {
     if (num_pbr_blocks == 0) {
         return;
@@ -345,7 +346,12 @@ void launch_pbr_spmm(
     const dim3 grid(num_pbr_blocks, batch_size, feat_blocks);
     const dim3 block(THREADS_PER_BLOCK);
 
-    const bool use_vec = (features % L == 0);
+    // force_scalar: benchmark/profiling hook to run pbr_spmm_zero_idle_kernel
+    // even when features % L == 0 would otherwise auto-select the vectorized
+    // kernel -- needed for a fair scalar-vs-scalar comparison against nnzflat/
+    // chunkcols, which have no vectorized variant. Default false, so every
+    // existing call site (which doesn't pass this) is unaffected.
+    const bool use_vec = force_scalar ? false : (features % L == 0);
 
     #define PBR_LAUNCH(BR, BC, TS)                                                                  \
         do {                                                                                        \

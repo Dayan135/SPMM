@@ -89,12 +89,18 @@ _CHUNKCOLS_CUDA_KERNEL_DISPATCH = None
 _NNZFLAT_CUDA_KERNEL_DISPATCH = None
 
 
-def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048) -> torch.Tensor:
+def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
+                             force_scalar: bool = False) -> torch.Tensor:
     """
     Python wrapper that routes the GPU tensors to the correct PyBind11 CUDA function.
-    csr_mode:  0=auto, 1=force_fast, 2=force_fallback
-    smem_size: shared-memory tile size (floats) for the PBR block kernel; must be
-               one of 512, 1024, 2048.
+    csr_mode:     0=auto, 1=force_fast, 2=force_fallback
+    smem_size:    shared-memory tile size (floats) for the PBR block kernel; must be
+                  one of 512, 1024, 2048.
+    force_scalar: force pbr_spmm_zero_idle_kernel (scalar) even when features is a
+                  multiple of PbrVec<scalar_t>::lanes would otherwise auto-select
+                  pbr_spmm_vec_kernel. For benchmarking/profiling zero_idle specifically
+                  (e.g. a fair scalar-vs-scalar comparison against chunkcols/nnzflat,
+                  which have no vectorized variant) -- not needed for normal use.
     """
     meta = getattr(pbr_mat, '_gpu_meta', None)
     if meta is None:
@@ -120,6 +126,7 @@ def pbr_batched_matmul_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_si
         x,
         csr_mode,
         smem_size,
+        force_scalar,
     )
 
 
@@ -186,17 +193,20 @@ def pbr_batched_matmul_nnzflat_cuda(pbr_mat, x: torch.Tensor, csr_mode: int = 0,
 
 
 def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 2048,
-               kernel: str = 'block') -> torch.Tensor:
+               kernel: str = 'block', force_scalar: bool = False) -> torch.Tensor:
     """
     Unified entry point for PBR MatMul.
     Dispatches to the correct backend based on x.device.
-    csr_mode:  0=auto, 1=force_fast, 2=force_fallback (GPU only)
-    smem_size: shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
-    kernel:    'block'     — one CUDA block per PBR block; atomicAdd to Y (default)
-               'chunkcols' — experimental: bounds per-thread row-work at CHUNK_K=4
-                             active columns instead of up-to-BLOCK_COLS
-               'nnzflat'   — experimental: one thread per (nonzero, feature)
-                             work-item, column-sorted
+    csr_mode:     0=auto, 1=force_fast, 2=force_fallback (GPU only)
+    smem_size:    shared-memory tile size in floats; one of 512, 1024, 2048 (GPU only)
+    kernel:       'block'     — one CUDA block per PBR block; atomicAdd to Y (default)
+                  'chunkcols' — experimental: bounds per-thread row-work at CHUNK_K=4
+                                active columns instead of up-to-BLOCK_COLS
+                  'nnzflat'   — experimental: one thread per (nonzero, feature)
+                                work-item, column-sorted
+    force_scalar: only affects kernel='block' (GPU only) -- force the scalar
+                  zero_idle path instead of the auto vec/scalar choice. See
+                  pbr_batched_matmul_cuda's docstring.
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -210,7 +220,8 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         elif kernel == 'nnzflat':
             y = pbr_batched_matmul_nnzflat_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
         else:
-            y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
+            y = pbr_batched_matmul_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size,
+                                         force_scalar=force_scalar)
     else:
         y = core.pbr_batched_matmul_cpu(pbr_mat, x)
 

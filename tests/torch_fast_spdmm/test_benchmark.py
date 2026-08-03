@@ -155,6 +155,20 @@ def _make_pbr_runs():
 
 PBR_RUNS = _make_pbr_runs()
 
+# Which PBR kernel(s) to sweep -- (label, kwargs-for-pbr_matmul) pairs. "zero_idle"
+# forces the scalar path (force_scalar=True) rather than the auto vec/scalar choice
+# kernel='block' would otherwise make, for a fair scalar-vs-scalar comparison against
+# nnzflat (which has no vectorized variant) -- see pbr_matmul's force_scalar docstring.
+# One SLURM task per size already covers all matrices/features/pbr_runs/kernels (see
+# SPDMM_ONLY_SIZE above); SPDMM_ONLY_KERNEL further restricts to one kernel if needed,
+# matching the SPDMM_ONLY_SIZE/SPDMM_ONLY_MATRIX convention. Unset = all kernels.
+_ALL_KERNEL_RUNS = [
+    pytest.param(("zero_idle", dict(kernel='block', force_scalar=True)), id="zero_idle"),
+    pytest.param(("nnzflat",   dict(kernel='nnzflat')),                  id="nnzflat"),
+]
+_ONLY_KERNEL = os.environ.get("SPDMM_ONLY_KERNEL")
+KERNEL_RUNS = [k for k in _ALL_KERNEL_RUNS if k.id == _ONLY_KERNEL] if _ONLY_KERNEL else _ALL_KERNEL_RUNS
+
 # Adding a new baseline algorithm = one line here.
 BASELINE_ALGOS = [
     pytest.param(("cusparse",  torch.sparse.mm),  id="cusparse"),
@@ -266,12 +280,14 @@ def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, al
 # ── PBR benchmarks ─────────────────────────────────────────────────
 
 @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@mark.parametrize("kernel_run", KERNEL_RUNS)
 @mark.parametrize("pbr_run",    PBR_RUNS)
 @mark.parametrize("dtype",      DTYPES)
 @mark.parametrize("features",   FEATURES)
 @mark.parametrize("mat_config", MATRIX_CONFIGS)
-def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run):
+def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run, kernel_run):
     pbr_cfg = pbr_run
+    kernel_label, kernel_kwargs = kernel_run
     scipy_mat, _, x, size, profile = _prepare(mat_config, features, dtype)
 
     pbr_mat = csr_to_pbr(
@@ -285,9 +301,9 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run
     # Warm-up (excluded from timing): one-time CUDA launch overhead. Steady-state
     # matmul is what we measure.
     try:
-        pbr_matmul(pbr_mat, x, smem_size=pbr_cfg["smem_size"])
+        pbr_matmul(pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel_kwargs)
         torch.cuda.synchronize()
-        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"])
+        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel_kwargs)
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
@@ -296,12 +312,12 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run
 
     algo_name = (
         f"pbr_{pbr_cfg['block_rows']}x{pbr_cfg['block_cols']}"
-        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_block"
+        f"_min{pbr_cfg['min_nnz']}_sm{pbr_cfg['smem_size']}_{kernel_label}"
     )
     bench_results.append({
         "commit":      _COMMIT,
         "algorithm":   algo_name,
-        "kernel":      "block",
+        "kernel":      kernel_label,
         "system_size": size,
         "features":    features,
         "dtype":       str(dtype),

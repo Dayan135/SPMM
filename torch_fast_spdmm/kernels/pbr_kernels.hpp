@@ -18,7 +18,8 @@ void launch_pbr_spmm(
     const scalar_t* X,
     scalar_t* Y,
     cudaStream_t stream = 0,
-    int smem_size = 2048
+    int smem_size = 2048,
+    bool force_scalar = false
 );
 
 // Experimental: bounds per-thread row-work at CHUNK_K=4 active columns

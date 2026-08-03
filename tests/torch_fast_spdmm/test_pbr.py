@@ -105,6 +105,29 @@ class TestTorchFastPBR(TestTorchNoGrad):
         # 7. Final comparison (GPU vs CPU Reference)
         assert_close(y_gpu.cpu(), expected, rtol=1e-6, atol=1e-6)
 
+    @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @mark.parametrize('features', [8, 32], ids=['feat8', 'feat32'])
+    @mark.parametrize('min_nnz', [1, 64], ids=['all_blocks', 'mostly_coo'])
+    def test_pbr_force_scalar_matches_vec(self, sparse_mat, features, batch_size, data_dtype,
+                                           block_size, system_size, min_nnz):
+        """force_scalar=True forces pbr_spmm_zero_idle_kernel instead of the
+        auto-selected pbr_spmm_vec_kernel (features=8/32 are both multiples of
+        PbrVec<scalar_t>::lanes=4, so the default path here is vec) -- must
+        agree with the default output, not just avoid crashing."""
+        device = 'cuda'
+        torch_dtype = torch.from_numpy(np.array([], dtype=data_dtype)).dtype
+
+        x_gpu = torch.randn((batch_size, sparse_mat.shape[1], features), dtype=torch_dtype, device=device)
+
+        pbr_mat = csr_to_pbr(sparse_mat, block_rows=block_size, block_cols=block_size, min_nnz_per_block=min_nnz)
+        pbr_mat = pbr_mat.to(device)
+
+        y_vec    = pbr_batched_matmul_cuda(pbr_mat, x_gpu, force_scalar=False)
+        y_scalar = pbr_batched_matmul_cuda(pbr_mat, x_gpu, force_scalar=True)
+
+        assert_close(y_scalar, y_vec, rtol=1e-6, atol=1e-6,
+                     msg="force_scalar=True (zero_idle) output differs from the default vec output")
+
 
 @mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 @mark.parametrize('sparse_data_mat', ['sparse_identity_mat', 'sparse_permutation_mat', 'sparse_random_low_sparsity_mat'], indirect=True)
