@@ -723,6 +723,77 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     // set bit is exactly one nonzero, regardless of enumeration order).
     const uint32_t n_nz = __popcll(code);
 
+    // --- 1c. STATIC PER-THREAD nz_idx ASSIGNMENT, derived ONCE per launch ---
+    // The first version of this rewrite (still deriving inline inside Step B's
+    // flat (nz_idx, feature) work-item loop) eliminated the array/spill, but
+    // regressed 56-187% across every tested config: nz_idx = work_idx >>
+    // p_log2 depends only on tx/p_log2, not on base_f, so the SAME derivation
+    // was being redone on every feature-tile pass -- the fix traded a
+    // memory-bound bottleneck for a worse compute-bound one (ncu confirmed:
+    // long_scoreboard_pct dropped 90-98% as designed, but math_pipe_throttle_pct
+    // rose 700-5000% and became the new dominant cost).
+    //
+    // Since MAX_NZ = BLOCK_ROWS*BLOCK_COLS <= THREADS_PER_BLOCK for every
+    // config this project uses (checked below), assigning nz_idx = tx (one
+    // fixed nonzero per thread, for the WHOLE kernel invocation, computed
+    // once here instead of once per work-item per pass) needs at most one
+    // scalar set per thread -- still no array. block_data's value is also
+    // hoisted here for the same reason (it doesn't depend on base_f either,
+    // same redundant-reread issue the block_data-cache experiment targeted,
+    // fixed here for free as a register instead of a shared-memory cache).
+    // Step B below sequentially loops this thread's fixed nonzero over all
+    // of current_p's features instead of splitting across threads --
+    // trading Step B's thread-level parallelism (was up to THREADS_PER_BLOCK-wide,
+    // now n_nz-wide) for zero re-derivation cost across passes. Net effect
+    // to be measured empirically, not assumed.
+    static_assert(BLOCK_ROWS * BLOCK_COLS <= THREADS_PER_BLOCK,
+                  "static nz_idx=tx assignment requires MAX_NZ <= THREADS_PER_BLOCK");
+
+    const bool has_nz = (tx < n_nz);
+    uint32_t actual_r = 0, pc = 0;
+    scalar_t val = scalar_t(0);
+
+    if (has_nz) {
+        uint32_t remaining = tx;
+        uint32_t physical_c = 0;
+        bool col_found = false;
+
+        #pragma unroll
+        for (uint32_t cand_pc = 0; cand_pc < BLOCK_COLS; ++cand_pc) {
+            if (cand_pc < n_c && !col_found) {
+                const uint32_t cand_c = (packed_cols_physical >> (cand_pc * 3)) & 0x7;
+
+                uint32_t col_rows = 0;
+                #pragma unroll
+                for (uint32_t r = 0; r < BLOCK_ROWS; ++r)
+                    col_rows |= ((uint32_t)((code >> (r * BLOCK_COLS + cand_c)) & 1ULL)) << r;
+
+                const uint32_t cnt = __popc(col_rows);
+                if (remaining < cnt) {
+                    pc = cand_pc;
+                    physical_c = cand_c;
+                    col_found = true;
+
+                    uint32_t rk = remaining;
+                    bool row_found = false;
+                    #pragma unroll
+                    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+                        if (!row_found && ((col_rows >> r) & 1u)) {
+                            if (rk == 0) { actual_r = r; row_found = true; }
+                            else { rk--; }
+                        }
+                    }
+                } else {
+                    remaining -= cnt;
+                }
+            }
+        }
+
+        const uint32_t local_data_ptr = data_offset +
+            __popcll(code & ((1ULL << (actual_r * BLOCK_COLS + physical_c)) - 1));
+        val = __ldg(&block_data[local_data_ptr]);
+    }
+
     // --- 2. DYNAMIC P CALCULATION ---
     const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (BLOCK_ROWS + n_c), features));
     const uint32_t p      = 1u << p_log2;
@@ -751,62 +822,16 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
 
         __syncthreads();
 
-        // STEP B: one thread per (nonzero, feature) work-item
-        const uint32_t total_work = n_nz * current_p;
-
-        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
-            const uint32_t nz_idx = work_idx >> p_log2;
-            const uint32_t f_in_s = work_idx & p_mask;
-
-            // Derive (actual_r, pc, local_data_ptr) for nz_idx directly from
-            // `code` -- register-only rank/select, no array (see comment
-            // above the kernel for why this replaces the old nz_row/nz_ptr/
-            // nz_pc arrays). Reproduces the SAME column-major enumeration
-            // order (pc ascending, then r ascending within pc) as before.
-            uint32_t remaining = nz_idx;
-            uint32_t actual_r = 0;
-            uint32_t pc = 0;
-            uint32_t physical_c = 0;
-            bool col_found = false;
-
-            #pragma unroll
-            for (uint32_t cand_pc = 0; cand_pc < BLOCK_COLS; ++cand_pc) {
-                if (cand_pc < n_c && !col_found) {
-                    const uint32_t cand_c = (packed_cols_physical >> (cand_pc * 3)) & 0x7;
-
-                    uint32_t col_rows = 0;
-                    #pragma unroll
-                    for (uint32_t r = 0; r < BLOCK_ROWS; ++r)
-                        col_rows |= ((uint32_t)((code >> (r * BLOCK_COLS + cand_c)) & 1ULL)) << r;
-
-                    const uint32_t cnt = __popc(col_rows);
-                    if (remaining < cnt) {
-                        pc = cand_pc;
-                        physical_c = cand_c;
-                        col_found = true;
-
-                        uint32_t rk = remaining;
-                        bool row_found = false;
-                        #pragma unroll
-                        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
-                            if (!row_found && ((col_rows >> r) & 1u)) {
-                                if (rk == 0) { actual_r = r; row_found = true; }
-                                else { rk--; }
-                            }
-                        }
-                    } else {
-                        remaining -= cnt;
-                    }
-                }
+        // STEP B: each thread with has_nz sequentially covers all current_p
+        // features for its OWN fixed nonzero (actual_r/pc/val, derived once
+        // above -- no re-derivation, no array). Parallelism here is n_nz-wide
+        // (across threads) x current_p-wide (sequential per thread), instead
+        // of the flat THREADS_PER_BLOCK-wide (nz, feature) split used before.
+        if (has_nz) {
+            for (uint32_t f_in_s = 0; f_in_s < current_p; ++f_in_s) {
+                const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
+                atomicAdd(&smem_Y[actual_r * current_p + f_in_s], contribution);
             }
-
-            const uint32_t local_data_ptr = data_offset +
-                __popcll(code & ((1ULL << (actual_r * BLOCK_COLS + physical_c)) - 1));
-
-            const scalar_t val = __ldg(&block_data[local_data_ptr]);
-            const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
-
-            atomicAdd(&smem_Y[actual_r * current_p + f_in_s], contribution);
         }
 
         __syncthreads();
