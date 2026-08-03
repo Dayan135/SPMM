@@ -744,8 +744,23 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
 
     if (n_nz == 0) return;
 
-    // --- 2. DYNAMIC P CALCULATION ---
-    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (BLOCK_ROWS + n_c), features));
+    // --- 1c. CACHE block_data IN A SLICE OF THE SAME smem[] BUDGET ---
+    // Ports the "unified" carving pattern from feat/pbr-cache-block-data-unified-smem
+    // (block kernel family) to nnzflat: s_block_data is carved out of the front of
+    // the SAME smem[TOTAL_SHARED] buffer smem_X/smem_Y share below, instead of a new
+    // allocation, so static shared-memory footprint/occupancy is unchanged from
+    // baseline -- the cost is paid by a smaller `p` (more base_f passes) instead.
+    // Without this, block_data[data_offset + nz_ptr[nz_idx]] was re-read via __ldg
+    // on every base_f pass even though its value only depends on nz_idx, not base_f.
+    scalar_t* s_block_data = smem;
+    for (uint32_t i = tx; i < n_nz; i += THREADS_PER_BLOCK) {
+        s_block_data[i] = __ldg(&block_data[data_offset + i]);
+    }
+    __syncthreads();
+
+    // --- 2. DYNAMIC P CALCULATION, over the budget remaining after block_data's reservation ---
+    const uint32_t remaining = TOTAL_SHARED > n_nz ? TOTAL_SHARED - n_nz : 1u;
+    const uint32_t p_log2 = 31u - __clz(max(1u, min(remaining / (BLOCK_ROWS + n_c), features)));
     const uint32_t p      = 1u << p_log2;
     const uint32_t p_mask = p - 1u;
 
@@ -755,8 +770,8 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
         const uint32_t current_p = min(p, feat_end - base_f);
 
-        scalar_t* smem_X = smem;
-        scalar_t* smem_Y = smem + (n_c * current_p);
+        scalar_t* smem_X = smem + n_nz;
+        scalar_t* smem_Y = smem + n_nz + (n_c * current_p);
 
         // STEP A: Cooperative Load
         const uint32_t total_x_elements = n_c * current_p;
@@ -780,10 +795,10 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             const uint32_t f_in_s = work_idx & p_mask;
 
             const uint32_t actual_r = nz_row[nz_idx];
-            const uint32_t local_data_ptr = data_offset + nz_ptr[nz_idx];
+            const uint32_t local_data_ptr = nz_ptr[nz_idx];
             const uint32_t pc = nz_pc[nz_idx];
 
-            const scalar_t val = __ldg(&block_data[local_data_ptr]);
+            const scalar_t val = s_block_data[local_data_ptr];
             const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
 
             atomicAdd(&smem_Y[actual_r * current_p + f_in_s], contribution);
