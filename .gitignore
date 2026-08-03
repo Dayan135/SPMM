@@ -15,6 +15,10 @@ wandb/
 jobs/logs/
 jobs/.slurm-remote
 
+# Local profiling/ledger scratch (optimizer.quick, profile_pbr ncu output)
+ncu_out/
+*.sqlite3
+
 # Stray LaTeX build artifacts
 .aux
 .fdb_latexmk
