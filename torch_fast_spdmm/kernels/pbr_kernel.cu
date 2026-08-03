@@ -647,11 +647,22 @@ template void launch_pbr_chunkcols_spmm<int64_t, double>(const int, const int, c
 // win.
 //
 // Rows are NOT compacted (same simplification as chunkcols) -- smem_Y is
-// BLOCK_ROWS*p, indexed by physical row. nz_row/nz_ptr/nz_pc are sized to
-// the worst case (BLOCK_ROWS*BLOCK_COLS = 64 for 8x8 blocks); if the
-// compiler can't keep these in registers under __launch_bounds__'s occupancy
-// target, expect local-memory spill traffic -- a real cost this kernel's own
-// hypothesis is measuring, not something to paper over.
+// BLOCK_ROWS*p, indexed by physical row.
+//
+// An earlier version of this kernel precomputed a per-block column-major
+// "nonzero list" (nz_row[]/nz_ptr[]/nz_pc[], sized BLOCK_ROWS*BLOCK_COLS)
+// once, then looked it up by nz_idx in Step B. Since nz_idx is a runtime
+// value, those array reads couldn't be register-allocated and were
+// confirmed (via ncu smsp__sass_inst_executed_op_local_{ld,st}.sum) to spill
+// to local memory on every access, in every tested config -- up to 1.15B
+// spill instructions/launch on dense matrices, with zero such spill in the
+// `block` kernel family for comparison. This version replaces the array
+// with an equivalent on-the-fly derivation, computed independently per
+// (nz_idx, feature-tile-pass) access, entirely from `code` (already
+// register-resident) via bounded #pragma-unrolled rank/select loops over
+// BLOCK_COLS x BLOCK_ROWS candidates -- no addressable array exists, so no
+// spill is possible. Trades the guaranteed local-memory round-trip for
+// bounded ALU work; net effect to be measured empirically, not assumed.
 //
 // Scalar-only, no vectorized variant (see chunkcols).
 
@@ -671,8 +682,6 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     const scalar_t* __restrict__ X,
     scalar_t* __restrict__ Y
 ) {
-    constexpr int MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
-
     __shared__ scalar_t smem[TOTAL_SHARED];
 
     const uint32_t b_idx = blockIdx.x;
@@ -687,21 +696,13 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     const uint32_t col_origin = block_coords[b_idx * 2 + 1];
     const uint32_t data_offset = block_offsets[b_idx];
 
-    // --- 1. SPARSITY SCAN: per-row data-start offsets + col_mask ---
+    // --- 1. SPARSITY SCAN: col_mask only (register scalar, no per-row array) ---
     const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
 
-    uint32_t row_start_offset[BLOCK_ROWS];
     uint64_t col_mask = 0;
-    uint32_t current_relative_offset = 0;
-
     #pragma unroll
     for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
-        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
-        row_start_offset[r] = current_relative_offset;
-        if (row_mask > 0) {
-            col_mask |= row_mask;
-            current_relative_offset += __popcll(row_mask);
-        }
+        col_mask |= (code >> (r * BLOCK_COLS)) & row_bits;
     }
 
     const uint32_t n_c = __popcll(col_mask);
@@ -718,31 +719,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
         }
     }
 
-    // --- 1b. COLUMN-MAJOR FLATTEN: one (row, pc, data_ptr) triple per nonzero ---
-    uint8_t  nz_row[MAX_NZ];
-    uint16_t nz_ptr[MAX_NZ];
-    uint8_t  nz_pc[MAX_NZ];
-    uint32_t consumed[BLOCK_ROWS];
-    #pragma unroll
-    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) consumed[r] = 0;
-
-    uint32_t n_nz = 0;
-    for (uint32_t pc = 0; pc < n_c; ++pc) {
-        const uint32_t physical_c = (packed_cols_physical >> (pc * 3)) & 0x7;
-        #pragma unroll
-        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
-            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
-            if ((row_mask >> physical_c) & 1) {
-                nz_row[n_nz] = (uint8_t)r;
-                nz_ptr[n_nz] = (uint16_t)(row_start_offset[r] + consumed[r]);
-                nz_pc[n_nz]  = (uint8_t)pc;
-                consumed[r]++;
-                n_nz++;
-            }
-        }
-    }
-
-    if (n_nz == 0) return;
+    // n_nz = total set bits in `code` = total nonzeros in the block (every
+    // set bit is exactly one nonzero, regardless of enumeration order).
+    const uint32_t n_nz = __popcll(code);
 
     // --- 2. DYNAMIC P CALCULATION ---
     const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (BLOCK_ROWS + n_c), features));
@@ -779,9 +758,50 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             const uint32_t nz_idx = work_idx >> p_log2;
             const uint32_t f_in_s = work_idx & p_mask;
 
-            const uint32_t actual_r = nz_row[nz_idx];
-            const uint32_t local_data_ptr = data_offset + nz_ptr[nz_idx];
-            const uint32_t pc = nz_pc[nz_idx];
+            // Derive (actual_r, pc, local_data_ptr) for nz_idx directly from
+            // `code` -- register-only rank/select, no array (see comment
+            // above the kernel for why this replaces the old nz_row/nz_ptr/
+            // nz_pc arrays). Reproduces the SAME column-major enumeration
+            // order (pc ascending, then r ascending within pc) as before.
+            uint32_t remaining = nz_idx;
+            uint32_t actual_r = 0;
+            uint32_t pc = 0;
+            uint32_t physical_c = 0;
+            bool col_found = false;
+
+            #pragma unroll
+            for (uint32_t cand_pc = 0; cand_pc < BLOCK_COLS; ++cand_pc) {
+                if (cand_pc < n_c && !col_found) {
+                    const uint32_t cand_c = (packed_cols_physical >> (cand_pc * 3)) & 0x7;
+
+                    uint32_t col_rows = 0;
+                    #pragma unroll
+                    for (uint32_t r = 0; r < BLOCK_ROWS; ++r)
+                        col_rows |= ((uint32_t)((code >> (r * BLOCK_COLS + cand_c)) & 1ULL)) << r;
+
+                    const uint32_t cnt = __popc(col_rows);
+                    if (remaining < cnt) {
+                        pc = cand_pc;
+                        physical_c = cand_c;
+                        col_found = true;
+
+                        uint32_t rk = remaining;
+                        bool row_found = false;
+                        #pragma unroll
+                        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+                            if (!row_found && ((col_rows >> r) & 1u)) {
+                                if (rk == 0) { actual_r = r; row_found = true; }
+                                else { rk--; }
+                            }
+                        }
+                    } else {
+                        remaining -= cnt;
+                    }
+                }
+            }
+
+            const uint32_t local_data_ptr = data_offset +
+                __popcll(code & ((1ULL << (actual_r * BLOCK_COLS + physical_c)) - 1));
 
             const scalar_t val = __ldg(&block_data[local_data_ptr]);
             const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
