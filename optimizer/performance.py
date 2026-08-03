@@ -62,7 +62,36 @@ _METRIC_SHORT_NAMES = {
     "smsp__warp_issue_stalled_selected_per_warp_active.pct": "selected_pct",
     "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct": "short_scoreboard_pct",
     "smsp__warp_issue_stalled_wait_per_warp_active.pct": "wait_pct",
+    "launch__registers_per_thread": "registers_per_thread",
+    "launch__shared_mem_per_block_static": "smem_static_bytes",
+    "launch__shared_mem_per_block_dynamic": "smem_dynamic_bytes",
+    "launch__occupancy_limit_registers": "occ_limit_registers_blocks",
+    "launch__occupancy_limit_shared_mem": "occ_limit_smem_blocks",
+    "launch__occupancy_limit_warps": "occ_limit_warps_blocks",
+    "launch__occupancy_limit_blocks": "occ_limit_hw_blocks",
+    "launch__waves_per_multiprocessor": "waves_per_sm",
+    "smsp__sass_inst_executed_op_local_ld.sum": "local_load_insts",
+    "smsp__sass_inst_executed_op_local_st.sum": "local_store_insts",
 }
+
+# Register/shared-memory/occupancy-limiter + local-memory-spill metrics.
+# Validated against a live ncu run on both `block` and `nnzflat` kernels
+# (2026-08-03) before being wired in here. Deliberately kept in a SEPARATE
+# list/ncu invocation from METRICS above, per that list's own methodology
+# note -- these are launch-config + SASS-instruction counters, a different
+# kind of pass than the stall-reason sampling metrics.
+OCCUPANCY_METRICS = [
+    "launch__registers_per_thread",
+    "launch__shared_mem_per_block_static",
+    "launch__shared_mem_per_block_dynamic",
+    "launch__occupancy_limit_registers",
+    "launch__occupancy_limit_shared_mem",
+    "launch__occupancy_limit_warps",
+    "launch__occupancy_limit_blocks",
+    "launch__waves_per_multiprocessor",
+    "smsp__sass_inst_executed_op_local_ld.sum",
+    "smsp__sass_inst_executed_op_local_st.sum",
+]
 
 def parse_ncu_csv(csv_text: str, kernel_name_prefix: str = "pbr_spmm") -> Optional[dict]:
     """Parse one ncu --csv capture, returning the metrics for the FIRST kernel
@@ -103,12 +132,15 @@ def parse_ncu_csv(csv_text: str, kernel_name_prefix: str = "pbr_spmm") -> Option
     return values or None
 
 
-def render_batch_script(configs: list[CandidateConfig], out_dir: str) -> str:
+def render_batch_script(configs: list[CandidateConfig], out_dir: str,
+                         metrics: list[str] = METRICS) -> str:
     """One sbatch script body looping over a batch of config points -- matches
     the existing jobs/profile_stall_reasons/*.sh convention of many ncu
     invocations per job rather than one job per point (Slurm allocation
-    overhead makes the latter wasteful even when GPU time itself is cheap)."""
-    metrics_arg = ",".join(METRICS)
+    overhead makes the latter wasteful even when GPU time itself is cheap).
+    Pass metrics=OCCUPANCY_METRICS for a register/shared-mem/spill pass
+    instead of the default stall-reason METRICS."""
+    metrics_arg = ",".join(metrics)
     lines = [
         remote.BUILD_ENV_PREAMBLE,
         f'cd {remote.REMOTE_REPO_DIR}/tests/torch_fast_spdmm',
@@ -133,11 +165,12 @@ def render_batch_script(configs: list[CandidateConfig], out_dir: str) -> str:
 
 
 def run_performance_batch(configs: list[CandidateConfig], *, job_name: str,
-                           local_out_dir: Path, time_limit: str = "2:00:00") -> dict[str, Optional[dict]]:
+                           local_out_dir: Path, time_limit: str = "2:00:00",
+                           metrics: list[str] = METRICS) -> dict[str, Optional[dict]]:
     """Submit, wait for, and parse a batch of performance-evaluation runs.
     Returns {config_key: metrics_dict_or_None}."""
     out_dir_rel = f"jobs/optimizer/logs_{job_name}"
-    script_body = render_batch_script(configs, out_dir_rel)
+    script_body = render_batch_script(configs, out_dir_rel, metrics=metrics)
     job_id = remote.render_and_submit(
         script_body, job_name=job_name, out_dir=out_dir_rel,
         mem="32G", time_limit=time_limit,
