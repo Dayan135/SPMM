@@ -647,8 +647,8 @@ template void launch_pbr_chunkcols_spmm<int64_t, double>(const int, const int, c
 // -- this kernel moves the opposite direction (finer atomics, no
 // coarsening), so it's an open question, not an assumed win.
 //
-// Rows are NOT compacted (same simplification as chunkcols) -- smem_Y is
-// BLOCK_ROWS*p, indexed by physical row.
+// Rows ARE compacted (step 5 below) -- smem_Y is n_r*p, indexed by
+// compacted row rank, mirroring zero_idle's Step 1/Step C row-packing.
 //
 // nz_idx -> (row, col, data-pointer) derivation history (see git log for the
 // full progression, all on the same nnzflat rewrite branch):
@@ -688,6 +688,18 @@ template void launch_pbr_chunkcols_spmm<int64_t, double>(const int, const int, c
 //      itself beat `block`, so it was never independently validated as a
 //      win for nnzflat specifically. Net effect (cheaper derivation vs. lost
 //      locality) to be measured empirically, not assumed.
+//   5. Row-compaction for Step C: ncu source-line profiling (SourceCounters,
+//      -lineinfo) on step 4 found Step C's row_mask==0 skip-branch costing
+//      up to 72% branch_resolving stall on matrices with few active rows per
+//      block (e.g. scattered_1x8: 7/8 structural rows empty) -- a cost
+//      zero_idle never pays because it compacts active rows into
+//      packed_active_rows/n_r in Step 1 (see pbr_spmm_zero_idle_kernel) and
+//      loops only those n_r slots in Step C, no branch needed. THIS version
+//      adds the same row-compaction here: Step B writes to smem_Y via a
+//      compacted row rank `pr` (popcount of active_row_mask below actual_r,
+//      same pattern already used for column rank `pc`) instead of the raw
+//      structural row, and Step C loops n_r*p via packed_active_rows instead
+//      of BLOCK_ROWS*p with a skip-branch.
 //
 // Scalar-only, no vectorized variant (see chunkcols).
 
@@ -721,13 +733,26 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     const uint32_t col_origin = block_coords[b_idx * 2 + 1];
     const uint32_t data_offset = block_offsets[b_idx];
 
-    // --- 1. SPARSITY SCAN: col_mask only (register scalar, no per-row array) ---
+    // --- 1. SPARSITY SCAN: col_mask + active-row compaction (register
+    // scalars, no per-row array) -- mirrors zero_idle's Step 1 so Step C can
+    // flush only the n_r active rows instead of looping all BLOCK_ROWS and
+    // branching around empty ones.
     const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
 
     uint64_t col_mask = 0;
+    uint32_t active_row_mask = 0;
+    uint32_t packed_active_rows = 0;
+    uint32_t n_r = 0;
+
     #pragma unroll
     for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
-        col_mask |= (code >> (r * BLOCK_COLS)) & row_bits;
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            col_mask |= row_mask;
+            active_row_mask |= (1u << r);
+            packed_active_rows |= (r << (n_r * 3));
+            n_r++;
+        }
     }
 
     const uint32_t n_c = __popcll(col_mask);
@@ -749,7 +774,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     const uint32_t n_nz = __popcll(code);
 
     // --- 2. DYNAMIC P CALCULATION ---
-    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (BLOCK_ROWS + n_c), features));
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
     const uint32_t p      = 1u << p_log2;
     const uint32_t p_mask = p - 1u;
 
@@ -771,7 +796,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
         }
 
-        for (uint32_t i = tx; i < (uint32_t)(BLOCK_ROWS * current_p); i += THREADS_PER_BLOCK)
+        for (uint32_t i = tx; i < n_r * current_p; i += THREADS_PER_BLOCK)
             smem_Y[i] = scalar_t(0);
 
         __syncthreads();
@@ -810,6 +835,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             // pc = rank of physical_c among the block's active columns --
             // matches Step A's packed_cols_physical compaction scheme.
             const uint32_t pc = __popc(col_mask & ((1u << physical_c) - 1u));
+            // pr = rank of actual_r among the block's active rows -- same
+            // compaction scheme, matches Step C's packed_active_rows.
+            const uint32_t pr = __popc(active_row_mask & ((1u << actual_r) - 1u));
 
             // block_data is stored in the SAME row-major order as `code`,
             // so the nz_idx-th nonzero in that order sits at exactly
@@ -819,21 +847,21 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             const scalar_t val = __ldg(&block_data[local_data_ptr]);
             const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
 
-            atomicAdd(&smem_Y[actual_r * current_p + f_in_s], contribution);
+            atomicAdd(&smem_Y[pr * current_p + f_in_s], contribution);
         }
 
         __syncthreads();
 
-        // STEP C: Cooperative Atomic Commit -- skip rows with no data
-        const uint32_t total_flush = BLOCK_ROWS * current_p;
+        // STEP C: Cooperative Atomic Commit -- only the n_r active rows,
+        // packed via packed_active_rows (no per-row skip branch needed,
+        // unlike the earlier BLOCK_ROWS-wide + row_mask==0 continue version).
+        const uint32_t total_flush = n_r * current_p;
         for (uint32_t work_idx = tx; work_idx < total_flush; work_idx += THREADS_PER_BLOCK) {
-            const uint32_t r      = work_idx >> p_log2;
+            const uint32_t pr     = work_idx >> p_log2;
             const uint32_t f_in_s = work_idx & p_mask;
 
-            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
-            if (row_mask == 0) continue;
-
-            const uint32_t global_r = row_origin + r;
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            const uint32_t global_r = row_origin + actual_r;
             atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
         }
 

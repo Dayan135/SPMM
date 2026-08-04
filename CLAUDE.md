@@ -132,14 +132,15 @@ none beat `block` in the end; see git history prior to this cleanup for the inve
 
 Two experimental intra-block work-distribution kernels, select via `kernel='chunkcols'|'nnzflat'` in
 `pbr_matmul`. Both target Step B's per-thread imbalance (one
-thread owns a whole row's active columns today, up to `BLOCK_COLS`), scalar-only, rows not compacted
-(smem_Y sized `BLOCK_ROWS*p`):
+thread owns a whole row's active columns today, up to `BLOCK_COLS`), scalar-only:
 
 - **`chunkcols`** (`pbr_spmm_chunkcols_kernel`) — caps per-thread work at `CHUNK_K=4` active columns;
   rows with more nonzeros split into multiple chunk-threads. Bounded increase in atomic count (multiple
-  chunks of one row share a `smem_Y` write, now `atomicAdd`).
+  chunks of one row share a `smem_Y` write, now `atomicAdd`). Rows not compacted (smem_Y sized `BLOCK_ROWS*p`).
 - **`nnzflat`** (`pbr_spmm_nnzflat_kernel`) — one thread per (nonzero, feature) work-item, nonzeros
-  visited column-major (reproduces colgroup's smem_X locality per-block, no host-side sort). Much larger
+  visited in `code`'s native row-major bit order (on-the-fly select-kth-set-bit derivation, no
+  per-block lookup arrays -- see the kernel's header comment for the full v1-v5 rewrite history).
+  Rows ARE compacted (mirrors zero_idle's Step 1/Step C row-packing; smem_Y sized `n_r*p`). Much larger
   atomic count than chunkcols — a direct test of whether finer-grained balance is worth its atomic cost,
   given prior findings (git history: `STALL_REASONS_NOATOMIC_ABLATION.md`, `STALL_REASONS_ROWGROUP_ATOMIC.md`)
   that atomics are already a proven major cost in this kernel family.
