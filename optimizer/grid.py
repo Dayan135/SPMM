@@ -64,17 +64,19 @@ class CandidateConfig:
     min_nnz: int
     smem_size: int
     kernel: str = "block"  # 'block' | 'chunkcols' | 'nnzflat' -- see profile_pbr.py --kernel
+    force_scalar: bool = False  # only affects kernel='block' -- see profile_pbr.py --force-scalar
 
     def config_key(self) -> str:
         """Stable string key identifying this exact config point, for ledger dedup."""
         return "|".join([
             self.matrix_profile, str(self.size), str(self.features),
             str(self.block), str(self.min_nnz), str(self.smem_size), self.kernel,
+            "fs" if self.force_scalar else "novec",
         ])
 
     def cli_args(self) -> list[str]:
         """The exact argv this config maps to for profile_pbr.py."""
-        return [
+        args = [
             "--size", str(self.size),
             "--features", str(self.features),
             "--block", str(self.block),
@@ -83,6 +85,9 @@ class CandidateConfig:
             "--matrix-profile", self.matrix_profile,
             "--kernel", self.kernel,
         ]
+        if self.force_scalar:
+            args.append("--force-scalar")
+        return args
 
     def as_dict(self) -> dict:
         return asdict(self)

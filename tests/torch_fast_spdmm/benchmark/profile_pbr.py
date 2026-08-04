@@ -149,6 +149,9 @@ def main() -> None:
     p.add_argument("--kernel",         type=str, default="block",
                    choices=["block", "chunkcols", "nnzflat"],
                    help="which PBR kernel to profile")
+    p.add_argument("--force-scalar",   action="store_true",
+                   help="force the scalar zero_idle path for kernel='block' "
+                        "instead of auto-selecting vec (only affects kernel='block')")
     p.add_argument("--warmup",         type=int, default=10)
     args = p.parse_args()
 
@@ -160,11 +163,13 @@ def main() -> None:
     print()
 
     for _ in range(args.warmup):
-        pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel)
+        pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel,
+                   force_scalar=args.force_scalar)
     torch.cuda.synchronize()
 
     profiler.start()
-    pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel)
+    pbr_matmul(pbr_mat, x, smem_size=args.smem_size, kernel=args.kernel,
+               force_scalar=args.force_scalar)
     torch.cuda.synchronize()
     profiler.stop()
 
