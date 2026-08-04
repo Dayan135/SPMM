@@ -56,6 +56,13 @@ from torch_fast_spdmm import csr_to_pbr, pbr_info, pbr_matmul
 _MATRIX_PROFILES = {
     "scattered_8x1":    ("scattered", {"block_size": 8, "rows_per_block": 8, "cols_per_block": 1}),
     "scattered_1x8":    ("scattered", {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8}),
+    # d0.5pct/d2pct variants mirror test_benchmark.py's MATRIX_FAMILIES naming/density
+    # (_sd(0.005, n) / _sd(0.02, n)) so the same matrix_profile string used in the
+    # W&B sweep can be profiled here for a stall-reason breakdown.
+    "scattered_8x1_d0.5pct": ("scattered", {"block_size": 8, "rows_per_block": 8, "cols_per_block": 1, "density_base": 0.005}),
+    "scattered_8x1_d2pct":   ("scattered", {"block_size": 8, "rows_per_block": 8, "cols_per_block": 1, "density_base": 0.02}),
+    "scattered_1x8_d0.5pct": ("scattered", {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8, "density_base": 0.005}),
+    "scattered_1x8_d2pct":   ("scattered", {"block_size": 8, "rows_per_block": 1, "cols_per_block": 8, "density_base": 0.02}),
     "scattered_2x4":    ("scattered", {"block_size": 8, "rows_per_block": 2, "cols_per_block": 4}),
     "scattered_2x2":    ("scattered", {"block_size": 8, "rows_per_block": 2, "cols_per_block": 2}),
     "scattered_dense2": ("scattered", {"block_size": 2, "rows_per_block": 2, "cols_per_block": 2}),
@@ -86,7 +93,7 @@ def build_matrix(size: int, matrix_profile: str):
     profile_cusparse.py so both drivers profile the identical matrix."""
     kind, cfg = _MATRIX_PROFILES[matrix_profile]
     if kind == "scattered":
-        density = _SCATTERED_DENSITY_AT_1024 * 1024 / size
+        density = cfg.get("density_base", _SCATTERED_DENSITY_AT_1024) * 1024 / size
         mat = generate_scattered_block_matrix(
             system_size=size,
             block_size=cfg["block_size"],
