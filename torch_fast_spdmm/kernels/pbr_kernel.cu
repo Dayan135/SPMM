@@ -632,32 +632,62 @@ template void launch_pbr_chunkcols_spmm<int64_t, double>(const int, const int, c
 
 
 // ===========================================================================
-// Nnzflat kernel — full nonzero-level flattening, column-sorted (experimental)
+// Nnzflat kernel — full nonzero-level flattening (experimental)
 // ===========================================================================
 //
 // Where chunkcols bounds per-thread imbalance at CHUNK_K columns, this kernel
 // removes it entirely: one thread per (nonzero, feature) work-item instead of
-// one thread per row. Nonzeros are visited in COLUMN-major order (all rows
-// sharing a column together) rather than the block's native row-major
-// storage order, so nearby threads read the same smem_X column -- the
-// locality property colgroup got from a host-side col-sort, reproduced here
-// per-block with no host-side reordering. Every nonzero-feature pair gets
-// its own atomicAdd into smem_Y -- a much larger atomic count than
-// chunkcols. This is the direct test of whether finer-grained balance is
-// worth its atomic cost: STALL_REASONS_NOATOMIC_ABLATION.md and
-// STALL_REASONS_ROWGROUP_ATOMIC.md (prior investigation, see git history)
-// found atomics already a proven major cost in this kernel family, and every
-// attempt so far to reduce atomic frequency by coarsening (rowgroup) lost to
-// an occupancy tax instead -- this kernel moves the opposite direction
-// (finer atomics, no coarsening), so it's an open question, not an assumed
-// win.
+// one thread per row. Every nonzero-feature pair gets its own atomicAdd into
+// smem_Y -- a much larger atomic count than chunkcols. This is the direct
+// test of whether finer-grained balance is worth its atomic cost:
+// STALL_REASONS_NOATOMIC_ABLATION.md and STALL_REASONS_ROWGROUP_ATOMIC.md
+// (prior investigation, see git history) found atomics already a proven
+// major cost in this kernel family, and every attempt so far to reduce
+// atomic frequency by coarsening (rowgroup) lost to an occupancy tax instead
+// -- this kernel moves the opposite direction (finer atomics, no
+// coarsening), so it's an open question, not an assumed win.
 //
 // Rows are NOT compacted (same simplification as chunkcols) -- smem_Y is
-// BLOCK_ROWS*p, indexed by physical row. nz_row/nz_ptr/nz_pc are sized to
-// the worst case (BLOCK_ROWS*BLOCK_COLS = 64 for 8x8 blocks); if the
-// compiler can't keep these in registers under __launch_bounds__'s occupancy
-// target, expect local-memory spill traffic -- a real cost this kernel's own
-// hypothesis is measuring, not something to paper over.
+// BLOCK_ROWS*p, indexed by physical row.
+//
+// nz_idx -> (row, col, data-pointer) derivation history (see git log for the
+// full progression, all on the same nnzflat rewrite branch):
+//   1. Original: precomputed a per-block COLUMN-major "nonzero list"
+//      (nz_row[]/nz_ptr[]/nz_pc[], sized BLOCK_ROWS*BLOCK_COLS) into
+//      thread-private arrays once, looked up by nz_idx in Step B. Since
+//      nz_idx is a runtime value, those array reads couldn't be
+//      register-allocated -- confirmed via ncu
+//      smsp__sass_inst_executed_op_local_{ld,st}.sum to spill to local
+//      memory on every access, in every tested config (up to 1.15B spill
+//      instructions/launch on dense matrices; zero such spill in `block`).
+//   2. Replaced the array with an on-the-fly rank/select search over `code`,
+//      still reproducing COLUMN-major order, still redone inline for every
+//      (nz_idx, feature) work-item -- regressed 56-187% (compute-bound
+//      instead of memory-bound: the ~70-op search, redone on every
+//      feature-tile pass, cost more than the spill it replaced).
+//   3. Tried hoisting that same derivation to once-per-thread (static
+//      nz_idx=tx assignment) -- regressed 538-1193%, far worse: it broke
+//      Step B's THREADS_PER_BLOCK-wide parallelism (only ~n_nz of
+//      THREADS_PER_BLOCK threads do any Step B work), so most threads sit
+//      idle at the following __syncthreads() while the few active ones
+//      serially grind through every feature -- confirmed via barrier_pct
+//      jumping to 50-74%.
+//   4. THIS version: keeps step 2's inline-per-work-item structure (full
+//      THREADS_PER_BLOCK-wide parallelism, no barrier risk) but switches
+//      the enumeration from column-major to `code`'s native ROW-major bit
+//      order, which makes the derivation itself much cheaper: local_data_ptr
+//      becomes a trivial data_offset+nz_idx (block_data is stored in the
+//      same row-major order as `code`, so rank IS position -- no popcount
+//      even needed), and (row, col) reduces to one "select the nz_idx-th set
+//      bit of `code`" query, solved via ~log2(BLOCK_ROWS*BLOCK_COLS) rounds
+//      of binary search over popcounts (6 rounds worst case for 8x8 blocks)
+//      instead of the ~70-op linear scan step 2 used. This gives up
+//      column-major's smem_X read-locality property (nearby threads no
+//      longer reliably share the same smem_X column) -- that property was
+//      inherited from `colgroup`, a since-removed kernel variant that never
+//      itself beat `block`, so it was never independently validated as a
+//      win for nnzflat specifically. Net effect (cheaper derivation vs. lost
+//      locality) to be measured empirically, not assumed.
 //
 // Scalar-only, no vectorized variant (see chunkcols).
 
@@ -677,8 +707,6 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     const scalar_t* __restrict__ X,
     scalar_t* __restrict__ Y
 ) {
-    constexpr int MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
-
     __shared__ scalar_t smem[TOTAL_SHARED];
 
     const uint32_t b_idx = blockIdx.x;
@@ -693,21 +721,13 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     const uint32_t col_origin = block_coords[b_idx * 2 + 1];
     const uint32_t data_offset = block_offsets[b_idx];
 
-    // --- 1. SPARSITY SCAN: per-row data-start offsets + col_mask ---
+    // --- 1. SPARSITY SCAN: col_mask only (register scalar, no per-row array) ---
     const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
 
-    uint32_t row_start_offset[BLOCK_ROWS];
     uint64_t col_mask = 0;
-    uint32_t current_relative_offset = 0;
-
     #pragma unroll
     for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
-        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
-        row_start_offset[r] = current_relative_offset;
-        if (row_mask > 0) {
-            col_mask |= row_mask;
-            current_relative_offset += __popcll(row_mask);
-        }
+        col_mask |= (code >> (r * BLOCK_COLS)) & row_bits;
     }
 
     const uint32_t n_c = __popcll(col_mask);
@@ -724,31 +744,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
         }
     }
 
-    // --- 1b. COLUMN-MAJOR FLATTEN: one (row, pc, data_ptr) triple per nonzero ---
-    uint8_t  nz_row[MAX_NZ];
-    uint16_t nz_ptr[MAX_NZ];
-    uint8_t  nz_pc[MAX_NZ];
-    uint32_t consumed[BLOCK_ROWS];
-    #pragma unroll
-    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) consumed[r] = 0;
-
-    uint32_t n_nz = 0;
-    for (uint32_t pc = 0; pc < n_c; ++pc) {
-        const uint32_t physical_c = (packed_cols_physical >> (pc * 3)) & 0x7;
-        #pragma unroll
-        for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
-            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
-            if ((row_mask >> physical_c) & 1) {
-                nz_row[n_nz] = (uint8_t)r;
-                nz_ptr[n_nz] = (uint16_t)(row_start_offset[r] + consumed[r]);
-                nz_pc[n_nz]  = (uint8_t)pc;
-                consumed[r]++;
-                n_nz++;
-            }
-        }
-    }
-
-    if (n_nz == 0) return;
+    // n_nz = total set bits in `code` = total nonzeros in the block (every
+    // set bit is exactly one nonzero, regardless of enumeration order).
+    const uint32_t n_nz = __popcll(code);
 
     // --- 2. DYNAMIC P CALCULATION ---
     const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (BLOCK_ROWS + n_c), features));
@@ -785,9 +783,38 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             const uint32_t nz_idx = work_idx >> p_log2;
             const uint32_t f_in_s = work_idx & p_mask;
 
-            const uint32_t actual_r = nz_row[nz_idx];
-            const uint32_t local_data_ptr = data_offset + nz_ptr[nz_idx];
-            const uint32_t pc = nz_pc[nz_idx];
+            // Derive (actual_r, pc, local_data_ptr) for nz_idx directly from
+            // `code`, in `code`'s own native ROW-major bit order (see the
+            // history note above the kernel). "Select the nz_idx-th set bit
+            // of `code`" via binary search over popcounts of shrinking
+            // windows -- MAX_NZ (BLOCK_ROWS*BLOCK_COLS) is a compile-time
+            // power of 2 (4/16/64), so this is a fixed, fully-unrolled
+            // register-only loop (2/4/6 rounds), no array.
+            constexpr uint32_t MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
+
+            uint32_t pos = 0;
+            uint32_t remaining = nz_idx;
+            #pragma unroll
+            for (uint32_t half = MAX_NZ / 2; half >= 1; half /= 2) {
+                const uint64_t lower_mask = ((1ULL << half) - 1ULL) << pos;
+                const uint32_t cnt = __popcll(code & lower_mask);
+                if (remaining >= cnt) {
+                    remaining -= cnt;
+                    pos += half;
+                }
+            }
+
+            const uint32_t actual_r = pos / BLOCK_COLS;
+            const uint32_t physical_c = pos % BLOCK_COLS;
+
+            // pc = rank of physical_c among the block's active columns --
+            // matches Step A's packed_cols_physical compaction scheme.
+            const uint32_t pc = __popc(col_mask & ((1u << physical_c) - 1u));
+
+            // block_data is stored in the SAME row-major order as `code`,
+            // so the nz_idx-th nonzero in that order sits at exactly
+            // data_offset + nz_idx -- no popcount needed at all.
+            const uint32_t local_data_ptr = data_offset + nz_idx;
 
             const scalar_t val = __ldg(&block_data[local_data_ptr]);
             const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
