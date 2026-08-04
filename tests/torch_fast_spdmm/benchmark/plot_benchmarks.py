@@ -16,6 +16,7 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 from pathlib import Path
 
@@ -50,10 +51,20 @@ def _table_to_df(run) -> pd.DataFrame:
 
 def fetch_results(project: str, runs: list[str] | None = None) -> pd.DataFrame:
     api = wandb.Api()
-    frames = []
+    # W&B allows multiple runs to share the same name (e.g. a one-off sanity
+    # check re-run under the same name as a later full sweep) -- keep only the
+    # most recently created run per name so its data isn't double-counted
+    # (duplicate rows break the profile/features pivot in speedup_heatmap etc).
+    by_name: dict[str, "wandb.apis.public.Run"] = {}
     for run in api.runs(project):
         if runs and run.name not in runs:
             continue
+        existing = by_name.get(run.name)
+        if existing is None or run.created_at > existing.created_at:
+            by_name[run.name] = run
+
+    frames = []
+    for run in by_name.values():
         df = _table_to_df(run)
         if not df.empty:
             frames.append(df)
@@ -78,7 +89,11 @@ def _best_smem(df: pd.DataFrame) -> pd.DataFrame:
     """Collapse PBR smem variants to the best (min time_ms) per block config.
 
     Baseline rows pass through unchanged. Used to keep facet_grid readable
-    when multiple smem_sizes are present.
+    when multiple smem_sizes are present. When multiple `kernel` values are
+    present (e.g. zero_idle + nnzflat), kernel is kept in the grouping key so
+    variants aren't silently collapsed into one "best of all kernels" bar --
+    harmless no-op when there's only ever been one kernel value, as in this
+    project's history until the zero_idle/nnzflat sweep.
     """
     if not _has_smem_sweep(df):
         return df
@@ -88,8 +103,15 @@ def _best_smem(df: pd.DataFrame) -> pd.DataFrame:
 
     pbr["_cfg"] = pbr.apply(_block_cfg_label, axis=1)
     group = ["commit", "profile", "system_size", "features", "dtype", "_cfg"]
+    multi_kernel = "kernel" in pbr.columns and pbr["kernel"].nunique() > 1
+    if multi_kernel:
+        group = group + ["kernel"]
+
     best = pbr.loc[pbr.groupby(group)["time_ms"].idxmin()].copy()
-    best["algorithm"] = "pbr_" + best["_cfg"]
+    if multi_kernel:
+        best["algorithm"] = "pbr_" + best["_cfg"] + "_" + best["kernel"].astype(str)
+    else:
+        best["algorithm"] = "pbr_" + best["_cfg"]
     best = best.drop(columns=["_cfg"])
 
     return pd.concat([base, best], ignore_index=True)
@@ -100,6 +122,13 @@ def _algo_order(algos) -> list[str]:
     baselines = [a for a in _BASELINE_ORDER if a in present]
     pbr = sorted(a for a in present if a not in _BASELINE_ORDER)
     return baselines + pbr
+
+
+def _color_map(labels) -> dict:
+    """label -> color, cycling through tab20 (not zip-truncating like tab10
+    does past 10 entries) -- needed now that per-kernel algorithm/cfg labels
+    (e.g. 8 block configs x 2 kernels = 16) can exceed tab10's palette size."""
+    return {label: color for label, color in zip(labels, itertools.cycle(plt.cm.tab20.colors))}
 
 
 # ── Plots ────────────────────────────────────────────────────────────────────
@@ -115,7 +144,7 @@ def facet_grid(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
     profiles = sorted(sub["profile"].unique())
     feats = sorted(sub["features"].unique())
     algos = _algo_order(sub["algorithm"])
-    colors = {a: c for a, c in zip(algos, plt.cm.tab10.colors)}
+    colors = _color_map(algos)
 
     fig, axes = plt.subplots(
         len(profiles), len(feats),
@@ -210,15 +239,16 @@ def _annotated_heatmap(ax, piv, fmt="{:.2f}", center=1.0):
     return im
 
 
-def kernel_speedup_heatmap(df: pd.DataFrame, challenger: str, out_path: Path) -> Path:
-    """Heatmap of best-challenger speedup over best-block per (profile, features), per size.
+def kernel_speedup_heatmap(df: pd.DataFrame, challenger: str, out_path: Path,
+                            reference: str = "block") -> Path:
+    """Heatmap of best-challenger speedup over best-reference per (profile, features), per size.
 
-    speedup = best_block_time / best_challenger_time  (>1 = challenger faster).
+    speedup = best_reference_time / best_challenger_time  (>1 = challenger faster).
     Both kernels are best-of across all block-config/smem variants.
     """
-    block = _best_pbr_by_kernel(df, "block")
+    ref = _best_pbr_by_kernel(df, reference)
     other = _best_pbr_by_kernel(df, challenger)
-    speedup = (block / other).rename("speedup").reset_index().dropna()
+    speedup = (ref / other).rename("speedup").reset_index().dropna()
 
     if speedup.empty:
         return out_path
@@ -233,7 +263,7 @@ def kernel_speedup_heatmap(df: pd.DataFrame, challenger: str, out_path: Path) ->
         ax.set_title(f"size={size}", fontsize=10)
         ax.set_xlabel("features")
         fig.colorbar(im, ax=ax, fraction=0.046)
-    fig.suptitle(f"{challenger} speedup over block kernel (>1 = {challenger} faster)", fontsize=12)
+    fig.suptitle(f"{challenger} speedup over {reference} kernel (>1 = {challenger} faster)", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     fig.savefig(out_path, dpi=130)
     plt.close(fig)
@@ -283,12 +313,17 @@ def smem_sweep(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
         return out_path
 
     pbr["block_cfg"] = pbr.apply(_block_cfg_label, axis=1)
+    # Fold kernel into the line label too when multiple kernels are present --
+    # otherwise a (block_cfg, smem_size) group spanning e.g. zero_idle AND
+    # nnzflat rows gets silently averaged together into one misleading line.
+    multi_kernel = "kernel" in pbr.columns and pbr["kernel"].nunique() > 1
+    pbr["cfg_label"] = pbr["block_cfg"] + ("_" + pbr["kernel"].astype(str) if multi_kernel else "")
     smem_vals = sorted(pbr["smem_size"].dropna().unique())
-    cfgs = sorted(pbr["block_cfg"].unique())
+    cfgs = sorted(pbr["cfg_label"].unique())
     profiles = sorted(sub["profile"].unique())
     feats = sorted(sub["features"].unique())
 
-    cfg_colors = {c: col for c, col in zip(cfgs, plt.cm.tab10.colors)}
+    cfg_colors = _color_map(cfgs)
 
     fig, axes = plt.subplots(
         len(profiles), len(feats),
@@ -303,7 +338,7 @@ def smem_sweep(df: pd.DataFrame, system_size: int, out_path: Path) -> Path:
             cell_base = base[(base["profile"] == profile) & (base["features"] == feat)]
 
             for cfg in cfgs:
-                row = (cell_pbr[cell_pbr["block_cfg"] == cfg]
+                row = (cell_pbr[cell_pbr["cfg_label"] == cfg]
                        .groupby("smem_size")["time_ms"].mean()
                        .reindex(smem_vals))
                 if row.isna().all():
@@ -347,6 +382,10 @@ def main() -> None:
     p.add_argument("--outdir", default="plots")
     p.add_argument("--runs", nargs="*", default=None,
                    help="restrict to these run names (default: all)")
+    p.add_argument("--reference-kernel", default="block",
+                   help="kernel treated as the comparison baseline for the kernel-vs-kernel "
+                        "heatmaps (default 'block'; use e.g. 'zero_idle' for a sweep that has "
+                        "no 'block'-labeled data, such as the zero_idle/nnzflat comparison)")
     args = p.parse_args()
 
     outdir = Path(args.outdir)
@@ -356,26 +395,47 @@ def main() -> None:
     sizes = sorted(df["system_size"].unique())
     written = []
 
-    for size in sizes:
-        written.append(facet_grid(df, size, outdir / f"facet_size{size}.png"))
-
-    written.append(speedup_heatmap(df, outdir / "speedup.png"))
-
-    # Kernel comparison heatmaps — generated for any non-block PBR kernel present.
-    if "kernel" in df.columns:
-        kernels = set(df["kernel"].unique())
-        written.append(kernel_vs_cusparse_heatmap(df, "block", outdir / "block_vs_cusparse.png"))
-        for challenger in kernels - {"block", "baseline"}:
+    def _write_kernel_heatmaps(sub_df: pd.DataFrame, sub_outdir: Path) -> None:
+        if "kernel" not in sub_df.columns:
+            return
+        kernels = set(sub_df["kernel"].unique())
+        ref = args.reference_kernel
+        written.append(kernel_vs_cusparse_heatmap(sub_df, ref, sub_outdir / f"{ref}_vs_cusparse.png"))
+        for challenger in kernels - {ref, "baseline"}:
             written.append(kernel_speedup_heatmap(
-                df, challenger, outdir / f"{challenger}_vs_block.png"))
+                sub_df, challenger, sub_outdir / f"{challenger}_vs_{ref}.png", reference=ref))
             written.append(kernel_vs_cusparse_heatmap(
-                df, challenger, outdir / f"{challenger}_vs_cusparse.png"))
+                sub_df, challenger, sub_outdir / f"{challenger}_vs_cusparse.png"))
 
+    # One subfolder per smem tier with the FULL (uncollapsed) breakdown for that
+    # tier -- not a "best smem" summary. Each slice keeps every baseline row
+    # (cusparse/csr_naive have no smem_size, so they'd otherwise be dropped by
+    # an exact-match filter) alongside just that tier's PBR rows.
+    smem_values = sorted(df["smem_size"].dropna().unique()) if "smem_size" in df.columns else []
+
+    if smem_values:
+        for smem in smem_values:
+            smem_dir = outdir / f"smem{int(smem)}"
+            smem_dir.mkdir(parents=True, exist_ok=True)
+            sub = df[(df["smem_size"] == smem) | df["smem_size"].isna()]
+
+            for size in sizes:
+                written.append(facet_grid(sub, size, smem_dir / f"facet_size{size}.png"))
+            written.append(speedup_heatmap(sub, smem_dir / "speedup.png"))
+            _write_kernel_heatmaps(sub, smem_dir)
+    else:
+        for size in sizes:
+            written.append(facet_grid(df, size, outdir / f"facet_size{size}.png"))
+        written.append(speedup_heatmap(df, outdir / "speedup.png"))
+        _write_kernel_heatmaps(df, outdir)
+
+    # smem_sweep is inherently a cross-smem comparison chart -- keep it at the
+    # top level on the full (unfiltered) data, not split per tier.
     if _has_smem_sweep(df):
         for size in sizes:
             written.append(smem_sweep(df, size, outdir / f"smem_sweep_size{size}.png"))
 
-    print(f"rows={len(df)}  sizes={sizes}")
+    print(f"rows={len(df)}  sizes={sizes}  smem_values={smem_values}")
     for path in written:
         print(f"wrote {path}")
 
