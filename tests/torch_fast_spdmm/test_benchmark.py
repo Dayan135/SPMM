@@ -118,6 +118,22 @@ MATRIX_FAMILIES = [
      lambda n: {"system_size": n, "block_size": 8,
                 "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.02, n))]},
      "pattern_row_skewed"),
+    # row_skewed at 0.2%/1%/5% -- atomic-contention stress test (row 0's 8
+    # nonzeros all target the same compacted smem_Y row-slot in nnzflat's
+    # Step B) for the nnzflat vs nnzflat_shared vs zero_idle comparison,
+    # fixed at PBR block=8x8/min_nnz=8 (see SPDMM_ONLY_PBR_CONFIG below).
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.002, n))]},
+     "pattern_row_skewed_d0.2pct"),
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.01, n))]},
+     "pattern_row_skewed_d1pct"),
+    (generate_patterned_block_matrix,
+     lambda n: {"system_size": n, "block_size": 8,
+                "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.05, n))]},
+     "pattern_row_skewed_d5pct"),
 ]
 
 # Optional per-matrix gate: one SLURM task per (size, matrix) so each task is
@@ -154,6 +170,13 @@ def _make_pbr_runs():
     return runs
 
 PBR_RUNS = _make_pbr_runs()
+
+# Optional gate matching SPDMM_ONLY_MATRIX/SPDMM_ONLY_KERNEL's convention: restrict
+# to PBR configs whose id starts with this prefix (e.g. "pbr_8x8_min8" selects all
+# 3 smem tiers of the 8x8/min_nnz=8 config, still sweeping smem). Unset = all configs.
+_ONLY_PBR_CONFIG = os.environ.get("SPDMM_ONLY_PBR_CONFIG")
+if _ONLY_PBR_CONFIG:
+    PBR_RUNS = [r for r in PBR_RUNS if r.id.startswith(_ONLY_PBR_CONFIG)]
 
 # Which PBR kernel(s) to sweep -- (label, kwargs-for-pbr_matmul) pairs. "zero_idle"
 # forces the scalar path (force_scalar=True) rather than the auto vec/scalar choice
