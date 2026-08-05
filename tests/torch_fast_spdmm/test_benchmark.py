@@ -114,14 +114,12 @@ MATRIX_FAMILIES = [
      lambda n: {"system_size": n, "block_size": 8,
                 "patterns": [(PBR_PATTERN_PRESETS["checkerboard"], _sd(0.02, n))]},
      "pattern_checkerboard"),
-    (generate_patterned_block_matrix,
-     lambda n: {"system_size": n, "block_size": 8,
-                "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.02, n))]},
-     "pattern_row_skewed"),
     # row_skewed at 0.2%/1%/5% -- atomic-contention stress test (row 0's 8
     # nonzeros all target the same compacted smem_Y row-slot in nnzflat's
-    # Step B) for the nnzflat vs nnzflat_shared vs zero_idle comparison,
-    # fixed at PBR block=8x8/min_nnz=8 (see SPDMM_ONLY_PBR_CONFIG below).
+    # Step B) for the nnzflat vs nnzflat_shared vs zero_idle comparison.
+    # SPDMM_ONLY_PBR_CONFIG below can still pin this to one PBR config for a
+    # narrower/faster run; unset sweeps the full PBR_RUNS grid like every
+    # other matrix family.
     (generate_patterned_block_matrix,
      lambda n: {"system_size": n, "block_size": 8,
                 "patterns": [(PBR_PATTERN_PRESETS["row_skewed"], _sd(0.002, n))]},
@@ -153,9 +151,13 @@ MATRIX_CONFIGS = [
 # PBR block-size / min-nnz variants, crossed with the shared-memory tier.
 # smem_size controls the shared-memory tile (floats) per CTA.
 _PBR_BLOCK_CONFIGS = [
-    (2, 2), (2, 3),            # 2x2 PBR blocks
+    (2, 2), (2, 3),    # 2x2 PBR blocks
     (4, 2), (4, 4), (4, 8),    # 4x4 PBR blocks
-    (8, 2), (8, 8), (8, 12),   # 8x8 PBR blocks
+    (8, 2), (8, 8),    # 8x8 PBR blocks -- min_nnz capped at 8 (block max for
+                       # 1x8/8x1-oriented scattered matrices) so no config
+                       # here can silently 100%-CSR-shunt an otherwise-real
+                       # PBR workload the way min_nnz=12 did (see
+                       # SHOW_TO_ERAN.md sec. 2).
 ]  # (block_size, min_nnz)
 _SMEM_TIERS = [512, 1024, 2048]
 
