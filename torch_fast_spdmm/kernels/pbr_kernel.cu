@@ -700,6 +700,25 @@ template void launch_pbr_chunkcols_spmm<int64_t, double>(const int, const int, c
 //      same pattern already used for column rank `pc`) instead of the raw
 //      structural row, and Step C loops n_r*p via packed_active_rows instead
 //      of BLOCK_ROWS*p with a skip-branch.
+//   6. Shared position table (this version, branch feat/pbr-nnzflat-shared):
+//      even after step 5, per-line ncu profiling showed the step-4
+//      select-search (lines ~797-804) as the single largest sampled cost in
+//      the kernel -- because it's redone by every one of the current_p
+//      threads sharing an nz_idx (once per feature), and again on every
+//      base_f pass, even though the result never depends on feature or
+//      pass. THIS version hoists it to run exactly ONCE per active nonzero:
+//      n_nz threads each do the search once (before the base_f loop, since
+//      the result is pass-invariant) and store the packed (row,col) `pos`
+//      into a tiny nz_pos[] byte table carved off the TAIL of the same
+//      smem[TOTAL_SHARED] buffer smem_X/smem_Y use (MAX_NZ bytes, <=64) --
+//      not a new separate __shared__ array, so the kernel's static shared-
+//      memory footprint (already the binding occupancy limiter -- see
+//      OCCUPANCY_METRICS profiling) doesn't grow. Step B then does a single
+//      byte load + two __popc rank lookups instead of the 6-round search.
+//      Trade-off: reserving those bytes shrinks the *usable* smem_X/smem_Y
+//      budget, which can push the dynamic-p calculation down to the next
+//      power of 2 (more base_f passes) on some (block, smem_size) configs --
+//      not assumed to be free, measure before trusting it's a net win.
 //
 // Scalar-only, no vectorized variant (see chunkcols).
 
@@ -773,8 +792,42 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
     // set bit is exactly one nonzero, regardless of enumeration order).
     const uint32_t n_nz = __popcll(code);
 
-    // --- 2. DYNAMIC P CALCULATION ---
-    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (n_r + n_c), features));
+    // --- 1b. NZ POSITION TABLE: carve MAX_NZ bytes off the tail of the same
+    // `smem[TOTAL_SHARED]` buffer smem_X/smem_Y already use (not a new,
+    // separate __shared__ array -- doesn't grow the kernel's static shared-
+    // memory footprint, which is already the binding occupancy limiter).
+    // Each of the n_nz active-nonzero threads runs the select-kth-bit search
+    // exactly ONCE here (not per (nonzero,feature) work-item, not per
+    // base_f pass -- this table doesn't depend on features, and its storage
+    // never overlaps smem_X/smem_Y, so it's built once and reused across
+    // every pass). Step B then does a single byte load + two cheap __popc
+    // rank lookups instead of the 6-round search.
+    constexpr uint32_t MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
+    constexpr uint32_t NZ_POS_SLOTS = (MAX_NZ + sizeof(scalar_t) - 1) / sizeof(scalar_t);
+    constexpr uint32_t USABLE_SHARED = TOTAL_SHARED - NZ_POS_SLOTS;
+
+    uint8_t* nz_pos = reinterpret_cast<uint8_t*>(smem + USABLE_SHARED);
+
+    if (tx < n_nz) {
+        const uint32_t nz_idx = tx;
+        uint32_t pos = 0;
+        uint32_t remaining = nz_idx;
+        #pragma unroll
+        for (uint32_t half = MAX_NZ / 2; half >= 1; half /= 2) {
+            const uint64_t lower_mask = ((1ULL << half) - 1ULL) << pos;
+            const uint32_t cnt = __popcll(code & lower_mask);
+            if (remaining >= cnt) {
+                remaining -= cnt;
+                pos += half;
+            }
+        }
+        nz_pos[nz_idx] = static_cast<uint8_t>(pos);
+    }
+    __syncthreads();
+
+    // --- 2. DYNAMIC P CALCULATION --- (USABLE_SHARED, not TOTAL_SHARED --
+    // smem_X/smem_Y must never encroach into the reserved nz_pos tail)
+    const uint32_t p_log2 = 31u - __clz(min(USABLE_SHARED / (n_r + n_c), features));
     const uint32_t p      = 1u << p_log2;
     const uint32_t p_mask = p - 1u;
 
@@ -808,27 +861,11 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_kernel
             const uint32_t nz_idx = work_idx >> p_log2;
             const uint32_t f_in_s = work_idx & p_mask;
 
-            // Derive (actual_r, pc, local_data_ptr) for nz_idx directly from
-            // `code`, in `code`'s own native ROW-major bit order (see the
-            // history note above the kernel). "Select the nz_idx-th set bit
-            // of `code`" via binary search over popcounts of shrinking
-            // windows -- MAX_NZ (BLOCK_ROWS*BLOCK_COLS) is a compile-time
-            // power of 2 (4/16/64), so this is a fixed, fully-unrolled
-            // register-only loop (2/4/6 rounds), no array.
-            constexpr uint32_t MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
-
-            uint32_t pos = 0;
-            uint32_t remaining = nz_idx;
-            #pragma unroll
-            for (uint32_t half = MAX_NZ / 2; half >= 1; half /= 2) {
-                const uint64_t lower_mask = ((1ULL << half) - 1ULL) << pos;
-                const uint32_t cnt = __popcll(code & lower_mask);
-                if (remaining >= cnt) {
-                    remaining -= cnt;
-                    pos += half;
-                }
-            }
-
+            // (actual_r, physical_c) for nz_idx: O(1) byte lookup into the
+            // position table built once in the 1b precompute above, instead
+            // of redoing the select-kth-bit search on every (nonzero,
+            // feature) work-item.
+            const uint32_t pos = nz_pos[nz_idx];
             const uint32_t actual_r = pos / BLOCK_COLS;
             const uint32_t physical_c = pos % BLOCK_COLS;
 
