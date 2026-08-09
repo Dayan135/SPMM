@@ -283,7 +283,7 @@ def test_baseline_spmm(benchmark, bench_results, mat_config, features, dtype, al
     _, sparse_torch, x, size, profile = _prepare(mat_config, features, dtype)
 
     try:
-        benchmark(algo_fn, sparse_torch, x)
+        benchmark.pedantic(algo_fn, args=(sparse_torch, x), rounds=50)
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
@@ -328,7 +328,10 @@ def test_pbr_spmm(benchmark, bench_results, mat_config, features, dtype, pbr_run
     try:
         pbr_matmul(pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel_kwargs)
         torch.cuda.synchronize()
-        benchmark(pbr_matmul, pbr_mat, x, smem_size=pbr_cfg["smem_size"], **kernel_kwargs)
+        benchmark.pedantic(
+            pbr_matmul, args=(pbr_mat, x),
+            kwargs={"smem_size": pbr_cfg["smem_size"], **kernel_kwargs}, rounds=50,
+        )
     except torch.OutOfMemoryError:
         _cleanup()
         pytest.skip("OutOfMemory")
