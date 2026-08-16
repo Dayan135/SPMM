@@ -67,6 +67,13 @@ def main() -> None:
     parser.add_argument('--block', type=int, default=8)
     parser.add_argument('--min-nnz', type=int, default=2)
     parser.add_argument('--smem-size', type=int, default=2048)
+    parser.add_argument('--pbr-kernel', default='block',
+                        choices=['block', 'chunkcols', 'nnzflat'],
+                        help='which PBR kernel to run when --kernel pbr. '
+                             'nnzflat is the fair within-family comparison: BOO '
+                             'uses the same one-thread-per-(nonzero,feature) work '
+                             'distribution, so block/zero_idle differs in BOTH '
+                             'format and work distribution.')
     parser.add_argument('--time', action='store_true',
                         help='also report a CUDA-event wall time (skip under ncu)')
     args = parser.parse_args()
@@ -101,7 +108,8 @@ def main() -> None:
         for key, value in dataclasses.asdict(pbr_info(pbr)).items():
             print(f'  {key:24s} {value}')
         pbr.to('cuda')
-        run = lambda: pbr_matmul(pbr, x, smem_size=args.smem_size)  # noqa: E731
+        run = lambda: pbr_matmul(pbr, x, smem_size=args.smem_size,  # noqa: E731
+                                 kernel=args.pbr_kernel)
 
     run()
     torch.cuda.synchronize()
