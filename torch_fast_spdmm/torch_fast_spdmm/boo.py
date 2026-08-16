@@ -165,7 +165,7 @@ def _build_boo_cuda_dispatch():
             torch.float64: core.boo_spmm_cuda_f64}
 
 
-def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 128, p: int = 8,
+def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 32,
                csr_mode: int = 0) -> torch.Tensor:
     """Y = A @ X.  Dispatches on x.device.
 
@@ -260,7 +260,7 @@ def boo_arena_bytes(max_nr: int, max_nc: int, max_nnz_blk: int, p: int,
     return data + ids + tiles
 
 
-def boo_info(boo_mat, p: int = 8, threads: int = 128) -> BOOInfo:
+def boo_info(boo_mat, p: int = 32, threads: int = 256) -> BOOInfo:
     """Structural summary, derived entirely from the built format -- no rebuild."""
     _, scalar_dtype = _BOO_TYPE_MAP[type(boo_mat).__name__]
     scalar_bytes = np.dtype(scalar_dtype).itemsize

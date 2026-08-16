@@ -35,8 +35,8 @@ at::Tensor boo_spmm_cuda_dispatch(
     const at::Tensor rem_col_ind,
     const at::Tensor rem_vals,
     const at::Tensor X,
-    int threads = 128,
-    int p = 8,
+    int threads = 256,
+    int p = 32,
     int csr_mode = 0
 ) {
     const int num_blocks = (int)blk_row_grp.size(0);

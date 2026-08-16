@@ -8,7 +8,8 @@
 // `threads` in {128, 256, 512} and `p` in {8, 16, 32} are swept, not fixed:
 // `threads` is the 4x step lever on the shared-memory budget (128 -> 512
 // quadruples it at identical 100% occupancy) and `p` is the linear one.
-// Defaults are threads=128, p=8.
+// Measured optimum on fem2d/fem2d_permuted at N=65536,f512: threads=256, p=32
+// (p=8 is 2.1x off it -- see BOO_FORMAT.md sec. 12c).
 //
 // The arena is sized from the format's GLOBAL maxima because `extern __shared__`
 // takes one size for the whole grid -- CUDA has no per-CTA shared-memory size.
@@ -35,8 +36,8 @@ void launch_boo_spmm(
     const scalar_t* X,
     scalar_t* Y,
     cudaStream_t stream = 0,
-    int threads = 128,
-    int p = 8);
+    int threads = 256,
+    int p = 32);
 
 // Dynamic shared memory the launcher requests, in bytes.  Mirrors
 // torch_fast_spdmm.boo.boo_arena_bytes so the Python occupancy model and the
