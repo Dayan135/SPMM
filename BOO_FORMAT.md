@@ -3,7 +3,7 @@
 A clustered, variable-size, bitmap-free sparse-matrix format for SpMM, and the CUDA
 kernel that consumes it.
 
-**Status:** design. Nothing in this document has been measured yet. Claims that are
+**Status:** implemented and measured. First results in §12. Claims that are still
 predictions rather than measurements are marked as such — there is a specific reason for
 that discipline, recorded in §8.
 
@@ -617,3 +617,94 @@ are noise unless they reproduce.
    change, and BOO makes it a small delta. This is the one variant where smem pitch padding
    would need re-examining.
 4. **Size-class bucketing**, if the histogram warrants it.
+
+---
+
+## 12. First measured results
+
+All at **N=65536, features=512, fp32, RTX 3090**, CUDA-event wall time, mean of 20 runs
+after 5 warmups. `compressed_fraction = 1.0` everywhere (the `keep` policy, so this is
+structural, not a coincidence) — no CSR-fallback confound is possible in any of these cells.
+
+### 12a. The format, at fixed work distribution
+
+BOO uses `nnzflat`'s one-thread-per-(nonzero, feature) work distribution. So the honest
+format comparison is against PBR's **`nnzflat`** kernel — comparing against PBR's `block`
+(`zero_idle`) varies both the format *and* the work distribution at once.
+
+| matrix | PBR `nnzflat` | **BOO** | BOO speedup |
+|---|---|---|---|
+| `fem2d_permuted` | 8.24 ms | **4.72 ms** | **1.74×** |
+| `fem2d` | 8.50 ms | **4.64 ms** | **1.83×** |
+
+**The format change is worth 1.7–1.8× at fixed work distribution.** That is the bitmap
+going away (no scan, no popcount, no select-kth-set-bit, no per-thread COO rebuild), the
+block-data hoist, free row compaction, and larger clustered blocks, combined.
+
+### 12b. Clustering, on destroyed locality
+
+`fem2d_permuted` is `fem2d` with mesh nodes randomly relabeled — built specifically to
+destroy grid-aligned locality. BOO at `threads=256, p=32`:
+
+| cluster | target | blocks | `x_loads` | occupancy | time |
+|---|---|---|---|---|---|
+| `identity` | 16 | 133,150 | 2,130,400 | 100% | 10.51 ms |
+| `identity` | 32 | 129,624 | 4,147,968 | 100% | 16.20 ms |
+| `identity` | 64 | 122,700 | 7,852,800 | 83% | 28.89 ms |
+| `hem` | 16 | 35,255 | 495,358 | 100% | 4.98 ms |
+| **`hem`** | **32** | **18,485** | **479,712** | **100%** | **4.67 ms** |
+| `hem` | 64 | 10,022 | 476,245 | 50% | 6.43 ms |
+
+**3.5× from clustering alone** (16.20 → 4.67 at target=32), tracking an 8.6× `x_loads`
+reduction. And it lands on top of the *unpermuted* matrix's own number (4.60 ms,
+`identity` on `fem2d`) — **the clustering fully recovers the locality the permutation
+destroyed.** That was the cheapest falsifiable claim in the design (§10.1); it holds.
+
+The negative control holds too: on `fem2d`, whose natural order is already good,
+`hem` (4.68 ms) vs `identity` (4.60 ms) is a wash, exactly as predicted.
+
+`x_loads` predicts wall time well within BOO, so the offline metric is validated as a
+screening tool — clustering methods can be ranked without GPU time.
+
+### 12c. `p = 8` was wrong
+
+The design point was `p = 8`, on the argument that 8 fp32 = 32 B = one sector is all
+coalescing needs (§9.1). Measured on `fem2d_permuted` with `hem`, target=32:
+
+| `p` | threads=128 | threads=256 | threads=512 |
+|---|---|---|---|
+| 8 | 9.91 ms | 10.31 ms | 12.32 ms |
+| 16 | 6.42 ms | 6.61 ms | 7.81 ms |
+| **32** | 5.53 ms | **4.69 ms** | 5.44 ms |
+| 64 | 7.94 ms | 5.06 ms | — |
+| 128 | 11.39 ms | 7.95 ms | — |
+
+**`p = 32` is a clear interior optimum, and `p = 8` is 2.1× off it.** Below 32 the barrier
+count (`features / p` passes, each with three `__syncthreads()`) and the 4× wavefront
+count dominate; above 32 the arena grows and occupancy collapses (at `p=128`,
+`threads=128`: 16.7%). The §9.1 reasoning was right that 32 B is enough for *sector*
+efficiency and wrong that sector efficiency was the binding constraint.
+
+`threads` behaves as designed — a budget lever, not a direct win: it matters precisely
+because it is what lets `p = 32` run at 100% occupancy (58% at `threads=128`).
+
+**Defaults updated: `threads=256, p=32`.**
+
+### 12d. What is left
+
+| matrix | PBR `block` | BOO best |
+|---|---|---|
+| `fem2d_permuted` | 3.63 ms | 4.72 ms (1.30× slower) |
+| `fem2d` | 2.37 ms | 4.64 ms (1.96× slower) |
+
+BOO does not beat PBR's `block` kernel. But `block` is `zero_idle`, which accumulates a
+whole row in a *register* and does one plain shared store, where BOO (like `nnzflat`)
+issues a shared `atomicAdd` per (nonzero, feature). `SHOW_TO_ERAN.md` already measured
+that work-distribution difference at 1.1–2.2× in `zero_idle`'s favour on PBR, and the
+residual gap here is the same size — i.e. **the remaining deficit is the work
+distribution, not the format**, and §11 follow-on 3 (warp-per-row register accumulation
+before the shared store) is the specific fix. BOO makes it a small delta rather than a
+rewrite.
+
+Not yet measured: the `nz_order` isolate (§4.3, §8), the small-block policy decision (§7),
+fp64, and any matrix other than the `fem2d` pair.
