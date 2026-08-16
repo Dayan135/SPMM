@@ -1,3 +1,10 @@
+// Registers pybind11's at::Tensor type caster.  Without it every binding in
+// this TU that takes an at::Tensor is uncallable from Python -- pybind sees an
+// unregistered type and rejects the argument.  That has always been true of
+// pbr_batched_matmul_cpu here (the CUDA bindings work only because
+// bindings_kernels.cu includes this header itself).
+#include <torch/extension.h>
+
 #include <ATen/SparseCsrTensorUtils.h>
 
 #include "../pbr_matrix/pbr_matrix.hpp"
