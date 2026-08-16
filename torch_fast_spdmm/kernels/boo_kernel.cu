@@ -205,9 +205,11 @@ void launch_boo_spmm(
 
     #define BOO_DISPATCH_P(T)                                                    \
         do {                                                                     \
-            if      (p <= 8)  BOO_LAUNCH(T, 3);                                  \
-            else if (p <= 16) BOO_LAUNCH(T, 4);                                  \
-            else              BOO_LAUNCH(T, 5);                                  \
+            if      (p <= 8)   BOO_LAUNCH(T, 3);                                 \
+            else if (p <= 16)  BOO_LAUNCH(T, 4);                                 \
+            else if (p <= 32)  BOO_LAUNCH(T, 5);                                 \
+            else if (p <= 64)  BOO_LAUNCH(T, 6);                                 \
+            else               BOO_LAUNCH(T, 7);                                 \
         } while (0)
 
     if      (threads <= 128) BOO_DISPATCH_P(128);
