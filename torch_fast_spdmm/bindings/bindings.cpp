@@ -7,7 +7,9 @@
 void bind_cuda_functions(py::module_& m);
 #endif
 
-#define BOO_ARRAY_PROPERTY(name, field, elem_t) \
+// T and S must be macro parameters here: tokens named T/S inside a nested
+// macro's body are not substituted by the enclosing macro's arguments.
+#define BOO_ARRAY_PROPERTY(T, S, name, field, elem_t) \
             .def_property_readonly(name, [](const boo_matrix_t<T, S>& self) { \
                 return py::array_t<elem_t>(self.field.size(), self.field.data()); \
             })
@@ -21,19 +23,19 @@ void bind_cuda_functions(py::module_& m);
             .def_readonly("max_nc", &boo_matrix_t<T, S>::max_nc) \
             .def_readonly("max_nnz_blk", &boo_matrix_t<T, S>::max_nnz_blk) \
             .def_readonly("nz_order", &boo_matrix_t<T, S>::nz_order) \
-            BOO_ARRAY_PROPERTY("row_grp_ptr", row_grp_ptr, T) \
-            BOO_ARRAY_PROPERTY("row_ids",     row_ids,     T) \
-            BOO_ARRAY_PROPERTY("col_grp_ptr", col_grp_ptr, T) \
-            BOO_ARRAY_PROPERTY("col_ids",     col_ids,     T) \
-            BOO_ARRAY_PROPERTY("blk_row_grp", blk_row_grp, T) \
-            BOO_ARRAY_PROPERTY("blk_col_grp", blk_col_grp, T) \
-            BOO_ARRAY_PROPERTY("blk_nz_ptr",  blk_nz_ptr,  T) \
-            BOO_ARRAY_PROPERTY("blk_shift",   blk_shift,   uint8_t) \
-            BOO_ARRAY_PROPERTY("nz_idx",      nz_idx,      uint16_t) \
-            BOO_ARRAY_PROPERTY("nz_val",      nz_val,      S) \
-            BOO_ARRAY_PROPERTY("rem_indptr",  rem_indptr,  T) \
-            BOO_ARRAY_PROPERTY("rem_col_ind", rem_col_ind, T) \
-            BOO_ARRAY_PROPERTY("rem_vals",    rem_vals,    S) \
+            BOO_ARRAY_PROPERTY(T, S, "row_grp_ptr", row_grp_ptr, T) \
+            BOO_ARRAY_PROPERTY(T, S, "row_ids", row_ids, T) \
+            BOO_ARRAY_PROPERTY(T, S, "col_grp_ptr", col_grp_ptr, T) \
+            BOO_ARRAY_PROPERTY(T, S, "col_ids", col_ids, T) \
+            BOO_ARRAY_PROPERTY(T, S, "blk_row_grp", blk_row_grp, T) \
+            BOO_ARRAY_PROPERTY(T, S, "blk_col_grp", blk_col_grp, T) \
+            BOO_ARRAY_PROPERTY(T, S, "blk_nz_ptr", blk_nz_ptr, T) \
+            BOO_ARRAY_PROPERTY(T, S, "blk_shift", blk_shift, uint8_t) \
+            BOO_ARRAY_PROPERTY(T, S, "nz_idx", nz_idx, uint16_t) \
+            BOO_ARRAY_PROPERTY(T, S, "nz_val", nz_val, S) \
+            BOO_ARRAY_PROPERTY(T, S, "rem_indptr", rem_indptr, T) \
+            BOO_ARRAY_PROPERTY(T, S, "rem_col_ind", rem_col_ind, T) \
+            BOO_ARRAY_PROPERTY(T, S, "rem_vals", rem_vals, S) \
             .def("num_blocks",     &boo_matrix_t<T, S>::num_blocks) \
             .def("num_row_groups", &boo_matrix_t<T, S>::num_row_groups) \
             .def("num_col_groups", &boo_matrix_t<T, S>::num_col_groups) \
