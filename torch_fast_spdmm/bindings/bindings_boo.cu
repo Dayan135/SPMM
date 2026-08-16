@@ -37,7 +37,8 @@ at::Tensor boo_spmm_cuda_dispatch(
     const at::Tensor X,
     int threads = 256,
     int p = 32,
-    int csr_mode = 0
+    int csr_mode = 0,
+    bool row_seg = true
 ) {
     const int num_blocks = (int)blk_row_grp.size(0);
     const int csr_nnz    = (int)rem_col_ind.size(0);
@@ -75,7 +76,7 @@ at::Tensor boo_spmm_cuda_dispatch(
             X3.data_ptr<scalar_t>(),
             Y.data_ptr<scalar_t>(),
             block_stream.stream(),
-            threads, p
+            threads, p, row_seg
         );
     }
 

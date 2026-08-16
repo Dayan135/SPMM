@@ -37,9 +37,14 @@ void launch_boo_spmm(
     scalar_t* Y,
     cudaStream_t stream = 0,
     int threads = 256,
-    int p = 32);
+    int p = 32,
+    // row_seg: register-accumulating variant. Requires nz_order == rowmajor
+    // (nz_idx sorted by local_row). Default; the caller falls back to false
+    // for colmajor.
+    bool row_seg = true);
 
 // Dynamic shared memory the launcher requests, in bytes.  Mirrors
 // torch_fast_spdmm.boo.boo_arena_bytes so the Python occupancy model and the
 // real launch cannot drift apart.
 int boo_arena_bytes(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes);
+int boo_arena_bytes_rowseg(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes);

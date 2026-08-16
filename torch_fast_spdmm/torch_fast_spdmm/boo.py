@@ -166,7 +166,7 @@ def _build_boo_cuda_dispatch():
 
 
 def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 32,
-               csr_mode: int = 0) -> torch.Tensor:
+               csr_mode: int = 0, row_seg: Optional[bool] = None) -> torch.Tensor:
     """Y = A @ X.  Dispatches on x.device.
 
     `threads` in {128, 256, 512} and `p` in {8, 16, 32} are the two shared-memory
@@ -189,6 +189,13 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 32,
     if x.dtype not in _BOO_CUDA_DISPATCH:
         raise TypeError(f'BOO CUDA kernel supports float32/float64, got {x.dtype}')
 
+    if row_seg is None:
+        # The register-accumulating kernel needs nz_idx sorted by local_row,
+        # which only rowmajor guarantees.
+        row_seg = int(boo_mat.nz_order) == _ORDER_CODE['rowmajor']
+    elif row_seg and int(boo_mat.nz_order) != _ORDER_CODE['rowmajor']:
+        raise ValueError('row_seg=True requires a matrix built with nz_order="rowmajor"')
+
     y = _BOO_CUDA_DISPATCH[x.dtype](
         boo_mat.rows, boo_mat.cols,
         int(boo_mat.max_nr), int(boo_mat.max_nc), int(boo_mat.max_nnz_blk),
@@ -196,7 +203,7 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 32,
         meta.blk_row_grp, meta.blk_col_grp, meta.blk_nz_ptr, meta.blk_shift,
         meta.nz_idx, meta.nz_val,
         meta.rem_indptr, meta.rem_col_ind, meta.rem_vals,
-        x, threads, p, csr_mode,
+        x, threads, p, csr_mode, row_seg,
     )
     return y.squeeze(0) if x.dim() == 2 else y
 
@@ -248,19 +255,28 @@ def _occupancy(arena_bytes: int, threads: int) -> Tuple[int, float]:
 
 
 def boo_arena_bytes(max_nr: int, max_nc: int, max_nnz_blk: int, p: int,
-                    scalar_bytes: int) -> int:
+                    scalar_bytes: int, row_seg: bool = True) -> int:
     """Bytes of dynamic shared memory the launcher must request.
 
     Sized from the GLOBAL maxima, because `extern __shared__` takes one size for
     the whole grid -- every CTA gets the same allocation (BOO_FORMAT.md 9.4).
+
+    The row-segmented kernel drops smem_Y entirely (each thread accumulates a
+    row in a register) at the cost of a small row-start table, so it is
+    materially cheaper -- which is part of why it wins.
     """
     data = max_nnz_blk * (scalar_bytes + 2)          # nz_val + nz_idx
-    ids = 4 * (max_nr + max_nc)                      # row_ids + col_ids, int32
-    tiles = scalar_bytes * p * (max_nr + max_nc)     # smem_X + smem_Y
+    if row_seg:
+        ids = 4 * (max_nr + max_nc) + 4 * (max_nr + 1)   # + row_start
+        tiles = scalar_bytes * p * max_nc                # smem_X only
+    else:
+        ids = 4 * (max_nr + max_nc)
+        tiles = scalar_bytes * p * (max_nr + max_nc)     # smem_X + smem_Y
     return data + ids + tiles
 
 
-def boo_info(boo_mat, p: int = 32, threads: int = 256) -> BOOInfo:
+def boo_info(boo_mat, p: int = 32, threads: int = 256,
+             row_seg: bool = True) -> BOOInfo:
     """Structural summary, derived entirely from the built format -- no rebuild."""
     _, scalar_dtype = _BOO_TYPE_MAP[type(boo_mat).__name__]
     scalar_bytes = np.dtype(scalar_dtype).itemsize
@@ -295,7 +311,7 @@ def boo_info(boo_mat, p: int = 32, threads: int = 256) -> BOOInfo:
     compressed = int(boo_mat.compressed_nnz())
     total = int(boo_mat.total_nnz)
     arena = boo_arena_bytes(int(boo_mat.max_nr), int(boo_mat.max_nc),
-                            int(boo_mat.max_nnz_blk), p, scalar_bytes)
+                            int(boo_mat.max_nnz_blk), p, scalar_bytes, row_seg)
     ctas, occupancy = _occupancy(arena, threads)
 
     return BOOInfo(

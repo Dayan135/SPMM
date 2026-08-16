@@ -37,6 +37,15 @@ int boo_arena_bytes(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_b
     return data + ids + tiles + 16;                          // + alignment slack
 }
 
+// The row-segmented kernel needs no smem_Y at all -- each thread accumulates a
+// whole row in a register -- but does need a per-block row-start table.
+int boo_arena_bytes_rowseg(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes) {
+    const int data = max_nnz_blk * (scalar_bytes + 2);
+    const int ids = 4 * (max_nr + max_nc) + 4 * (max_nr + 1);  // + sh_row_start
+    const int tiles = scalar_bytes * p * max_nc;               // smem_X only
+    return data + ids + tiles + 16;
+}
+
 
 template <typename scalar_t, int THREADS, int P_LOG2>
 __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_kernel(
@@ -158,6 +167,153 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_kern
 }
 
 
+// ===========================================================================
+// Row-segmented variant -- the default when nz_order == rowmajor
+// ===========================================================================
+//
+// Profiling the nnzflat kernel above on fem2d/65536/f512 found it *compute*
+// bound, not memory bound: sm_throughput 92%, alu_pipe 40%, long_scoreboard
+// only 10.8%, and the single largest stall short_scoreboard at 29.3% -- i.e.
+// warps waiting on shared-memory dependencies. That is the per-(nonzero,
+// feature) atomicAdd into smem_Y.
+//
+// Here each thread instead owns one (row, feature) work-item and accumulates
+// that row's whole contribution in a REGISTER, then commits once. Removes:
+//   * every shared atomic,
+//   * smem_Y entirely (and its zeroing pass) -- a smaller arena, so more CTAs,
+//   * one __syncthreads() per feature tile.
+// Global atomic count is unchanged. This is zero_idle's structure on BOO's
+// format, and zero_idle is the PBR kernel that actually wins.
+//
+// REQUIRES nz_order == rowmajor, which makes nz_idx sorted by local_row, so a
+// per-block row-start table can be recovered by binary search. The launcher
+// falls back to the nnzflat kernel for colmajor.
+
+template <typename scalar_t, int THREADS, int P_LOG2>
+__global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kernel(
+    const uint32_t num_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t rows,
+    const uint32_t cols,
+    const uint32_t max_nr,
+    const uint32_t max_nc,
+    const uint32_t max_nnz_blk,
+    const int32_t* __restrict__ row_grp_ptr,
+    const int32_t* __restrict__ row_ids,
+    const int32_t* __restrict__ col_grp_ptr,
+    const int32_t* __restrict__ col_ids,
+    const int32_t* __restrict__ blk_row_grp,
+    const int32_t* __restrict__ blk_col_grp,
+    const int32_t* __restrict__ blk_nz_ptr,
+    const uint8_t* __restrict__ blk_shift,
+    const uint16_t* __restrict__ nz_idx,
+    const scalar_t* __restrict__ nz_val,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    constexpr uint32_t P = 1u << P_LOG2;
+    constexpr uint32_t P_MASK = P - 1u;
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_slab = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_blocks || batch_idx >= batch_size) return;
+
+    extern __shared__ __align__(16) char boo_smem_raw[];
+    scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);
+    scalar_t* smem_X = sh_nz_val + max_nnz_blk;
+    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + max_nc * P);
+    int32_t* sh_row_ids = sh_col_ids + max_nc;
+    int32_t* sh_row_start = sh_row_ids + max_nr;              // max_nr + 1 entries
+    uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_start + max_nr + 1);
+
+    const uint32_t rg = blk_row_grp[b_idx];
+    const uint32_t cg = blk_col_grp[b_idx];
+    const uint32_t row_base = row_grp_ptr[rg];
+    const uint32_t n_r = row_grp_ptr[rg + 1] - row_base;
+    const uint32_t col_base = col_grp_ptr[cg];
+    const uint32_t n_c = col_grp_ptr[cg + 1] - col_base;
+    const uint32_t nz_base = blk_nz_ptr[b_idx];
+    const uint32_t n_nz = blk_nz_ptr[b_idx + 1] - nz_base;
+
+    if (n_r == 0 || n_c == 0 || n_nz == 0) return;
+
+    const uint32_t shift = blk_shift[b_idx];
+    const uint32_t col_mask = (1u << shift) - 1u;
+
+    // --- LOAD, once per CTA -------------------------------------------------
+    for (uint32_t i = tx; i < n_nz; i += THREADS) {
+        sh_nz_val[i] = nz_val[nz_base + i];
+        sh_nz_idx[i] = nz_idx[nz_base + i];
+    }
+    for (uint32_t i = tx; i < n_c; i += THREADS) sh_col_ids[i] = col_ids[col_base + i];
+    for (uint32_t i = tx; i < n_r; i += THREADS) sh_row_ids[i] = row_ids[row_base + i];
+    __syncthreads();
+
+    // Row-start table by binary search. nz_idx is sorted by local_row (rowmajor)
+    // and local_col occupies the low bits, so `idx >> shift` is non-decreasing.
+    // Binary search rather than a scan because it is branch-free per thread,
+    // needs no atomics, and handles rows with NO nonzero in this block (a row
+    // group member the column group simply does not touch) for free.
+    for (uint32_t r = tx; r <= n_r; r += THREADS) {
+        uint32_t lo = 0, hi = n_nz;
+        while (lo < hi) {
+            const uint32_t mid = (lo + hi) >> 1;
+            if ((uint32_t)(sh_nz_idx[mid] >> shift) < r) lo = mid + 1;
+            else hi = mid;
+        }
+        sh_row_start[r] = (int32_t)lo;
+    }
+    __syncthreads();
+
+    const uint32_t feat_start = feat_slab * BOO_FEAT_BLOCK;
+    if (feat_start >= features) return;
+    const uint32_t feat_end = min(feat_start + BOO_FEAT_BLOCK, features);
+
+    const size_t x_batch_base = static_cast<size_t>(batch_idx) * cols * features;
+    const size_t y_batch_base = static_cast<size_t>(batch_idx) * rows * features;
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += P) {
+
+        // --- STEP A: stage X (no smem_Y to zero) ---------------------------
+        for (uint32_t i = tx; i < n_c * P; i += THREADS) {
+            const uint32_t c = i >> P_LOG2;
+            const uint32_t global_f = base_f + (i & P_MASK);
+            smem_X[i] = (global_f < features)
+                ? X[x_batch_base + static_cast<size_t>(sh_col_ids[c]) * features + global_f]
+                : scalar_t(0);
+        }
+        __syncthreads();
+
+        // --- STEP B+C: one thread per (row, feature), register accumulate ---
+        for (uint32_t i = tx; i < n_r * P; i += THREADS) {
+            const uint32_t r = i >> P_LOG2;
+            const uint32_t f = i & P_MASK;
+            const uint32_t global_f = base_f + f;
+
+            const uint32_t begin = sh_row_start[r];
+            const uint32_t end = sh_row_start[r + 1];
+
+            scalar_t acc = scalar_t(0);
+            for (uint32_t k = begin; k < end; ++k) {
+                acc += sh_nz_val[k] * smem_X[(sh_nz_idx[k] & col_mask) * P + f];
+            }
+
+            if (acc != scalar_t(0) && global_f < features) {
+                atomicAdd(&Y[y_batch_base
+                             + static_cast<size_t>(sh_row_ids[r]) * features
+                             + global_f],
+                          acc);
+            }
+        }
+        __syncthreads();
+    }
+}
+
+
 template <typename scalar_t>
 void launch_boo_spmm(
     const int num_blocks, const int features, const int batch_size,
@@ -169,7 +325,7 @@ void launch_boo_spmm(
     const int32_t* blk_nz_ptr, const uint8_t* blk_shift,
     const uint16_t* nz_idx, const scalar_t* nz_val,
     const scalar_t* X, scalar_t* Y,
-    cudaStream_t stream, int threads, int p
+    cudaStream_t stream, int threads, int p, bool row_seg
 ) {
     if (num_blocks == 0 || features == 0 || batch_size == 0) return;
 
@@ -178,15 +334,18 @@ void launch_boo_spmm(
     // default p in the first place.
     while (p > 1 && p > features) p >>= 1;
 
-    const int arena = boo_arena_bytes(max_nr, max_nc, max_nnz_blk, p,
-                                      static_cast<int>(sizeof(scalar_t)));
+    const int scalar_bytes = static_cast<int>(sizeof(scalar_t));
+    const int arena = row_seg
+        ? boo_arena_bytes_rowseg(max_nr, max_nc, max_nnz_blk, p, scalar_bytes)
+        : boo_arena_bytes(max_nr, max_nc, max_nnz_blk, p, scalar_bytes);
 
     const int feat_slabs = (features + BOO_FEAT_BLOCK - 1) / BOO_FEAT_BLOCK;
     const dim3 grid(num_blocks, batch_size, feat_slabs);
 
     #define BOO_LAUNCH(T, PL)                                                                  \
         do {                                                                                   \
-            auto kernel = boo_spmm_nnzflat_kernel<scalar_t, T, PL>;                            \
+            auto kernel = row_seg ? boo_spmm_rowseg_kernel<scalar_t, T, PL>                    \
+                                  : boo_spmm_nnzflat_kernel<scalar_t, T, PL>;                  \
             /* Only required above 48 KB/CTA, but set it guarded anyway: without */            \
             /* it an oversized arena fails at launch with a swallowed             */            \
             /* cudaErrorInvalidValue rather than anything diagnosable.            */            \
@@ -224,10 +383,10 @@ template void launch_boo_spmm<float>(
     const int, const int, const int, const int, const int, const int, const int, const int,
     const int32_t*, const int32_t*, const int32_t*, const int32_t*,
     const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
-    const uint16_t*, const float*, const float*, float*, cudaStream_t, int, int);
+    const uint16_t*, const float*, const float*, float*, cudaStream_t, int, int, bool);
 
 template void launch_boo_spmm<double>(
     const int, const int, const int, const int, const int, const int, const int, const int,
     const int32_t*, const int32_t*, const int32_t*, const int32_t*,
     const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
-    const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int);
+    const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int, bool);
