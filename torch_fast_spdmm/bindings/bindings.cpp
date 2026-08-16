@@ -1,10 +1,57 @@
 #include <ATen/SparseCsrTensorUtils.h>
 
 #include "../pbr_matrix/pbr_matrix.hpp"
+#include "../boo_matrix/boo_matrix.hpp"
 
 #ifdef CUDA_ENABLED
 void bind_cuda_functions(py::module_& m);
 #endif
+
+#define BOO_ARRAY_PROPERTY(name, field, elem_t) \
+            .def_property_readonly(name, [](const boo_matrix_t<T, S>& self) { \
+                return py::array_t<elem_t>(self.field.size(), self.field.data()); \
+            })
+
+#define BIND_BOO_MATRIX_CLASS(T, S, py_name) \
+        py::class_<boo_matrix_t<T, S>>(m, (py_name), py::dynamic_attr()) \
+            .def_readonly("rows", &boo_matrix_t<T, S>::rows) \
+            .def_readonly("cols", &boo_matrix_t<T, S>::cols) \
+            .def_readonly("total_nnz", &boo_matrix_t<T, S>::total_nnz) \
+            .def_readonly("max_nr", &boo_matrix_t<T, S>::max_nr) \
+            .def_readonly("max_nc", &boo_matrix_t<T, S>::max_nc) \
+            .def_readonly("max_nnz_blk", &boo_matrix_t<T, S>::max_nnz_blk) \
+            .def_readonly("nz_order", &boo_matrix_t<T, S>::nz_order) \
+            BOO_ARRAY_PROPERTY("row_grp_ptr", row_grp_ptr, T) \
+            BOO_ARRAY_PROPERTY("row_ids",     row_ids,     T) \
+            BOO_ARRAY_PROPERTY("col_grp_ptr", col_grp_ptr, T) \
+            BOO_ARRAY_PROPERTY("col_ids",     col_ids,     T) \
+            BOO_ARRAY_PROPERTY("blk_row_grp", blk_row_grp, T) \
+            BOO_ARRAY_PROPERTY("blk_col_grp", blk_col_grp, T) \
+            BOO_ARRAY_PROPERTY("blk_nz_ptr",  blk_nz_ptr,  T) \
+            BOO_ARRAY_PROPERTY("blk_shift",   blk_shift,   uint8_t) \
+            BOO_ARRAY_PROPERTY("nz_idx",      nz_idx,      uint16_t) \
+            BOO_ARRAY_PROPERTY("nz_val",      nz_val,      S) \
+            BOO_ARRAY_PROPERTY("rem_indptr",  rem_indptr,  T) \
+            BOO_ARRAY_PROPERTY("rem_col_ind", rem_col_ind, T) \
+            BOO_ARRAY_PROPERTY("rem_vals",    rem_vals,    S) \
+            .def("num_blocks",     &boo_matrix_t<T, S>::num_blocks) \
+            .def("num_row_groups", &boo_matrix_t<T, S>::num_row_groups) \
+            .def("num_col_groups", &boo_matrix_t<T, S>::num_col_groups) \
+            .def("compressed_nnz", &boo_matrix_t<T, S>::compressed_nnz) \
+            .def("remainder_nnz",  &boo_matrix_t<T, S>::remainder_nnz) \
+            .def("__repr__", [](const boo_matrix_t<T, S>& self) { \
+                return std::string("BOOMatrix(") \
+                     + std::to_string(self.rows) + "x" + std::to_string(self.cols) \
+                     + ", blocks=" + std::to_string(self.num_blocks()) \
+                     + ", grid=" + std::to_string(self.num_row_groups()) \
+                     + "x" + std::to_string(self.num_col_groups()) \
+                     + ", max_nr=" + std::to_string(self.max_nr) \
+                     + ", max_nc=" + std::to_string(self.max_nc) \
+                     + ", max_nnz_blk=" + std::to_string(self.max_nnz_blk) \
+                     + ", compressed_nnz=" + std::to_string(self.compressed_nnz()) \
+                     + ", remainder_nnz=" + std::to_string(self.remainder_nnz()) \
+                     + ")"; \
+            });
 
 #define BIND_PBR_STATS_CLASS(T, S, py_name) \
         py::class_<pbr_stats_t<T, S>>(m, py_name) \
@@ -126,6 +173,36 @@ PYBIND11_MODULE(torch_fast_spdmm_core, m) {
     m.def("pbr_analyze_csr", &pbr_analyze_csr<uint32_t, float>);
     m.def("pbr_analyze_csr", &pbr_analyze_csr<uint64_t, double>);
     m.def("pbr_analyze_csr", &pbr_analyze_csr<uint32_t, double>);
+
+    // --- BOO (Blocked COO) --------------------------------------------------
+    py::enum_<boo_small_block_policy_t>(m, "BooSmallBlockPolicy")
+        .value("KEEP", boo_small_block_policy_t::BOO_KEEP)
+        .value("MERGE", boo_small_block_policy_t::BOO_MERGE)
+        .value("REMAINDER", boo_small_block_policy_t::BOO_REMAINDER);
+
+    py::enum_<boo_nz_order_t>(m, "BooNzOrder")
+        .value("ROWMAJOR", boo_nz_order_t::BOO_ROWMAJOR)
+        .value("COLMAJOR", boo_nz_order_t::BOO_COLMAJOR);
+
+    BIND_BOO_MATRIX_CLASS(int64_t, float,  "BOOMatrixInt64Float");
+    BIND_BOO_MATRIX_CLASS(int32_t, float,  "BOOMatrixInt32Float");
+    BIND_BOO_MATRIX_CLASS(int64_t, double, "BOOMatrixInt64Double");
+    BIND_BOO_MATRIX_CLASS(int32_t, double, "BOOMatrixInt32Double");
+
+    m.def("csr_to_boo", &csr_to_boo<int64_t, float>);
+    m.def("csr_to_boo", &csr_to_boo<int32_t, float>);
+    m.def("csr_to_boo", &csr_to_boo<int64_t, double>);
+    m.def("csr_to_boo", &csr_to_boo<int32_t, double>);
+
+    m.def("boo_to_csr", &boo_to_csr<int64_t, float>);
+    m.def("boo_to_csr", &boo_to_csr<int32_t, float>);
+    m.def("boo_to_csr", &boo_to_csr<int64_t, double>);
+    m.def("boo_to_csr", &boo_to_csr<int32_t, double>);
+
+    m.def("boo_batched_matmul_cpu", &boo_batched_matmul_cpu<int64_t, float>);
+    m.def("boo_batched_matmul_cpu", &boo_batched_matmul_cpu<int32_t, float>);
+    m.def("boo_batched_matmul_cpu", &boo_batched_matmul_cpu<int64_t, double>);
+    m.def("boo_batched_matmul_cpu", &boo_batched_matmul_cpu<int32_t, double>);
 
     #ifdef CUDA_ENABLED
     bind_cuda_functions(m);

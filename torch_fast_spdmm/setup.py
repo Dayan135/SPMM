@@ -17,7 +17,7 @@ def find_cpp_files(directories):
     return out
 
 
-cpp_files = find_cpp_files(['bindings', 'kernels', 'pbr_matrix'])
+cpp_files = find_cpp_files(['bindings', 'kernels', 'pbr_matrix', 'boo_matrix'])
 include_dirs = [os.path.join(os.getcwd())]
 
 compile_cuda = bool(os.environ.get("CUDA_ENABLED", True))

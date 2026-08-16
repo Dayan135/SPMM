@@ -362,8 +362,27 @@ def pbr_info(pbr_mat) -> PBRInfo:
     )
 
 
+from .boo import (  # noqa: E402  -- must follow the core import above
+    csr_to_boo, boo_to_csr, boo_info, boo_matmul, boo_arena_bytes, BOOInfo,
+    SMALL_BLOCK_POLICIES, NZ_ORDERS,
+)
+from .clustering import cluster_axes, cluster_axis, CLUSTER_METHODS  # noqa: E402
+
 __all__ = [
     'spdmm_csr_naive',
+
+    'csr_to_boo',
+    'boo_to_csr',
+    'boo_info',
+    'boo_matmul',
+    'boo_arena_bytes',
+    'BOOInfo',
+    'SMALL_BLOCK_POLICIES',
+    'NZ_ORDERS',
+    'cluster_axes',
+    'cluster_axis',
+    'CLUSTER_METHODS',
+
 
     'csr_to_pbr',
     'pbr_to_csr',
