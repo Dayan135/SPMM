@@ -71,7 +71,10 @@ def _boo_to_method(self, device='cuda'):
             blk_col_grp=_pin_to_device(self.blk_col_grp, device, np.int32),
             blk_nz_ptr=_pin_to_device(self.blk_nz_ptr, device, np.int32),
             blk_shift=_pin_to_device(self.blk_shift, device, np.uint8),
-            nz_idx=_pin_to_device(self.nz_idx, device, np.uint16),
+            # Bit-level int16 VIEW, not a cast: nz_idx is uint16 and values above
+            # 32767 are legal, so converting would overflow.  The kernel reads
+            # int16_t and reinterprets back to uint16_t.
+            nz_idx=_pin_to_device(np.ascontiguousarray(self.nz_idx).view(np.int16), device),
             nz_val=_pin_to_device(self.nz_val, device),
             rem_indptr=_pin_to_device(self.rem_indptr, device, np.int32),
             rem_col_ind=_pin_to_device(self.rem_col_ind, device, np.int32),
@@ -154,13 +157,47 @@ def boo_to_csr(boo_mat) -> sp.csr_matrix:
     return sp.csr_matrix((data, indices, indptr), shape=(boo_mat.rows, boo_mat.cols))
 
 
-def boo_matmul(boo_mat, x: torch.Tensor) -> torch.Tensor:
-    """Y = A @ X.  CPU path only until the CUDA kernel lands (M2)."""
+_BOO_CUDA_DISPATCH = None
+
+
+def _build_boo_cuda_dispatch():
+    return {torch.float32: core.boo_spmm_cuda_f32,
+            torch.float64: core.boo_spmm_cuda_f64}
+
+
+def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 128, p: int = 8,
+               csr_mode: int = 0) -> torch.Tensor:
+    """Y = A @ X.  Dispatches on x.device.
+
+    `threads` in {128, 256, 512} and `p` in {8, 16, 32} are the two shared-memory
+    levers (BOO_FORMAT.md sec. 9); both are swept rather than fixed.
+    """
     if x.dim() not in (2, 3):
         raise ValueError(f'Expected 2D or 3D input, got {x.dim()}D')
-    if x.is_cuda:
-        raise NotImplementedError('BOO CUDA kernel not yet implemented (M2)')
-    y = core.boo_batched_matmul_cpu(boo_mat, x)
+
+    if not x.is_cuda:
+        y = core.boo_batched_matmul_cpu(boo_mat, x)
+        return y.squeeze(0) if x.dim() == 2 else y
+
+    meta = getattr(boo_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("[boo_matmul] X is on GPU but BOOMatrix is not. Call .to('cuda') first.")
+
+    global _BOO_CUDA_DISPATCH
+    if _BOO_CUDA_DISPATCH is None:
+        _BOO_CUDA_DISPATCH = _build_boo_cuda_dispatch()
+    if x.dtype not in _BOO_CUDA_DISPATCH:
+        raise TypeError(f'BOO CUDA kernel supports float32/float64, got {x.dtype}')
+
+    y = _BOO_CUDA_DISPATCH[x.dtype](
+        boo_mat.rows, boo_mat.cols,
+        int(boo_mat.max_nr), int(boo_mat.max_nc), int(boo_mat.max_nnz_blk),
+        meta.row_grp_ptr, meta.row_ids, meta.col_grp_ptr, meta.col_ids,
+        meta.blk_row_grp, meta.blk_col_grp, meta.blk_nz_ptr, meta.blk_shift,
+        meta.nz_idx, meta.nz_val,
+        meta.rem_indptr, meta.rem_col_ind, meta.rem_vals,
+        x, threads, p, csr_mode,
+    )
     return y.squeeze(0) if x.dim() == 2 else y
 
 

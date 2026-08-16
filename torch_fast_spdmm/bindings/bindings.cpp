@@ -5,6 +5,7 @@
 
 #ifdef CUDA_ENABLED
 void bind_cuda_functions(py::module_& m);
+void bind_boo_functions(py::module_& m);
 #endif
 
 // T and S must be macro parameters here: tokens named T/S inside a nested
@@ -208,5 +209,6 @@ PYBIND11_MODULE(torch_fast_spdmm_core, m) {
 
     #ifdef CUDA_ENABLED
     bind_cuda_functions(m);
+    bind_boo_functions(m);
     #endif
 }

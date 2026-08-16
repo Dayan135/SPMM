@@ -1,0 +1,231 @@
+#include <cuda_runtime.h>
+#include <cstdint>
+#include <stdexcept>
+
+#include "kernels/boo_kernels.hpp"
+
+// ===========================================================================
+// BOO SpMM -- load / work / flush over a clustered, variable-size block grid
+// ===========================================================================
+//
+// One CUDA block per BOO block.  A BOO block is the intersection
+// (row group) x (col group), so its dimensions are runtime data, not template
+// parameters -- hence a dynamic `extern __shared__` arena rather than PBR's
+// static smem[TOTAL_SHARED].
+//
+// Occupancy inside a block is an explicit uint16 per nonzero:
+//     r = idx >> shift;  c = idx & mask
+// which replaces PBR's bitmap scan, its 3-bit/7-bit packed registers, and
+// nnzflat's per-thread COO rebuild all at once.  See BOO_FORMAT.md sec. 4.2.
+//
+// Feature slabs: blockIdx.z slices `features` into FEAT_BLOCK-wide slabs, and
+// inside a slab the `base_f` loop steps by the compile-time constant P.
+//
+// NOTE the deliberate absence of PBR's `current_p`.  All four PBR kernels
+// decode with stride `p` but index shared memory with stride
+// `current_p = min(p, feat_end - base_f)`, which is wrong whenever they differ
+// (documented-not-fixed at pbr_kernel.cu:82-84).  Here shared memory is ALWAYS
+// indexed with the template constant P and only the *global* accesses are
+// guarded by `global_f < features`, so the bug class cannot occur.
+
+constexpr int BOO_FEAT_BLOCK = 512;
+
+int boo_arena_bytes(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes) {
+    const int data = max_nnz_blk * (scalar_bytes + 2);       // sh_nz_val + sh_nz_idx
+    const int ids = 4 * (max_nr + max_nc);                   // sh_row_ids + sh_col_ids
+    const int tiles = scalar_bytes * p * (max_nr + max_nc);  // smem_X + smem_Y
+    return data + ids + tiles + 16;                          // + alignment slack
+}
+
+
+template <typename scalar_t, int THREADS, int P_LOG2>
+__global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_kernel(
+    const uint32_t num_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t rows,
+    const uint32_t cols,
+    const uint32_t max_nr,
+    const uint32_t max_nc,
+    const uint32_t max_nnz_blk,
+    const int32_t* __restrict__ row_grp_ptr,
+    const int32_t* __restrict__ row_ids,
+    const int32_t* __restrict__ col_grp_ptr,
+    const int32_t* __restrict__ col_ids,
+    const int32_t* __restrict__ blk_row_grp,
+    const int32_t* __restrict__ blk_col_grp,
+    const int32_t* __restrict__ blk_nz_ptr,
+    const uint8_t* __restrict__ blk_shift,
+    const uint16_t* __restrict__ nz_idx,
+    const scalar_t* __restrict__ nz_val,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    constexpr uint32_t P = 1u << P_LOG2;
+    constexpr uint32_t P_MASK = P - 1u;
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_slab = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_blocks || batch_idx >= batch_size) return;
+
+    // Widest alignment first (scalar_t, then int32, then uint16) so every
+    // region is naturally aligned without explicit padding.
+    extern __shared__ __align__(16) char boo_smem_raw[];
+    scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);
+    scalar_t* smem_X = sh_nz_val + max_nnz_blk;
+    scalar_t* smem_Y = smem_X + max_nc * P;
+    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_Y + max_nr * P);
+    int32_t* sh_row_ids = sh_col_ids + max_nc;
+    uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_ids + max_nr);
+
+    const uint32_t rg = blk_row_grp[b_idx];
+    const uint32_t cg = blk_col_grp[b_idx];
+    const uint32_t row_base = row_grp_ptr[rg];
+    const uint32_t n_r = row_grp_ptr[rg + 1] - row_base;
+    const uint32_t col_base = col_grp_ptr[cg];
+    const uint32_t n_c = col_grp_ptr[cg + 1] - col_base;
+    const uint32_t nz_base = blk_nz_ptr[b_idx];
+    const uint32_t n_nz = blk_nz_ptr[b_idx + 1] - nz_base;
+
+    if (n_r == 0 || n_c == 0 || n_nz == 0) return;
+
+    const uint32_t shift = blk_shift[b_idx];
+    const uint32_t col_mask = (1u << shift) - 1u;
+
+    // --- LOAD: hoisted ABOVE the feature-tile loop, so it runs once per CTA --
+    // PBR re-reads block_data from global on every feature-tile pass, making
+    // A-traffic 4*nnz*(FEAT_BLOCK/p) -- which is why a small p used to be
+    // unaffordable. Hoisting makes it 6*nnz, independent of p, and that is what
+    // funds p=8. (BOO_FORMAT.md sec. 6.1.)
+    for (uint32_t i = tx; i < n_nz; i += THREADS) {
+        sh_nz_val[i] = nz_val[nz_base + i];
+        sh_nz_idx[i] = nz_idx[nz_base + i];
+    }
+    for (uint32_t i = tx; i < n_c; i += THREADS) sh_col_ids[i] = col_ids[col_base + i];
+    for (uint32_t i = tx; i < n_r; i += THREADS) sh_row_ids[i] = row_ids[row_base + i];
+    __syncthreads();
+
+    const uint32_t feat_start = feat_slab * BOO_FEAT_BLOCK;
+    if (feat_start >= features) return;
+    const uint32_t feat_end = min(feat_start + BOO_FEAT_BLOCK, features);
+
+    const size_t x_batch_base = static_cast<size_t>(batch_idx) * cols * features;
+    const size_t y_batch_base = static_cast<size_t>(batch_idx) * rows * features;
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += P) {
+
+        // --- STEP A: stage X, zero the accumulator -------------------------
+        for (uint32_t i = tx; i < n_r * P; i += THREADS) smem_Y[i] = scalar_t(0);
+
+        for (uint32_t i = tx; i < n_c * P; i += THREADS) {
+            const uint32_t c = i >> P_LOG2;
+            const uint32_t global_f = base_f + (i & P_MASK);
+            smem_X[i] = (global_f < features)
+                ? X[x_batch_base + static_cast<size_t>(sh_col_ids[c]) * features + global_f]
+                : scalar_t(0);
+        }
+        __syncthreads();
+
+        // --- STEP B: one thread per (nonzero, feature) ----------------------
+        for (uint32_t i = tx; i < n_nz * P; i += THREADS) {
+            const uint32_t k = i >> P_LOG2;
+            const uint32_t f = i & P_MASK;
+            const uint32_t idx = sh_nz_idx[k];
+            atomicAdd(&smem_Y[(idx >> shift) * P + f],
+                      sh_nz_val[k] * smem_X[(idx & col_mask) * P + f]);
+        }
+        __syncthreads();
+
+        // --- STEP C: flush ---------------------------------------------------
+        // No row-activity branch: a row group only lists rows the clustering
+        // assigned to it, so every slot is live by construction. That is
+        // SHOW_TO_ERAN.md sec. 4's row-compaction, free from the format.
+        // atomicAdd because a row's result is split across its block-row.
+        for (uint32_t i = tx; i < n_r * P; i += THREADS) {
+            const uint32_t global_f = base_f + (i & P_MASK);
+            if (global_f < features) {
+                atomicAdd(&Y[y_batch_base
+                             + static_cast<size_t>(sh_row_ids[i >> P_LOG2]) * features
+                             + global_f],
+                          smem_Y[i]);
+            }
+        }
+        __syncthreads();
+    }
+}
+
+
+template <typename scalar_t>
+void launch_boo_spmm(
+    const int num_blocks, const int features, const int batch_size,
+    const int rows, const int cols,
+    const int max_nr, const int max_nc, const int max_nnz_blk,
+    const int32_t* row_grp_ptr, const int32_t* row_ids,
+    const int32_t* col_grp_ptr, const int32_t* col_ids,
+    const int32_t* blk_row_grp, const int32_t* blk_col_grp,
+    const int32_t* blk_nz_ptr, const uint8_t* blk_shift,
+    const uint16_t* nz_idx, const scalar_t* nz_val,
+    const scalar_t* X, scalar_t* Y,
+    cudaStream_t stream, int threads, int p
+) {
+    if (num_blocks == 0 || features == 0 || batch_size == 0) return;
+
+    // p is capped at `features` so a narrow feature dimension does not force the
+    // kernel to stage tiles it will never use -- one of the reasons for a small
+    // default p in the first place.
+    while (p > 1 && p > features) p >>= 1;
+
+    const int arena = boo_arena_bytes(max_nr, max_nc, max_nnz_blk, p,
+                                      static_cast<int>(sizeof(scalar_t)));
+
+    const int feat_slabs = (features + BOO_FEAT_BLOCK - 1) / BOO_FEAT_BLOCK;
+    const dim3 grid(num_blocks, batch_size, feat_slabs);
+
+    #define BOO_LAUNCH(T, PL)                                                                  \
+        do {                                                                                   \
+            auto kernel = boo_spmm_nnzflat_kernel<scalar_t, T, PL>;                            \
+            /* Only required above 48 KB/CTA, but set it guarded anyway: without */            \
+            /* it an oversized arena fails at launch with a swallowed             */            \
+            /* cudaErrorInvalidValue rather than anything diagnosable.            */            \
+            if (arena > 48 * 1024) {                                                           \
+                cudaFuncSetAttribute(kernel,                                                   \
+                                     cudaFuncAttributeMaxDynamicSharedMemorySize, arena);      \
+            }                                                                                  \
+            kernel<<<grid, dim3(T), arena, stream>>>(                                          \
+                (uint32_t)num_blocks, (uint32_t)features, (uint32_t)batch_size,                \
+                (uint32_t)rows, (uint32_t)cols,                                                \
+                (uint32_t)max_nr, (uint32_t)max_nc, (uint32_t)max_nnz_blk,                     \
+                row_grp_ptr, row_ids, col_grp_ptr, col_ids,                                    \
+                blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift,                               \
+                nz_idx, nz_val, X, Y);                                                         \
+        } while (0)
+
+    #define BOO_DISPATCH_P(T)                                                    \
+        do {                                                                     \
+            if      (p <= 8)  BOO_LAUNCH(T, 3);                                  \
+            else if (p <= 16) BOO_LAUNCH(T, 4);                                  \
+            else              BOO_LAUNCH(T, 5);                                  \
+        } while (0)
+
+    if      (threads <= 128) BOO_DISPATCH_P(128);
+    else if (threads <= 256) BOO_DISPATCH_P(256);
+    else                     BOO_DISPATCH_P(512);
+
+    #undef BOO_DISPATCH_P
+    #undef BOO_LAUNCH
+}
+
+template void launch_boo_spmm<float>(
+    const int, const int, const int, const int, const int, const int, const int, const int,
+    const int32_t*, const int32_t*, const int32_t*, const int32_t*,
+    const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
+    const uint16_t*, const float*, const float*, float*, cudaStream_t, int, int);
+
+template void launch_boo_spmm<double>(
+    const int, const int, const int, const int, const int, const int, const int, const int,
+    const int32_t*, const int32_t*, const int32_t*, const int32_t*,
+    const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
+    const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int);
