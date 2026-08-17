@@ -101,7 +101,7 @@ for _cls_name in _BOO_TYPE_MAP:
 def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 32,
                max_nr: Optional[int] = None, max_nc: Optional[int] = None,
                max_block_nnz: Optional[int] = None,
-               small_block_policy: str = 'keep', small_block_threshold: int = 0,
+               small_block_policy: str = 'remainder', small_block_threshold: int = 4,
                nz_order: str = 'rowmajor', seed: int = 0,
                symmetric: Optional[bool] = None,
                row_labels: Optional[np.ndarray] = None,
@@ -110,6 +110,21 @@ def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 
 
     `row_labels`/`col_labels` bypass the clustering step entirely -- useful for
     reproducing a specific grid, and for the PBR-parity check.
+
+    Default policy is `remainder` (threshold 4), not `keep`. On matrices with a
+    long tail of near-empty blocks (diag_skewed: 97.4% of blocks hold <=3
+    nonzeros at N=262144), `keep` launches one CTA per block regardless -- each
+    still paying the arena sized for the matrix's densest block -- and that CTA
+    explosion measured 6-35x slower than PBR's `block` kernel, which simply
+    routes the same noise to a CSR remainder. `remainder` matches that
+    behaviour and closes the gap (0.15-0.37x -> parity with PBR, sometimes
+    faster). `tail_batch` was also tried (an in-format alternative that keeps
+    boo_fraction == 1.0 -- see below) but its naive one-thread-per-nonzero
+    kernel is 1.5-3.7x slower than `remainder`'s reuse of the already
+    row-grouped, register-accumulated, vectorized CSR kernel, and the gap
+    widens with scale. Neither policy regresses matrices with few or no
+    near-empty blocks (measured within ~0.2%, i.e. noise) -- see
+    BOO_FORMAT.md sec. 15/16.
     """
     if small_block_policy not in SMALL_BLOCK_POLICIES:
         raise ValueError(f'small_block_policy must be one of {SMALL_BLOCK_POLICIES}')
