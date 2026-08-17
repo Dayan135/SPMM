@@ -776,3 +776,94 @@ Still unmeasured: the `nz_order` isolate with bank-conflict counters, the small-
 policy, fp64, and matrices beyond the `fem2d` pair. Single runs; `SHOW_TO_ERAN.md` §4
 recorded up to 29% run-to-run variance on this cluster, so the 1.25× and 1.56× effects
 are clear of it but finer distinctions are not.
+
+---
+
+## 14. Full 4-way benchmark
+
+**BOO vs PBR `block` (zero_idle) vs PBR `nnzflat_shared` (v6) vs PBR `nnzflat_onthefly` (v5).**
+
+14 matrix profiles × {16384, 65536, 262144} × {128, 512} features, fp32 — 84 cells, 82
+clean. Raw data: `tests/torch_fast_spdmm/benchmark/results/bench_4way_{hem,identity}.csv`.
+
+### 14a. Method
+
+`nnzflat_shared` and `nnzflat_onthefly` rewrite the *same* kernel function in place on
+their respective branches, so the repo's existing approach is one build and one sweep per
+branch. That is the wrong instrument here: `SHOW_TO_ERAN.md` §4/§7 measured `zero_idle`'s
+own **unchanged** code swinging **29–41%** between sweep runs on this cluster — larger than
+most of the effects being compared.
+
+So both variants were resurrected verbatim into **one build** (`bench/4way`) as
+`pbr_spmm_nnzflat_{shared,onthefly}_kernel`, and all four kernels are timed **back to back
+in one process against the same matrix object**, with each cell the median of 3 interleaved
+rounds. A node transient then perturbs every kernel in a cell equally. Measured
+within-cell spread is **≤ 11%**, which is the noise floor for any claim below. All four
+kernels were verified against dense before timing.
+
+### 14b. BOO is only comparable if its config is chosen too
+
+Every published comparison in this repo gives PBR a swept config (best-of-grid over
+block size / `min_nnz` / smem tier). Pinning BOO to one clustering method is not the same
+courtesy, and it matters enormously:
+
+| | vs `block` | vs `nnzflat_shared` | vs `nnzflat_onthefly` |
+|---|---|---|---|
+| BOO, `hem` always | 0.828 | 0.949 | 1.421 |
+| **BOO, best of {`hem`, `identity`}** | **1.026** | **1.175** | **1.760** |
+
+Geomean over 82 clean cells, >1 = BOO faster. The clustering choice is worth **~1.9–2.0×
+in either direction** — `hem` wins 57/82 cells, `identity` 25/82, and picking wrong costs
+about as much as everything else in this document combined. `diag_b0.3` alone swings from
+**0.40 → 2.08** on that choice.
+
+**This is not an oracle.** `x_loads` (offline, no GPU) picks the faster clustering in
+**75/82 cells (91%)**, and when it is wrong the penalty is negligible — geomean **1.0025×**,
+worst cell 1.073×. So the best-of-two column is achievable in practice by running
+`boo_info` on both labelings and taking the lower `x_loads`.
+
+### 14c. Results
+
+Geomean speedup of BOO (best-of-two) over each PBR kernel, clean cells only:
+
+| by size | n | vs `block` | vs `nnzflat_shared` | vs `nnzflat_onthefly` |
+|---|---|---|---|---|
+| 16,384 | 28 | 0.974 | 1.126 | 1.646 |
+| 65,536 | 28 | 1.013 | 1.173 | 1.803 |
+| 262,144 | 26 | **1.098** | 1.233 | 1.842 |
+| **overall** | **82** | **1.026** | **1.175** | **1.760** |
+
+BOO is the fastest of the four in **28/82** clean cells.
+
+| by matrix | vs `block` | | by matrix | vs `block` |
+|---|---|---|---|---|
+| `diag_b0.3` | **2.077** | | `pattern_corner_cluster` | 0.962 |
+| `diag_b0.1` | **2.020** | | `diag_b1.0` | 0.935 |
+| `fem2d_permuted` | **1.169** | | `scattered_2x4` | 0.893 |
+| `scattered_8x1` | **1.099** | | `scattered_2x2` | 0.886 |
+| `pattern_checkerboard` | 1.020 | | `scattered_1x8` | 0.906 |
+| `pattern_row_skewed` | 1.019 | | `fem2d` | 0.791 |
+| | | | `pattern_diag_stripe` | 0.781 |
+| | | | `diag_skewed` | 0.503 † |
+
+† `diag_skewed` is the one profile where PBR's `compressed_fraction` is 0.92, so those
+cells are partly CSR-vs-CSR rather than a kernel comparison (`SHOW_TO_ERAN.md` §2's trap).
+Excluded from nothing above, but do not read it as a clean loss.
+
+### 14d. What this says
+
+- **BOO edges `block` overall (1.026×) and the advantage grows with size** (0.974 → 1.013 →
+  1.098). At the largest size it is a ~10% win. That is the opposite of PBR's own scaling
+  story, where the block kernel loses ground as N grows.
+- **BOO beats both `nnzflat` variants** — 1.18× vs the better one (`shared`), 1.76× vs
+  `onthefly`. Since BOO shares `nnzflat`'s heritage, this is the cleanest statement that
+  the *format* is doing real work.
+- **`nnzflat_shared` (v6) is much better than `nnzflat_onthefly` (v5)** — the shared
+  position table is worth ~1.5× — and v6 is close to `block` on many profiles, which is a
+  more favourable reading of that line of work than `SHOW_TO_ERAN.md` §7 reached.
+- **The remaining losses cluster on `scattered_*` and `pattern_diag_stripe`** — profiles
+  whose nonzeros are structurally scattered, so there is little locality for clustering to
+  find and BOO pays the format's per-block overhead without the reward. `fem2d` (0.791)
+  is the same story: already well-ordered, nothing to recover.
+- **The single largest lever is the clustering choice, not the kernel.** Getting it right
+  is worth ~2× and costs nothing at runtime.
