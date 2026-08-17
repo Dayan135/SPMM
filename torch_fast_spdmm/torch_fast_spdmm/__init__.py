@@ -84,6 +84,36 @@ def _build_nnzflat_cuda_dispatch():
     }
 
 
+def _build_variant_cuda_dispatch(prefix):
+    """(index_dtype, x_dtype) -> pybind symbol for a `pbr_<prefix>_spmm_cuda_*` family."""
+    return {
+        (torch.int32, torch.float32): getattr(core, f'pbr_{prefix}_spmm_cuda_i32_f32'),
+        (torch.int64, torch.float32): getattr(core, f'pbr_{prefix}_spmm_cuda_i64_f32'),
+        (torch.int32, torch.float64): getattr(core, f'pbr_{prefix}_spmm_cuda_i32_f64'),
+        (torch.int64, torch.float64): getattr(core, f'pbr_{prefix}_spmm_cuda_i64_f64'),
+    }
+
+
+# nnzflat v5/v6, resurrected into this build so the 4-way comparison is not
+# confounded by the 29-41% between-sweep variance SHOW_TO_ERAN sec. 4/7 measured.
+_VARIANT_DISPATCH_CACHE = {}
+
+
+def pbr_batched_matmul_variant_cuda(pbr_mat, x, prefix, csr_mode=0, smem_size=2048):
+    meta = getattr(pbr_mat, '_gpu_meta', None)
+    if meta is None:
+        raise RuntimeError("PBRMatrix is not on GPU. Call .to('cuda') first.")
+    if prefix not in _VARIANT_DISPATCH_CACHE:
+        _VARIANT_DISPATCH_CACHE[prefix] = _build_variant_cuda_dispatch(prefix)
+    kernel = _VARIANT_DISPATCH_CACHE[prefix][(meta.coords.dtype, x.dtype)]
+    return kernel(
+        pbr_mat.cols, pbr_mat.rows, pbr_mat.block_rows, pbr_mat.block_cols,
+        meta.codes, meta.coords, meta.offsets, meta.data,
+        meta.rem_indptr, meta.rem_col_ind, meta.rem_vals,
+        x, csr_mode, smem_size,
+    )
+
+
 _CUDA_KERNEL_DISPATCH = None
 _CHUNKCOLS_CUDA_KERNEL_DISPATCH = None
 _NNZFLAT_CUDA_KERNEL_DISPATCH = None
@@ -197,6 +227,8 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
                              active columns instead of up-to-BLOCK_COLS
                'nnzflat'   — experimental: one thread per (nonzero, feature)
                              work-item, column-sorted
+               'nnzflat_shared'   — nnzflat v6, shared position table
+               'nnzflat_onthefly' — nnzflat v5, row-major on-the-fly derivation
     """
     if x.dim() not in (2, 3):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
@@ -205,7 +237,10 @@ def pbr_matmul(pbr_mat, x: torch.Tensor, csr_mode: int = 0, smem_size: int = 204
         meta = getattr(pbr_mat, '_gpu_meta', None)
         if meta is None:
             raise RuntimeError("[pbr_matmul] X is on GPU but PBRMatrix is not. Call .to('cuda') first.")
-        if kernel == 'chunkcols':
+        if kernel in ('nnzflat_shared', 'nnzflat_onthefly'):
+            y = pbr_batched_matmul_variant_cuda(pbr_mat, x, kernel,
+                                                csr_mode=csr_mode, smem_size=smem_size)
+        elif kernel == 'chunkcols':
             y = pbr_batched_matmul_chunkcols_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
         elif kernel == 'nnzflat':
             y = pbr_batched_matmul_nnzflat_cuda(pbr_mat, x, csr_mode=csr_mode, smem_size=smem_size)
@@ -396,4 +431,5 @@ __all__ = [
     'pbr_batched_matmul_cuda',
     'pbr_batched_matmul_chunkcols_cuda',
     'pbr_batched_matmul_nnzflat_cuda',
+    'pbr_batched_matmul_variant_cuda',
 ]

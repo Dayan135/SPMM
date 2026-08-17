@@ -1064,3 +1064,622 @@ template void launch_csr_spmm<int32_t, float>(const int, const int, const int, c
 template void launch_csr_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
 template void launch_csr_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
 template void launch_csr_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+
+
+// =========================================================================
+// nnzflat SHARED (v6) -- shared position table, from feat/pbr-nnzflat-shared @ d2e4dce
+// =========================================================================
+// Resurrected verbatim for the 4-way benchmark so all kernels live in ONE
+// build. SHOW_TO_ERAN.md sec. 4/7 measured 29-41% run-to-run variance on this
+// cluster between separate sweeps, which is larger than most effects being
+// compared; a single build removes that confound from the comparison.
+// ===========================================================================
+// Nnzflat kernel — full nonzero-level flattening (experimental)
+// ===========================================================================
+//
+// Where chunkcols bounds per-thread imbalance at CHUNK_K columns, this kernel
+// removes it entirely: one thread per (nonzero, feature) work-item instead of
+// one thread per row. Every nonzero-feature pair gets its own atomicAdd into
+// smem_Y -- a much larger atomic count than chunkcols. This is the direct
+// test of whether finer-grained balance is worth its atomic cost:
+// STALL_REASONS_NOATOMIC_ABLATION.md and STALL_REASONS_ROWGROUP_ATOMIC.md
+// (prior investigation, see git history) found atomics already a proven
+// major cost in this kernel family, and every attempt so far to reduce
+// atomic frequency by coarsening (rowgroup) lost to an occupancy tax instead
+// -- this kernel moves the opposite direction (finer atomics, no
+// coarsening), so it's an open question, not an assumed win.
+//
+// Rows ARE compacted (step 5 below) -- smem_Y is n_r*p, indexed by
+// compacted row rank, mirroring zero_idle's Step 1/Step C row-packing.
+//
+// nz_idx -> (row, col, data-pointer) derivation history (see git log for the
+// full progression, all on the same nnzflat rewrite branch):
+//   1. Original: precomputed a per-block COLUMN-major "nonzero list"
+//      (nz_row[]/nz_ptr[]/nz_pc[], sized BLOCK_ROWS*BLOCK_COLS) into
+//      thread-private arrays once, looked up by nz_idx in Step B. Since
+//      nz_idx is a runtime value, those array reads couldn't be
+//      register-allocated -- confirmed via ncu
+//      smsp__sass_inst_executed_op_local_{ld,st}.sum to spill to local
+//      memory on every access, in every tested config (up to 1.15B spill
+//      instructions/launch on dense matrices; zero such spill in `block`).
+//   2. Replaced the array with an on-the-fly rank/select search over `code`,
+//      still reproducing COLUMN-major order, still redone inline for every
+//      (nz_idx, feature) work-item -- regressed 56-187% (compute-bound
+//      instead of memory-bound: the ~70-op search, redone on every
+//      feature-tile pass, cost more than the spill it replaced).
+//   3. Tried hoisting that same derivation to once-per-thread (static
+//      nz_idx=tx assignment) -- regressed 538-1193%, far worse: it broke
+//      Step B's THREADS_PER_BLOCK-wide parallelism (only ~n_nz of
+//      THREADS_PER_BLOCK threads do any Step B work), so most threads sit
+//      idle at the following __syncthreads() while the few active ones
+//      serially grind through every feature -- confirmed via barrier_pct
+//      jumping to 50-74%.
+//   4. THIS version: keeps step 2's inline-per-work-item structure (full
+//      THREADS_PER_BLOCK-wide parallelism, no barrier risk) but switches
+//      the enumeration from column-major to `code`'s native ROW-major bit
+//      order, which makes the derivation itself much cheaper: local_data_ptr
+//      becomes a trivial data_offset+nz_idx (block_data is stored in the
+//      same row-major order as `code`, so rank IS position -- no popcount
+//      even needed), and (row, col) reduces to one "select the nz_idx-th set
+//      bit of `code`" query, solved via ~log2(BLOCK_ROWS*BLOCK_COLS) rounds
+//      of binary search over popcounts (6 rounds worst case for 8x8 blocks)
+//      instead of the ~70-op linear scan step 2 used. This gives up
+//      column-major's smem_X read-locality property (nearby threads no
+//      longer reliably share the same smem_X column) -- that property was
+//      inherited from `colgroup`, a since-removed kernel variant that never
+//      itself beat `block`, so it was never independently validated as a
+//      win for nnzflat specifically. Net effect (cheaper derivation vs. lost
+//      locality) to be measured empirically, not assumed.
+//   5. Row-compaction for Step C: ncu source-line profiling (SourceCounters,
+//      -lineinfo) on step 4 found Step C's row_mask==0 skip-branch costing
+//      up to 72% branch_resolving stall on matrices with few active rows per
+//      block (e.g. scattered_1x8: 7/8 structural rows empty) -- a cost
+//      zero_idle never pays because it compacts active rows into
+//      packed_active_rows/n_r in Step 1 (see pbr_spmm_zero_idle_kernel) and
+//      loops only those n_r slots in Step C, no branch needed. THIS version
+//      adds the same row-compaction here: Step B writes to smem_Y via a
+//      compacted row rank `pr` (popcount of active_row_mask below actual_r,
+//      same pattern already used for column rank `pc`) instead of the raw
+//      structural row, and Step C loops n_r*p via packed_active_rows instead
+//      of BLOCK_ROWS*p with a skip-branch.
+//   6. Shared position table (this version, branch feat/pbr-nnzflat-shared):
+//      even after step 5, per-line ncu profiling showed the step-4
+//      select-search (lines ~797-804) as the single largest sampled cost in
+//      the kernel -- because it's redone by every one of the current_p
+//      threads sharing an nz_idx (once per feature), and again on every
+//      base_f pass, even though the result never depends on feature or
+//      pass. THIS version hoists it to run exactly ONCE per active nonzero:
+//      n_nz threads each do the search once (before the base_f loop, since
+//      the result is pass-invariant) and store the packed (row,col) `pos`
+//      into a tiny nz_pos[] byte table carved off the TAIL of the same
+//      smem[TOTAL_SHARED] buffer smem_X/smem_Y use (MAX_NZ bytes, <=64) --
+//      not a new separate __shared__ array, so the kernel's static shared-
+//      memory footprint (already the binding occupancy limiter -- see
+//      OCCUPANCY_METRICS profiling) doesn't grow. Step B then does a single
+//      byte load + two __popc rank lookups instead of the 6-round search.
+//      Trade-off: reserving those bytes shrinks the *usable* smem_X/smem_Y
+//      budget, which can push the dynamic-p calculation down to the next
+//      power of 2 (more base_f passes) on some (block, smem_size) configs --
+//      not assumed to be free, measure before trusting it's a net win.
+//
+// Scalar-only, no vectorized variant (see chunkcols).
+
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_shared_kernel(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    // --- 1. SPARSITY SCAN: col_mask + active-row compaction (register
+    // scalars, no per-row array) -- mirrors zero_idle's Step 1 so Step C can
+    // flush only the n_r active rows instead of looping all BLOCK_ROWS and
+    // branching around empty ones.
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint64_t col_mask = 0;
+    uint32_t active_row_mask = 0;
+    uint32_t packed_active_rows = 0;
+    uint32_t n_r = 0;
+
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+        if (row_mask > 0) {
+            col_mask |= row_mask;
+            active_row_mask |= (1u << r);
+            packed_active_rows |= (r << (n_r * 3));
+            n_r++;
+        }
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    // n_nz = total set bits in `code` = total nonzeros in the block (every
+    // set bit is exactly one nonzero, regardless of enumeration order).
+    const uint32_t n_nz = __popcll(code);
+
+    // --- 1b. NZ POSITION TABLE: carve MAX_NZ bytes off the tail of the same
+    // `smem[TOTAL_SHARED]` buffer smem_X/smem_Y already use (not a new,
+    // separate __shared__ array -- doesn't grow the kernel's static shared-
+    // memory footprint, which is already the binding occupancy limiter).
+    // Each of the n_nz active-nonzero threads runs the select-kth-bit search
+    // exactly ONCE here (not per (nonzero,feature) work-item, not per
+    // base_f pass -- this table doesn't depend on features, and its storage
+    // never overlaps smem_X/smem_Y, so it's built once and reused across
+    // every pass). Step B then does a single byte load + two cheap __popc
+    // rank lookups instead of the 6-round search.
+    constexpr uint32_t MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
+    constexpr uint32_t NZ_POS_SLOTS = (MAX_NZ + sizeof(scalar_t) - 1) / sizeof(scalar_t);
+    constexpr uint32_t USABLE_SHARED = TOTAL_SHARED - NZ_POS_SLOTS;
+
+    uint8_t* nz_pos = reinterpret_cast<uint8_t*>(smem + USABLE_SHARED);
+
+    if (tx < n_nz) {
+        const uint32_t nz_idx = tx;
+        uint32_t pos = 0;
+        uint32_t remaining = nz_idx;
+        #pragma unroll
+        for (uint32_t half = MAX_NZ / 2; half >= 1; half /= 2) {
+            const uint64_t lower_mask = ((1ULL << half) - 1ULL) << pos;
+            const uint32_t cnt = __popcll(code & lower_mask);
+            if (remaining >= cnt) {
+                remaining -= cnt;
+                pos += half;
+            }
+        }
+        nz_pos[nz_idx] = static_cast<uint8_t>(pos);
+    }
+    __syncthreads();
+
+    // --- 2. DYNAMIC P CALCULATION --- (USABLE_SHARED, not TOTAL_SHARED --
+    // smem_X/smem_Y must never encroach into the reserved nz_pos tail)
+    const uint32_t p_log2 = 31u - __clz(min(USABLE_SHARED / (n_r + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
+
+        // STEP A: Cooperative Load
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        for (uint32_t i = tx; i < n_r * current_p; i += THREADS_PER_BLOCK)
+            smem_Y[i] = scalar_t(0);
+
+        __syncthreads();
+
+        // STEP B: one thread per (nonzero, feature) work-item
+        const uint32_t total_work = n_nz * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t nz_idx = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            // (actual_r, physical_c) for nz_idx: O(1) byte lookup into the
+            // position table built once in the 1b precompute above, instead
+            // of redoing the select-kth-bit search on every (nonzero,
+            // feature) work-item.
+            const uint32_t pos = nz_pos[nz_idx];
+            const uint32_t actual_r = pos / BLOCK_COLS;
+            const uint32_t physical_c = pos % BLOCK_COLS;
+
+            // pc = rank of physical_c among the block's active columns --
+            // matches Step A's packed_cols_physical compaction scheme.
+            const uint32_t pc = __popc(col_mask & ((1u << physical_c) - 1u));
+            // pr = rank of actual_r among the block's active rows -- same
+            // compaction scheme, matches Step C's packed_active_rows.
+            const uint32_t pr = __popc(active_row_mask & ((1u << actual_r) - 1u));
+
+            // block_data is stored in the SAME row-major order as `code`,
+            // so the nz_idx-th nonzero in that order sits at exactly
+            // data_offset + nz_idx -- no popcount needed at all.
+            const uint32_t local_data_ptr = data_offset + nz_idx;
+
+            const scalar_t val = __ldg(&block_data[local_data_ptr]);
+            const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
+
+            atomicAdd(&smem_Y[pr * current_p + f_in_s], contribution);
+        }
+
+        __syncthreads();
+
+        // STEP C: Cooperative Atomic Commit -- only the n_r active rows,
+        // packed via packed_active_rows (no per-row skip branch needed,
+        // unlike the earlier BLOCK_ROWS-wide + row_mask==0 continue version).
+        const uint32_t total_flush = n_r * current_p;
+        for (uint32_t work_idx = tx; work_idx < total_flush; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t pr     = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint32_t actual_r = (packed_active_rows >> (pr * 3)) & 0x7;
+            const uint32_t global_r = row_origin + actual_r;
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+        }
+
+        __syncthreads();
+    }
+}
+
+
+template <typename index_t, typename scalar_t>
+void launch_pbr_nnzflat_shared_spmm(
+    const int num_pbr_blocks,
+    const int features,
+    const int batch_size,
+    const int cols,
+    const int rows,
+    const int runtime_block_rows,
+    const int runtime_block_cols,
+    const int64_t* block_codes,
+    const index_t* block_coords,
+    const index_t* block_offsets,
+    const scalar_t* block_data,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream,
+    int smem_size
+) {
+    if (num_pbr_blocks == 0) {
+        return;
+    }
+
+    constexpr int THREADS_PER_BLOCK = 128;
+    constexpr int FEAT_BLOCK_SIZE   = 512;
+
+    const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
+    const dim3 grid(num_pbr_blocks, batch_size, feat_blocks);
+    const dim3 block(THREADS_PER_BLOCK);
+
+    #define NNZFLAT_SHARED_LAUNCH(BR, BC, TS)                                                             \
+        pbr_spmm_nnzflat_shared_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK,                   \
+                                FEAT_BLOCK_SIZE><<<grid, block, 0, stream>>>(                        \
+            (uint32_t)num_pbr_blocks, (uint32_t)features, (uint32_t)batch_size,                     \
+            (uint32_t)cols, (uint32_t)rows,                                                         \
+            block_codes, block_coords, block_offsets, block_data, X, Y)
+
+    #define DISPATCH_SMEM_NNZFLAT_SHARED(BR, BC)                              \
+        do {                                                          \
+            if      (smem_size <= 512)  NNZFLAT_SHARED_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) NNZFLAT_SHARED_LAUNCH(BR, BC, 1024); \
+            else                        NNZFLAT_SHARED_LAUNCH(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_NNZFLAT_SHARED(2, 2);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_NNZFLAT_SHARED(4, 4);
+    else if (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_NNZFLAT_SHARED(8, 8);
+    else throw std::invalid_argument("Unsupported block size for PBR nnzflat SpMM. Only 2x2, 4x4, and 8x8 are supported.");
+
+    #undef NNZFLAT_SHARED_LAUNCH
+    #undef DISPATCH_SMEM_NNZFLAT_SHARED
+}
+
+template void launch_pbr_nnzflat_shared_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_nnzflat_shared_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_nnzflat_shared_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_nnzflat_shared_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+
+
+
+// =========================================================================
+// nnzflat ONTHEFLY (v5) -- row-major on-the-fly derivation, from feat/pbr-nnzflat-online-index @ 27c8759
+// =========================================================================
+// Resurrected verbatim for the 4-way benchmark so all kernels live in ONE
+// build. SHOW_TO_ERAN.md sec. 4/7 measured 29-41% run-to-run variance on this
+// cluster between separate sweeps, which is larger than most effects being
+// compared; a single build removes that confound from the comparison.
+// ===========================================================================
+// Nnzflat kernel — full nonzero-level flattening (experimental)
+// ===========================================================================
+//
+// Where chunkcols bounds per-thread imbalance at CHUNK_K columns, this kernel
+// removes it entirely: one thread per (nonzero, feature) work-item instead of
+// one thread per row. Every nonzero-feature pair gets its own atomicAdd into
+// smem_Y -- a much larger atomic count than chunkcols. This is the direct
+// test of whether finer-grained balance is worth its atomic cost:
+// STALL_REASONS_NOATOMIC_ABLATION.md and STALL_REASONS_ROWGROUP_ATOMIC.md
+// (prior investigation, see git history) found atomics already a proven
+// major cost in this kernel family, and every attempt so far to reduce
+// atomic frequency by coarsening (rowgroup) lost to an occupancy tax instead
+// -- this kernel moves the opposite direction (finer atomics, no
+// coarsening), so it's an open question, not an assumed win.
+//
+// Rows are NOT compacted (same simplification as chunkcols) -- smem_Y is
+// BLOCK_ROWS*p, indexed by physical row.
+//
+// nz_idx -> (row, col, data-pointer) derivation history (see git log for the
+// full progression, all on the same nnzflat rewrite branch):
+//   1. Original: precomputed a per-block COLUMN-major "nonzero list"
+//      (nz_row[]/nz_ptr[]/nz_pc[], sized BLOCK_ROWS*BLOCK_COLS) into
+//      thread-private arrays once, looked up by nz_idx in Step B. Since
+//      nz_idx is a runtime value, those array reads couldn't be
+//      register-allocated -- confirmed via ncu
+//      smsp__sass_inst_executed_op_local_{ld,st}.sum to spill to local
+//      memory on every access, in every tested config (up to 1.15B spill
+//      instructions/launch on dense matrices; zero such spill in `block`).
+//   2. Replaced the array with an on-the-fly rank/select search over `code`,
+//      still reproducing COLUMN-major order, still redone inline for every
+//      (nz_idx, feature) work-item -- regressed 56-187% (compute-bound
+//      instead of memory-bound: the ~70-op search, redone on every
+//      feature-tile pass, cost more than the spill it replaced).
+//   3. Tried hoisting that same derivation to once-per-thread (static
+//      nz_idx=tx assignment) -- regressed 538-1193%, far worse: it broke
+//      Step B's THREADS_PER_BLOCK-wide parallelism (only ~n_nz of
+//      THREADS_PER_BLOCK threads do any Step B work), so most threads sit
+//      idle at the following __syncthreads() while the few active ones
+//      serially grind through every feature -- confirmed via barrier_pct
+//      jumping to 50-74%.
+//   4. THIS version: keeps step 2's inline-per-work-item structure (full
+//      THREADS_PER_BLOCK-wide parallelism, no barrier risk) but switches
+//      the enumeration from column-major to `code`'s native ROW-major bit
+//      order, which makes the derivation itself much cheaper: local_data_ptr
+//      becomes a trivial data_offset+nz_idx (block_data is stored in the
+//      same row-major order as `code`, so rank IS position -- no popcount
+//      even needed), and (row, col) reduces to one "select the nz_idx-th set
+//      bit of `code`" query, solved via ~log2(BLOCK_ROWS*BLOCK_COLS) rounds
+//      of binary search over popcounts (6 rounds worst case for 8x8 blocks)
+//      instead of the ~70-op linear scan step 2 used. This gives up
+//      column-major's smem_X read-locality property (nearby threads no
+//      longer reliably share the same smem_X column) -- that property was
+//      inherited from `colgroup`, a since-removed kernel variant that never
+//      itself beat `block`, so it was never independently validated as a
+//      win for nnzflat specifically. Net effect (cheaper derivation vs. lost
+//      locality) to be measured empirically, not assumed.
+//
+// Scalar-only, no vectorized variant (see chunkcols).
+
+template <typename index_t, typename scalar_t,
+          int BLOCK_ROWS, int BLOCK_COLS,
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_nnzflat_onthefly_kernel(
+    const uint32_t num_pbr_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t cols,
+    const uint32_t rows,
+    const int64_t* __restrict__ block_codes,
+    const index_t* __restrict__ block_coords,
+    const index_t* __restrict__ block_offsets,
+    const scalar_t* __restrict__ block_data,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    __shared__ scalar_t smem[TOTAL_SHARED];
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_block_idx = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_pbr_blocks || batch_idx >= batch_size) return;
+
+    const uint64_t code = static_cast<uint64_t>(block_codes[b_idx]);
+    const uint32_t row_origin = block_coords[b_idx * 2];
+    const uint32_t col_origin = block_coords[b_idx * 2 + 1];
+    const uint32_t data_offset = block_offsets[b_idx];
+
+    // --- 1. SPARSITY SCAN: col_mask only (register scalar, no per-row array) ---
+    const uint64_t row_bits = (1ULL << BLOCK_COLS) - 1;
+
+    uint64_t col_mask = 0;
+    #pragma unroll
+    for (uint32_t r = 0; r < BLOCK_ROWS; ++r) {
+        col_mask |= (code >> (r * BLOCK_COLS)) & row_bits;
+    }
+
+    const uint32_t n_c = __popcll(col_mask);
+    if (n_c == 0) return;
+
+    uint32_t packed_cols_physical = 0;
+    uint32_t pc_idx = 0;
+
+    #pragma unroll
+    for (uint32_t c = 0; c < BLOCK_COLS; ++c) {
+        if ((col_mask >> c) & 1) {
+            packed_cols_physical |= (c << (pc_idx * 3));
+            pc_idx++;
+        }
+    }
+
+    // n_nz = total set bits in `code` = total nonzeros in the block (every
+    // set bit is exactly one nonzero, regardless of enumeration order).
+    const uint32_t n_nz = __popcll(code);
+
+    // --- 2. DYNAMIC P CALCULATION ---
+    const uint32_t p_log2 = 31u - __clz(min(TOTAL_SHARED / (BLOCK_ROWS + n_c), features));
+    const uint32_t p      = 1u << p_log2;
+    const uint32_t p_mask = p - 1u;
+
+    const uint32_t feat_start = feat_block_idx * FEAT_BLOCK_SIZE;
+    const uint32_t feat_end = min(feat_start + FEAT_BLOCK_SIZE, features);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += p) {
+        const uint32_t current_p = min(p, feat_end - base_f);
+
+        scalar_t* smem_X = smem;
+        scalar_t* smem_Y = smem + (n_c * current_p);
+
+        // STEP A: Cooperative Load
+        const uint32_t total_x_elements = n_c * current_p;
+        for (uint32_t i = tx; i < total_x_elements; i += THREADS_PER_BLOCK) {
+            const uint32_t c_idx   = i >> p_log2;
+            const uint32_t f_offset = i & p_mask;
+            const uint32_t local_c = (packed_cols_physical >> (c_idx * 3)) & 0x7;
+            smem_X[i] = X[(batch_idx * cols * features) + ((col_origin + local_c) * features) + base_f + f_offset];
+        }
+
+        for (uint32_t i = tx; i < (uint32_t)(BLOCK_ROWS * current_p); i += THREADS_PER_BLOCK)
+            smem_Y[i] = scalar_t(0);
+
+        __syncthreads();
+
+        // STEP B: one thread per (nonzero, feature) work-item
+        const uint32_t total_work = n_nz * current_p;
+
+        for (uint32_t work_idx = tx; work_idx < total_work; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t nz_idx = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            // Derive (actual_r, pc, local_data_ptr) for nz_idx directly from
+            // `code`, in `code`'s own native ROW-major bit order (see the
+            // history note above the kernel). "Select the nz_idx-th set bit
+            // of `code`" via binary search over popcounts of shrinking
+            // windows -- MAX_NZ (BLOCK_ROWS*BLOCK_COLS) is a compile-time
+            // power of 2 (4/16/64), so this is a fixed, fully-unrolled
+            // register-only loop (2/4/6 rounds), no array.
+            constexpr uint32_t MAX_NZ = BLOCK_ROWS * BLOCK_COLS;
+
+            uint32_t pos = 0;
+            uint32_t remaining = nz_idx;
+            #pragma unroll
+            for (uint32_t half = MAX_NZ / 2; half >= 1; half /= 2) {
+                const uint64_t lower_mask = ((1ULL << half) - 1ULL) << pos;
+                const uint32_t cnt = __popcll(code & lower_mask);
+                if (remaining >= cnt) {
+                    remaining -= cnt;
+                    pos += half;
+                }
+            }
+
+            const uint32_t actual_r = pos / BLOCK_COLS;
+            const uint32_t physical_c = pos % BLOCK_COLS;
+
+            // pc = rank of physical_c among the block's active columns --
+            // matches Step A's packed_cols_physical compaction scheme.
+            const uint32_t pc = __popc(col_mask & ((1u << physical_c) - 1u));
+
+            // block_data is stored in the SAME row-major order as `code`,
+            // so the nz_idx-th nonzero in that order sits at exactly
+            // data_offset + nz_idx -- no popcount needed at all.
+            const uint32_t local_data_ptr = data_offset + nz_idx;
+
+            const scalar_t val = __ldg(&block_data[local_data_ptr]);
+            const scalar_t contribution = val * smem_X[pc * current_p + f_in_s];
+
+            atomicAdd(&smem_Y[actual_r * current_p + f_in_s], contribution);
+        }
+
+        __syncthreads();
+
+        // STEP C: Cooperative Atomic Commit -- skip rows with no data
+        const uint32_t total_flush = BLOCK_ROWS * current_p;
+        for (uint32_t work_idx = tx; work_idx < total_flush; work_idx += THREADS_PER_BLOCK) {
+            const uint32_t r      = work_idx >> p_log2;
+            const uint32_t f_in_s = work_idx & p_mask;
+
+            const uint64_t row_mask = (code >> (r * BLOCK_COLS)) & row_bits;
+            if (row_mask == 0) continue;
+
+            const uint32_t global_r = row_origin + r;
+            atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_in_s], smem_Y[work_idx]);
+        }
+
+        __syncthreads();
+    }
+}
+
+
+template <typename index_t, typename scalar_t>
+void launch_pbr_nnzflat_onthefly_spmm(
+    const int num_pbr_blocks,
+    const int features,
+    const int batch_size,
+    const int cols,
+    const int rows,
+    const int runtime_block_rows,
+    const int runtime_block_cols,
+    const int64_t* block_codes,
+    const index_t* block_coords,
+    const index_t* block_offsets,
+    const scalar_t* block_data,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream,
+    int smem_size
+) {
+    if (num_pbr_blocks == 0) {
+        return;
+    }
+
+    constexpr int THREADS_PER_BLOCK = 128;
+    constexpr int FEAT_BLOCK_SIZE   = 512;
+
+    const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
+    const dim3 grid(num_pbr_blocks, batch_size, feat_blocks);
+    const dim3 block(THREADS_PER_BLOCK);
+
+    #define NNZFLAT_ONTHEFLY_LAUNCH(BR, BC, TS)                                                             \
+        pbr_spmm_nnzflat_onthefly_kernel<index_t, scalar_t, BR, BC, TS, THREADS_PER_BLOCK,                   \
+                                FEAT_BLOCK_SIZE><<<grid, block, 0, stream>>>(                        \
+            (uint32_t)num_pbr_blocks, (uint32_t)features, (uint32_t)batch_size,                     \
+            (uint32_t)cols, (uint32_t)rows,                                                         \
+            block_codes, block_coords, block_offsets, block_data, X, Y)
+
+    #define DISPATCH_SMEM_NNZFLAT_ONTHEFLY(BR, BC)                              \
+        do {                                                          \
+            if      (smem_size <= 512)  NNZFLAT_ONTHEFLY_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) NNZFLAT_ONTHEFLY_LAUNCH(BR, BC, 1024); \
+            else                        NNZFLAT_ONTHEFLY_LAUNCH(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_NNZFLAT_ONTHEFLY(2, 2);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_NNZFLAT_ONTHEFLY(4, 4);
+    else if (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_NNZFLAT_ONTHEFLY(8, 8);
+    else throw std::invalid_argument("Unsupported block size for PBR nnzflat SpMM. Only 2x2, 4x4, and 8x8 are supported.");
+
+    #undef NNZFLAT_ONTHEFLY_LAUNCH
+    #undef DISPATCH_SMEM_NNZFLAT_ONTHEFLY
+}
+
+template void launch_pbr_nnzflat_onthefly_spmm<int32_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_nnzflat_onthefly_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
+template void launch_pbr_nnzflat_onthefly_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
+template void launch_pbr_nnzflat_onthefly_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+

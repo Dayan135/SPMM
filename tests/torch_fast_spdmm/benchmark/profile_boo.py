@@ -68,7 +68,8 @@ def main() -> None:
     parser.add_argument('--min-nnz', type=int, default=2)
     parser.add_argument('--smem-size', type=int, default=2048)
     parser.add_argument('--pbr-kernel', default='block',
-                        choices=['block', 'chunkcols', 'nnzflat'],
+                        choices=['block', 'chunkcols', 'nnzflat',
+                                 'nnzflat_shared', 'nnzflat_onthefly'],
                         help='which PBR kernel to run when --kernel pbr. '
                              'nnzflat is the fair within-family comparison: BOO '
                              'uses the same one-thread-per-(nonzero,feature) work '
