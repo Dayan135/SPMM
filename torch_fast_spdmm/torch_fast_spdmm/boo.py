@@ -165,12 +165,17 @@ def _build_boo_cuda_dispatch():
             torch.float64: core.boo_spmm_cuda_f64}
 
 
-def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 32,
+def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
                csr_mode: int = 0, row_seg: Optional[bool] = None) -> torch.Tensor:
     """Y = A @ X.  Dispatches on x.device.
 
-    `threads` in {128, 256, 512} and `p` in {8, 16, 32} are the two shared-memory
-    levers (BOO_FORMAT.md sec. 9); both are swept rather than fixed.
+    `threads` in {128, 256, 512} and `p` in {8..128} are the two shared-memory
+    levers (BOO_FORMAT.md sec. 9); both are swept rather than fixed. Measured
+    optimum for the row-segmented kernel is threads=256, p=64.
+
+    `row_seg` selects the register-accumulating Step B; it defaults to True
+    whenever the matrix was built rowmajor, and is ~1.6x faster than the
+    shared-atomic variant (BOO_FORMAT.md sec. 13).
     """
     if x.dim() not in (2, 3):
         raise ValueError(f'Expected 2D or 3D input, got {x.dim()}D')
@@ -275,7 +280,7 @@ def boo_arena_bytes(max_nr: int, max_nc: int, max_nnz_blk: int, p: int,
     return data + ids + tiles
 
 
-def boo_info(boo_mat, p: int = 32, threads: int = 256,
+def boo_info(boo_mat, p: int = 64, threads: int = 256,
              row_seg: bool = True) -> BOOInfo:
     """Structural summary, derived entirely from the built format -- no rebuild."""
     _, scalar_dtype = _BOO_TYPE_MAP[type(boo_mat).__name__]

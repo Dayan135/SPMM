@@ -58,7 +58,7 @@ def main() -> None:
     parser.add_argument('--target-nr', type=int, default=32)
     parser.add_argument('--target-nc', type=int, default=32)
     parser.add_argument('--threads', type=int, default=256)
-    parser.add_argument('--p', type=int, default=32)
+    parser.add_argument('--p', type=int, default=64)
     parser.add_argument('--nz-order', default='rowmajor', choices=['rowmajor', 'colmajor'])
     parser.add_argument('--small-block-policy', default='keep',
                         choices=['keep', 'merge', 'remainder'])

@@ -708,3 +708,71 @@ rewrite.
 
 Not yet measured: the `nz_order` isolate (§4.3, §8), the small-block policy decision (§7),
 fp64, and any matrix other than the `fem2d` pair.
+
+---
+
+## 13. Optimizing Step B — the row-segmented kernel
+
+§12's numbers are the **shared-atomic** kernel. Profiling it (`ncu`, the
+`optimizer.performance.METRICS` list, `fem2d` N=65536 f512) showed the problem was not
+where §3 assumed:
+
+| metric | BOO (atomic) | PBR `block` | PBR `nnzflat` |
+|---|---|---|---|
+| gpu_time_ns | 5,488,032 | 2,647,008 | 8,690,816 |
+| `sm_throughput_pct` | **92.08** | 30.24 | 68.63 |
+| `alu_pipe_pct` | **40.40** | 16.96 | 21.57 |
+| `long_scoreboard_pct` | 10.82 | 19.75 | **61.26** |
+| `mio_throttle_pct` | 5.30 | **23.54** | 1.12 |
+| **`short_scoreboard_pct`** | **29.28** | 13.69 | 6.51 |
+| `barrier_pct` | 11.32 | 12.85 | 5.66 |
+
+BOO was **not memory-bound** — `long_scoreboard` 10.8% and `mio_throttle` 5.3%, both far
+below PBR. It ran at 92% SM throughput with 40% ALU pipe: issuing an enormous number of
+instructions, top stall `short_scoreboard` (29.3%) = warps waiting on shared-memory
+dependencies. That is the per-(nonzero, feature) `atomicAdd` into `smem_Y`.
+
+**The fix.** `nz_order = rowmajor` sorts nonzeros by `local_row`, so a per-block row-start
+table can be recovered by binary search (branch-free, no atomics, and rows the column
+group does not touch fall out for free). Each thread then owns one *(row, feature)* item
+and accumulates that row in a **register**, committing once. This removes every shared
+atomic, `smem_Y` entirely and its zeroing pass, and one barrier per feature tile. It is
+`zero_idle`'s structure on BOO's format — and `zero_idle` is the PBR kernel that wins.
+
+`boo_spmm_nnzflat_kernel` is kept and is still used for `colmajor`, so `nz_order` remains
+a real A/B axis.
+
+### 13a. Isolated effect
+
+Same format, same `rowmajor` ordering, same `p=32` — only Step B differs:
+
+| matrix (N=65536) | shared atomic | register accumulate | |
+|---|---|---|---|
+| `fem2d` | 4.64 ms | **2.94 ms** | **1.58×** |
+| `fem2d_permuted` | 4.72 ms | **3.03 ms** | **1.56×** |
+
+Dropping `smem_Y` also shrank the arena enough that **`p = 64` now fits at 100%
+occupancy** (12,612 B) where `p = 32` used to be the ceiling. New optimum:
+**`threads=256, p=64`**. `p=128` still loses (20,804 B → 67% occupancy).
+
+### 13b. Final standing vs PBR
+
+Best BOO config (`hem`, target 32, `threads=256`, `p=64`) against PBR `block`:
+
+| matrix | N | BOO | PBR `block` | |
+|---|---|---|---|---|
+| `fem2d_permuted` | 65,536 | **2.92 ms** | 3.66 ms | **BOO 1.25× faster** |
+| `fem2d_permuted` | 262,144 | **11.46 ms** | 14.35 ms | **BOO 1.25× faster** |
+| `fem2d` | 65,536 | 2.86 ms | **2.38 ms** | BOO 1.20× slower |
+| `fem2d` | 262,144 | 10.99 ms | **9.46 ms** | BOO 1.16× slower |
+
+**BOO beats PBR on the permuted matrix at both sizes, by the same 1.25×, and loses on the
+naturally-ordered one by ~1.2×.** That split is the mechanism working as designed rather
+than a surprise: BOO's advantage is recovering locality, and `fem2d` in its natural order
+has none to recover — it is close to BOO's worst case, `fem2d_permuted` closer to its
+best. The advantage is stable across a 4× size increase.
+
+Still unmeasured: the `nz_order` isolate with bank-conflict counters, the small-block
+policy, fp64, and matrices beyond the `fem2d` pair. Single runs; `SHOW_TO_ERAN.md` §4
+recorded up to 29% run-to-run variance on this cluster, so the 1.25× and 1.56× effects
+are clear of it but finer distinctions are not.

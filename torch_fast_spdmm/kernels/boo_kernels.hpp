@@ -8,8 +8,8 @@
 // `threads` in {128, 256, 512} and `p` in {8, 16, 32} are swept, not fixed:
 // `threads` is the 4x step lever on the shared-memory budget (128 -> 512
 // quadruples it at identical 100% occupancy) and `p` is the linear one.
-// Measured optimum on fem2d/fem2d_permuted at N=65536,f512: threads=256, p=32
-// (p=8 is 2.1x off it -- see BOO_FORMAT.md sec. 12c).
+// Measured optimum for the row-segmented kernel: threads=256, p=64.
+// (p=8, the original design point, is ~3x off it -- BOO_FORMAT.md sec. 12c/13.)
 //
 // The arena is sized from the format's GLOBAL maxima because `extern __shared__`
 // takes one size for the whole grid -- CUDA has no per-CTA shared-memory size.
@@ -37,7 +37,7 @@ void launch_boo_spmm(
     scalar_t* Y,
     cudaStream_t stream = 0,
     int threads = 256,
-    int p = 32,
+    int p = 64,
     // row_seg: register-accumulating variant. Requires nz_order == rowmajor
     // (nz_idx sorted by local_row). Default; the caller falls back to false
     // for colmajor.

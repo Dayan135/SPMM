@@ -36,7 +36,7 @@ at::Tensor boo_spmm_cuda_dispatch(
     const at::Tensor rem_vals,
     const at::Tensor X,
     int threads = 256,
-    int p = 32,
+    int p = 64,
     int csr_mode = 0,
     bool row_seg = true
 ) {
