@@ -31,10 +31,18 @@ namespace py = pybind11;
 
 // Policy for blocks that fall below `small_block_threshold` nonzeros.
 // Deliberately open -- BOO_FORMAT.md sec. 7 -- and decided by measurement.
+//
+// Profiling diag_skewed (bimodal per-block nnz by construction) found KEEP
+// launches one CUDA block per intersection regardless of how little work it
+// holds: at N=262144, 97.4% of blocks carry <=3 nonzeros, each still paying
+// the arena sized for the matrix's densest block (1.3% utilization), and the
+// resulting 1.4M-CTA grid runs 6-7x slower than PBR's `block` kernel, which
+// simply routes the same noise to a CSR remainder. See BOO_FORMAT.md sec. 15.
 enum boo_small_block_policy_t {
     BOO_KEEP = 0,       // every non-empty intersection becomes a block
     BOO_MERGE = 1,      // fuse a row group's sparse col groups into one wider block
-    BOO_REMAINDER = 2   // spill below-threshold blocks to the CSR remainder
+    BOO_REMAINDER = 2,  // spill below-threshold blocks to the CSR remainder
+    BOO_TAIL_BATCH = 3  // spill to a flat COO tail, processed by boo_spmm_tail_kernel
 };
 
 // Nonzero ordering within a block.  A build parameter, not an assumption:
@@ -72,6 +80,19 @@ struct boo_matrix_t {
     const std::vector<index_t> rem_col_ind;
     const std::vector<scalar_t> rem_vals;
 
+    // --- tail (may be empty; BOO_TAIL_BATCH only) ----------------------------
+    // Flat COO of every nonzero from below-threshold blocks, GLOBAL indices
+    // (no block-local reencoding -- there is no shared arena to amortize for
+    // entries this sparse). Consumed by boo_spmm_tail_kernel: a grid-stride
+    // loop with no smem staging and no barriers, so its CTA count is bounded
+    // by occupancy rather than by tail_nnz -- the fix for KEEP's CTA
+    // explosion on bimodal matrices. Unlike BOO_REMAINDER this never leaves
+    // BOO for the shared CSR kernel; boo_info folds tail_nnz into its
+    // "handled inside BOO" fraction accordingly (see torch_fast_spdmm/boo.py).
+    const std::vector<index_t> tail_row;
+    const std::vector<index_t> tail_col;
+    const std::vector<scalar_t> tail_val;
+
     // --- global maxima ------------------------------------------------------
     // CUDA has no per-CTA shared-memory size: `extern __shared__` takes its size
     // from the launch config and every CTA in the grid gets that same
@@ -91,6 +112,8 @@ struct boo_matrix_t {
                  std::vector<uint16_t>&& nz_idx, std::vector<scalar_t>&& nz_val,
                  std::vector<index_t>&& rem_indptr, std::vector<index_t>&& rem_col_ind,
                  std::vector<scalar_t>&& rem_vals,
+                 std::vector<index_t>&& tail_row, std::vector<index_t>&& tail_col,
+                 std::vector<scalar_t>&& tail_val,
                  const index_t max_nr, const index_t max_nc, const index_t max_nnz_blk,
                  const boo_nz_order_t nz_order) :
         rows(rows), cols(cols), total_nnz(total_nnz),
@@ -101,6 +124,8 @@ struct boo_matrix_t {
         nz_idx(std::move(nz_idx)), nz_val(std::move(nz_val)),
         rem_indptr(std::move(rem_indptr)), rem_col_ind(std::move(rem_col_ind)),
         rem_vals(std::move(rem_vals)),
+        tail_row(std::move(tail_row)), tail_col(std::move(tail_col)),
+        tail_val(std::move(tail_val)),
         max_nr(max_nr), max_nc(max_nc), max_nnz_blk(max_nnz_blk),
         nz_order(nz_order) {}
 
@@ -109,6 +134,7 @@ struct boo_matrix_t {
     index_t num_col_groups() const { return static_cast<index_t>(col_grp_ptr.size()) - 1; }
     index_t compressed_nnz() const { return static_cast<index_t>(nz_val.size()); }
     index_t remainder_nnz() const { return static_cast<index_t>(rem_col_ind.size()); }
+    index_t tail_nnz() const { return static_cast<index_t>(tail_val.size()); }
 };
 
 // Build from CSR plus a clustering label per row and per column.  The labels

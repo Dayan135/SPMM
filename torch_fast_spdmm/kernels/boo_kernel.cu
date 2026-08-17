@@ -390,3 +390,114 @@ template void launch_boo_spmm<double>(
     const int32_t*, const int32_t*, const int32_t*, const int32_t*,
     const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
     const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int, bool);
+
+
+// ===========================================================================
+// Tail kernel -- flat COO for below-threshold blocks (BOO_TAIL_BATCH policy)
+// ===========================================================================
+//
+// KEEP launches one CUDA block per (row group x col group) intersection no
+// matter how little work it holds. Profiling diag_skewed (bimodal per-block
+// nnz by construction) found 97.4% of blocks holding <=3 nonzeros at
+// N=262144, each still paying the arena sized for the matrix's densest block
+// (1024 nnz there -- 1.3% utilization), and the resulting 1.4M-CTA grid ran
+// 6-7x slower than PBR's `block` kernel, which simply routes the same noise
+// to a CSR remainder. See BOO_FORMAT.md sec. 15.
+//
+// This kernel is the in-format alternative to that CSR spill (BOO_REMAINDER):
+// below-threshold blocks are flattened to a GLOBAL-index COO list at build
+// time (boo_matrix.cpp), with no block-local reencoding -- there is no
+// shared arena to amortize for entries this sparse. Each thread owns one
+// nonzero and grid-strides over the tail, looping over `features` for that
+// nonzero. No smem, no barriers, no per-block arena, and critically the CTA
+// count is bounded by GPU occupancy rather than by tail_nnz -- this is what
+// fixes KEEP's CTA explosion, in contrast to BOO_REMAINDER which fixes it by
+// leaving BOO entirely for the shared CSR kernel (and dropping
+// compressed_fraction below 1.0, reintroducing SHOW_TO_ERAN sec. 2's
+// CSR-fallback confound into any benchmark that reads it naively).
+//
+// atomicAdd is required, unlike the row-segmented kernel's plain per-row
+// commit: a tail row has no row_ids partition guarantee -- it may also
+// receive contributions from a kept BOO block (same row group, a different,
+// denser column group) or from another tail entry.
+template <typename scalar_t, int THREADS>
+__global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_tail_kernel(
+    const uint32_t tail_nnz,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t rows,
+    const uint32_t cols,
+    const int32_t* __restrict__ tail_row,
+    const int32_t* __restrict__ tail_col,
+    const scalar_t* __restrict__ tail_val,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y
+) {
+    const uint32_t batch_idx = blockIdx.y;
+    if (batch_idx >= batch_size) return;
+
+    const size_t x_base = static_cast<size_t>(batch_idx) * cols * features;
+    const size_t y_base = static_cast<size_t>(batch_idx) * rows * features;
+    const uint32_t stride = gridDim.x * blockDim.x;
+
+    for (uint32_t k = blockIdx.x * blockDim.x + threadIdx.x; k < tail_nnz; k += stride) {
+        const int32_t r = tail_row[k];
+        const int32_t c = tail_col[k];
+        const scalar_t v = tail_val[k];
+        const scalar_t* __restrict__ xrow = X + x_base + static_cast<size_t>(c) * features;
+        scalar_t* __restrict__ yrow = Y + y_base + static_cast<size_t>(r) * features;
+
+        #pragma unroll 4
+        for (uint32_t f = 0; f < features; ++f) {
+            atomicAdd(&yrow[f], v * xrow[f]);
+        }
+    }
+}
+
+
+template <typename scalar_t>
+void launch_boo_tail_spmm(
+    const int tail_nnz, const int features, const int batch_size,
+    const int rows, const int cols,
+    const int32_t* tail_row, const int32_t* tail_col, const scalar_t* tail_val,
+    const scalar_t* X, scalar_t* Y,
+    cudaStream_t stream, int threads
+) {
+    if (tail_nnz == 0 || features == 0 || batch_size == 0) return;
+
+    // Grid-stride, so CTA count is bounded by occupancy rather than by
+    // tail_nnz -- the whole point of this kernel. OCCUPANCY_WAVES=32 is a
+    // generous oversubscription factor for a kernel this light (no smem, no
+    // barriers): enough resident waves to hide global-load/atomic latency
+    // without the launch overhead of one CTA per tail element.
+    constexpr int OCCUPANCY_WAVES = 32;
+    int device = 0;
+    cudaGetDevice(&device);
+    int sm_count = 1;
+    cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device);
+    const int ctas_per_sm = max(1, 1536 / threads);
+    const int occupancy_grid = sm_count * ctas_per_sm * OCCUPANCY_WAVES;
+    const int work_grid = (tail_nnz + threads - 1) / threads;
+    const dim3 grid(max(1, min(occupancy_grid, work_grid)), batch_size);
+
+    #define BOO_TAIL_LAUNCH(T)                                                   \
+        boo_spmm_tail_kernel<scalar_t, T><<<grid, dim3(T), 0, stream>>>(         \
+            (uint32_t)tail_nnz, (uint32_t)features, (uint32_t)batch_size,        \
+            (uint32_t)rows, (uint32_t)cols, tail_row, tail_col, tail_val, X, Y)
+
+    if      (threads <= 128) BOO_TAIL_LAUNCH(128);
+    else if (threads <= 256) BOO_TAIL_LAUNCH(256);
+    else                     BOO_TAIL_LAUNCH(512);
+
+    #undef BOO_TAIL_LAUNCH
+}
+
+template void launch_boo_tail_spmm<float>(
+    const int, const int, const int, const int, const int,
+    const int32_t*, const int32_t*, const float*,
+    const float*, float*, cudaStream_t, int);
+
+template void launch_boo_tail_spmm<double>(
+    const int, const int, const int, const int, const int,
+    const int32_t*, const int32_t*, const double*,
+    const double*, double*, cudaStream_t, int);

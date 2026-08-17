@@ -25,10 +25,10 @@ __all__ = [
     'SMALL_BLOCK_POLICIES', 'NZ_ORDERS',
 ]
 
-SMALL_BLOCK_POLICIES = ('keep', 'merge', 'remainder')
+SMALL_BLOCK_POLICIES = ('keep', 'merge', 'remainder', 'tail_batch')
 NZ_ORDERS = ('rowmajor', 'colmajor')
 
-_POLICY_CODE = {'keep': 0, 'merge': 1, 'remainder': 2}
+_POLICY_CODE = {'keep': 0, 'merge': 1, 'remainder': 2, 'tail_batch': 3}
 _ORDER_CODE = {'rowmajor': 0, 'colmajor': 1}
 
 _BOO_TYPE_MAP = {
@@ -79,6 +79,9 @@ def _boo_to_method(self, device='cuda'):
             rem_indptr=_pin_to_device(self.rem_indptr, device, np.int32),
             rem_col_ind=_pin_to_device(self.rem_col_ind, device, np.int32),
             rem_vals=_pin_to_device(self.rem_vals, device),
+            tail_row=_pin_to_device(self.tail_row, device, np.int32),
+            tail_col=_pin_to_device(self.tail_col, device, np.int32),
+            tail_val=_pin_to_device(self.tail_val, device),
         )
         torch.cuda.synchronize(device)
     else:
@@ -208,6 +211,7 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
         meta.blk_row_grp, meta.blk_col_grp, meta.blk_nz_ptr, meta.blk_shift,
         meta.nz_idx, meta.nz_val,
         meta.rem_indptr, meta.rem_col_ind, meta.rem_vals,
+        meta.tail_row, meta.tail_col, meta.tail_val,
         x, threads, p, csr_mode, row_seg,
     )
     return y.squeeze(0) if x.dim() == 2 else y
@@ -223,7 +227,16 @@ class BOOInfo:
     total_nnz: int
     compressed_nnz: int
     remainder_nnz: int
+    tail_nnz: int
+    # Strict: fraction of nnz encoded as a block (the uint16 nz_idx form).
+    # Under BOO_REMAINDER this doubles as "did any nnz leave BOO for the
+    # shared CSR kernel" (SHOW_TO_ERAN sec. 2's confound); under
+    # BOO_TAIL_BATCH it does NOT -- nothing left BOO, so read boo_fraction
+    # instead for that question.
     compressed_fraction: float
+    # Fraction of nnz processed by a BOO-family kernel (block OR tail), i.e.
+    # 1.0 unless BOO_REMAINDER actually spilled to the shared CSR kernel.
+    boo_fraction: float
 
     num_blocks: int
     num_row_groups: int
@@ -314,6 +327,7 @@ def boo_info(boo_mat, p: int = 64, threads: int = 256,
         hist = {}
 
     compressed = int(boo_mat.compressed_nnz())
+    tail = int(boo_mat.tail_nnz())
     total = int(boo_mat.total_nnz)
     arena = boo_arena_bytes(int(boo_mat.max_nr), int(boo_mat.max_nc),
                             int(boo_mat.max_nnz_blk), p, scalar_bytes, row_seg)
@@ -324,7 +338,9 @@ def boo_info(boo_mat, p: int = 64, threads: int = 256,
         total_nnz=total,
         compressed_nnz=compressed,
         remainder_nnz=int(boo_mat.remainder_nnz()),
+        tail_nnz=tail,
         compressed_fraction=compressed / total if total else 0.0,
+        boo_fraction=(compressed + tail) / total if total else 0.0,
         num_blocks=nb,
         num_row_groups=int(rg_size.size),
         num_col_groups=int(cg_size.size),

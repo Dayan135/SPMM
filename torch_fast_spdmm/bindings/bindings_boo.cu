@@ -13,10 +13,13 @@
 // the way PBR does, which halves both the index traffic and the pybind symbol
 // count (2 symbols instead of 4).
 //
-// The two-stream fork/join is kept from the PBR path even though the default
-// `keep` small-block policy leaves the remainder empty: the policy is
-// deliberately open (BOO_FORMAT.md sec. 7), and `remainder` must work without a
-// later rewrite.  With an empty remainder the CSR leg is simply skipped.
+// Three-way fork/join. block_stream runs the main BOO-block kernel; csr_stream
+// the shared CSR remainder kernel (BOO_REMAINDER policy); tail_stream the
+// in-format tail kernel (BOO_TAIL_BATCH policy). Exactly one of csr_nnz/
+// tail_nnz is normally nonzero (the two small-block policies are mutually
+// exclusive at build time), but nothing here assumes that -- an empty leg is
+// simply skipped, so all three streams stay valid for every policy without a
+// later rewrite. All three commit into the same zeroed Y via atomicAdd.
 template <typename scalar_t>
 at::Tensor boo_spmm_cuda_dispatch(
     int rows, int cols,
@@ -34,6 +37,9 @@ at::Tensor boo_spmm_cuda_dispatch(
     const at::Tensor rem_indptr,
     const at::Tensor rem_col_ind,
     const at::Tensor rem_vals,
+    const at::Tensor tail_row,
+    const at::Tensor tail_col,
+    const at::Tensor tail_val,
     const at::Tensor X,
     int threads = 256,
     int p = 64,
@@ -42,6 +48,7 @@ at::Tensor boo_spmm_cuda_dispatch(
 ) {
     const int num_blocks = (int)blk_row_grp.size(0);
     const int csr_nnz    = (int)rem_col_ind.size(0);
+    const int tail_nnz   = (int)tail_col.size(0);
     const int batch_size = (X.dim() == 3) ? (int)X.size(0) : 1;
     const int features   = (int)X.size(-1);
 
@@ -51,12 +58,14 @@ at::Tensor boo_spmm_cuda_dispatch(
     auto cur_stream   = at::cuda::getCurrentCUDAStream();
     auto block_stream = at::cuda::getStreamFromPool();
     auto csr_stream   = at::cuda::getStreamFromPool();
+    auto tail_stream  = at::cuda::getStreamFromPool();
 
     cudaEvent_t y_ready;
     cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
     cudaEventRecord(y_ready, cur_stream.stream());
     cudaStreamWaitEvent(block_stream.stream(), y_ready, 0);
     cudaStreamWaitEvent(csr_stream.stream(),   y_ready, 0);
+    cudaStreamWaitEvent(tail_stream.stream(),  y_ready, 0);
     cudaEventDestroy(y_ready);
 
     if (num_blocks > 0) {
@@ -93,15 +102,32 @@ at::Tensor boo_spmm_cuda_dispatch(
         );
     }
 
-    cudaEvent_t block_done, csr_done;
+    if (tail_nnz > 0) {
+        launch_boo_tail_spmm<scalar_t>(
+            tail_nnz, features, batch_size, rows, cols,
+            tail_row.data_ptr<int32_t>(),
+            tail_col.data_ptr<int32_t>(),
+            tail_val.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            tail_stream.stream(),
+            threads
+        );
+    }
+
+    cudaEvent_t block_done, csr_done, tail_done;
     cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
     cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&tail_done,  cudaEventDisableTiming);
     cudaEventRecord(block_done, block_stream.stream());
     cudaEventRecord(csr_done,   csr_stream.stream());
+    cudaEventRecord(tail_done,  tail_stream.stream());
     cudaStreamWaitEvent(cur_stream.stream(), block_done, 0);
     cudaStreamWaitEvent(cur_stream.stream(), csr_done,   0);
+    cudaStreamWaitEvent(cur_stream.stream(), tail_done,  0);
     cudaEventDestroy(block_done);
     cudaEventDestroy(csr_done);
+    cudaEventDestroy(tail_done);
 
     return Y;
 }

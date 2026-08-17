@@ -61,7 +61,7 @@ def main() -> None:
     parser.add_argument('--p', type=int, default=64)
     parser.add_argument('--nz-order', default='rowmajor', choices=['rowmajor', 'colmajor'])
     parser.add_argument('--small-block-policy', default='keep',
-                        choices=['keep', 'merge', 'remainder'])
+                        choices=['keep', 'merge', 'remainder', 'tail_batch'])
     parser.add_argument('--small-block-threshold', type=int, default=0)
     # PBR knobs (for --kernel pbr)
     parser.add_argument('--block', type=int, default=8)

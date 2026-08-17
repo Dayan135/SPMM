@@ -74,7 +74,8 @@ boo_matrix_t<index_t, scalar_t> csr_to_boo(
             "csr_to_boo: 'merge' policy is a clustering-level column relabel, "
             "not a builder policy -- merge the column groups before building");
     }
-    if (small_block_policy != BOO_KEEP && small_block_policy != BOO_REMAINDER) {
+    if (small_block_policy != BOO_KEEP && small_block_policy != BOO_REMAINDER &&
+        small_block_policy != BOO_TAIL_BATCH) {
         throw std::invalid_argument("csr_to_boo: unknown small_block_policy");
     }
     if (nz_order != BOO_ROWMAJOR && nz_order != BOO_COLMAJOR) {
@@ -133,10 +134,13 @@ boo_matrix_t<index_t, scalar_t> csr_to_boo(
     index_t max_nr = 0, max_nc = 0, max_nnz_blk = 0;
     index_t running = 0;
 
+    const bool spills_small_blocks =
+        (small_block_policy == BOO_REMAINDER || small_block_policy == BOO_TAIL_BATCH);
+
     for (const auto& entry : sorted_blocks) {
         const index_t nnz_in_block = entry.second;
-        if (small_block_policy == BOO_REMAINDER && nnz_in_block < small_block_threshold) {
-            continue;  // handled by the remainder pass below
+        if (spills_small_blocks && nnz_in_block < small_block_threshold) {
+            continue;  // handled by the remainder/tail pass below
         }
         const index_t rg = static_cast<index_t>(entry.first / n_cg);
         const index_t cg = static_cast<index_t>(entry.first % n_cg);
@@ -172,6 +176,12 @@ boo_matrix_t<index_t, scalar_t> csr_to_boo(
     std::vector<index_t> cursor(blk_nz_ptr.begin(), blk_nz_ptr.end() - 1);
     std::vector<std::vector<std::pair<index_t, scalar_t>>> rem_bins(static_cast<size_t>(rows));
 
+    // TAIL_BATCH: flat global-index COO, no block-local reencoding. Populated
+    // in row-major CSR traversal order below, so -- unlike sorted_blocks'
+    // unordered_map iteration -- this stays deterministic with no extra sort.
+    std::vector<index_t> tail_row_vec, tail_col_vec;
+    std::vector<scalar_t> tail_val_vec;
+
     for (index_t r = 0; r < rows; ++r) {
         const int64_t rg = static_cast<int64_t>(row_label_ptr[r]);
         const index_t local_row = row_position[static_cast<size_t>(r)];
@@ -180,7 +190,13 @@ boo_matrix_t<index_t, scalar_t> csr_to_boo(
             const int64_t key = rg * static_cast<int64_t>(n_cg) + col_label_ptr[c];
             const auto found = key_to_block.find(key);
             if (found == key_to_block.end()) {
-                rem_bins[static_cast<size_t>(r)].push_back({c, data_ptr[j]});
+                if (small_block_policy == BOO_TAIL_BATCH) {
+                    tail_row_vec.push_back(r);
+                    tail_col_vec.push_back(c);
+                    tail_val_vec.push_back(data_ptr[j]);
+                } else {
+                    rem_bins[static_cast<size_t>(r)].push_back({c, data_ptr[j]});
+                }
                 continue;
             }
             const index_t b = found->second;
@@ -252,6 +268,7 @@ boo_matrix_t<index_t, scalar_t> csr_to_boo(
         std::move(blk_nz_ptr), std::move(blk_shift),
         std::move(nz_idx), std::move(nz_val),
         std::move(rem_indptr), std::move(rem_col_ind), std::move(rem_vals),
+        std::move(tail_row_vec), std::move(tail_col_vec), std::move(tail_val_vec),
         max_nr, max_nc, max_nnz_blk,
         static_cast<boo_nz_order_t>(nz_order));
 }
@@ -294,6 +311,11 @@ void boo_to_csr(const boo_matrix_t<index_t, scalar_t>& boo_mat,
                 {boo_mat.rem_col_ind[static_cast<size_t>(j)],
                  boo_mat.rem_vals[static_cast<size_t>(j)]});
         }
+    }
+
+    for (index_t k = 0; k < boo_mat.tail_nnz(); ++k) {
+        row_bins[static_cast<size_t>(boo_mat.tail_row[static_cast<size_t>(k)])].push_back(
+            {boo_mat.tail_col[static_cast<size_t>(k)], boo_mat.tail_val[static_cast<size_t>(k)]});
     }
 
     index_t current = 0;
@@ -358,6 +380,15 @@ at::Tensor boo_batched_matmul_cpu(const boo_matrix_t<index_t, scalar_t>& boo_mat
                     xb + static_cast<int64_t>(boo_mat.rem_col_ind[static_cast<size_t>(j)]) * features;
                 for (int64_t f = 0; f < features; ++f) yrow[f] += value * xrow[f];
             }
+        }
+
+        for (index_t k = 0; k < boo_mat.tail_nnz(); ++k) {
+            const scalar_t value = boo_mat.tail_val[static_cast<size_t>(k)];
+            const scalar_t* xrow =
+                xb + static_cast<int64_t>(boo_mat.tail_col[static_cast<size_t>(k)]) * features;
+            scalar_t* yrow =
+                yb + static_cast<int64_t>(boo_mat.tail_row[static_cast<size_t>(k)]) * features;
+            for (int64_t f = 0; f < features; ++f) yrow[f] += value * xrow[f];
         }
     }
 

@@ -48,3 +48,21 @@ void launch_boo_spmm(
 // real launch cannot drift apart.
 int boo_arena_bytes(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes);
 int boo_arena_bytes_rowseg(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes);
+
+// Launch the BOO tail kernel (BOO_TAIL_BATCH small_block_policy). Flat COO,
+// no smem, grid-stride over tail_nnz so CTA count is bounded by occupancy
+// rather than by tail_nnz -- see BOO_FORMAT.md sec. 15 / kernels/boo_kernel.cu.
+template <typename scalar_t>
+void launch_boo_tail_spmm(
+    const int tail_nnz,
+    const int features,
+    const int batch_size,
+    const int rows,
+    const int cols,
+    const int32_t* tail_row,
+    const int32_t* tail_col,
+    const scalar_t* tail_val,
+    const scalar_t* X,
+    scalar_t* Y,
+    cudaStream_t stream = 0,
+    int threads = 256);

@@ -78,6 +78,9 @@ def main() -> None:
     ap.add_argument('--target-nc', type=int, default=32)
     ap.add_argument('--threads', type=int, default=256)
     ap.add_argument('--p', type=int, default=64)
+    ap.add_argument('--small-block-policy', default='keep',
+                    choices=['keep', 'remainder', 'tail_batch'])
+    ap.add_argument('--small-block-threshold', type=int, default=0)
     # PBR config
     ap.add_argument('--block', type=int, default=8)
     ap.add_argument('--min-nnz', type=int, default=2)
@@ -103,7 +106,9 @@ def main() -> None:
 
             t0 = time.perf_counter()
             boo = csr_to_boo(mat, cluster=args.cluster,
-                             target_nr=args.target_nr, target_nc=args.target_nc)
+                             target_nr=args.target_nr, target_nc=args.target_nc,
+                             small_block_policy=args.small_block_policy,
+                             small_block_threshold=args.small_block_threshold)
             boo_build_s = time.perf_counter() - t0
             pbr = csr_to_pbr(mat, block_rows=args.block, block_cols=args.block,
                              min_nnz_per_block=args.min_nnz)
@@ -144,7 +149,11 @@ def main() -> None:
                     # Reporting rules (BOO_FORMAT.md sec. 10.1): a silent CSR
                     # fallback or an occupancy tax must be visible in the row,
                     # not inferred later.
+                    'boo_small_block_policy': args.small_block_policy,
+                    'boo_small_block_threshold': args.small_block_threshold,
                     'boo_compressed_fraction': round(binfo.compressed_fraction, 4),
+                    'boo_fraction': round(binfo.boo_fraction, 4),
+                    'boo_tail_nnz': binfo.tail_nnz,
                     'pbr_compressed_fraction': round(pinfo.compressed_fraction, 4),
                     'boo_occupancy_pct': round(binfo.occupancy_pct, 1),
                     'boo_ctas_per_sm': binfo.ctas_per_sm,

@@ -44,11 +44,15 @@ void bind_boo_functions(py::module_& m);
             BOO_ARRAY_PROPERTY(T, S, "rem_indptr", rem_indptr, T) \
             BOO_ARRAY_PROPERTY(T, S, "rem_col_ind", rem_col_ind, T) \
             BOO_ARRAY_PROPERTY(T, S, "rem_vals", rem_vals, S) \
+            BOO_ARRAY_PROPERTY(T, S, "tail_row", tail_row, T) \
+            BOO_ARRAY_PROPERTY(T, S, "tail_col", tail_col, T) \
+            BOO_ARRAY_PROPERTY(T, S, "tail_val", tail_val, S) \
             .def("num_blocks",     &boo_matrix_t<T, S>::num_blocks) \
             .def("num_row_groups", &boo_matrix_t<T, S>::num_row_groups) \
             .def("num_col_groups", &boo_matrix_t<T, S>::num_col_groups) \
             .def("compressed_nnz", &boo_matrix_t<T, S>::compressed_nnz) \
             .def("remainder_nnz",  &boo_matrix_t<T, S>::remainder_nnz) \
+            .def("tail_nnz",       &boo_matrix_t<T, S>::tail_nnz) \
             .def("__repr__", [](const boo_matrix_t<T, S>& self) { \
                 return std::string("BOOMatrix(") \
                      + std::to_string(self.rows) + "x" + std::to_string(self.cols) \
@@ -60,6 +64,7 @@ void bind_boo_functions(py::module_& m);
                      + ", max_nnz_blk=" + std::to_string(self.max_nnz_blk) \
                      + ", compressed_nnz=" + std::to_string(self.compressed_nnz()) \
                      + ", remainder_nnz=" + std::to_string(self.remainder_nnz()) \
+                     + ", tail_nnz=" + std::to_string(self.tail_nnz()) \
                      + ")"; \
             });
 
