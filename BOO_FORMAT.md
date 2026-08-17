@@ -867,3 +867,77 @@ Excluded from nothing above, but do not read it as a clean loss.
   is the same story: already well-ordered, nothing to recover.
 - **The single largest lever is the clustering choice, not the kernel.** Getting it right
   is worth ~2× and costs nothing at runtime.
+
+---
+
+## 15. Diagnosing the worst loss — `diag_skewed`
+
+The single worst cell in §14 was `diag_skewed` (0.503× vs `block`, worse than any other matrix and getting *worse* with scale: 0.407× at N=65536 → 0.161× at N=262144). It is the profile `generate_diag_blocks_plus_noise` builds deliberately **bimodal**: a dense 64-wide diagonal band plus sparse off-band noise, so its per-block nnz distribution has nothing in between "very full" and "nearly empty."
+
+### 15a. Structure
+
+```
+                          blocks with <=3 nnz     arena utilization
+N=65536,  hem, target=32     85,221 / 94,328 (90.3%)     4.4%
+N=262144, hem, target=32  1,365,213 / 1,401,812 (97.4%)  1.3%
+```
+
+`keep` launches one CUDA block per intersection regardless of how little work it holds, and every block's arena is sized from the **global** max (1024 nnz here — BOO_FORMAT §9.4 explains why this cannot be per-block). At N=262144, 97.4% of the 1.4M launched CTAs are doing a single multiply-add while paying for an arena built for 1024.
+
+### 15b. Confirmed by `ncu`
+
+`fem2d` N=65536 f=512, isolating BOO's own profile shape (not diag_skewed specifically, but the mechanism generalizes: many launched CTAs, most doing little):
+
+| metric | BOO | PBR `block` | PBR `nnzflat` |
+|---|---|---|---|
+| `sm_throughput_pct` | **92.08** | 30.24 | 68.63 |
+| `long_scoreboard_pct` | 10.82 | 19.75 | **61.26** |
+| **`short_scoreboard_pct`** | **29.28** | 13.69 | 6.51 |
+
+BOO here is compute-bound, not memory-bound (10.8% long-scoreboard, far below PBR) — it's issuing a huge number of instructions relative to the work done, top stall `short_scoreboard` (shared-memory dependency wait), consistent with a swarm of near-empty CTAs each paying fixed per-block cost.
+
+### 15c. Two fixes tried
+
+**Option 1 — `BOO_REMAINDER`, already in the format (§7), just unused by default.** Below-threshold blocks spill to the existing CSR remainder kernel on its own stream — exactly what PBR's `min_nnz` does today.
+
+**Option 2 — `BOO_TAIL_BATCH`, new.** Below-threshold blocks flatten to a global-index COO tail (no block-local reencoding — there's no shared arena to amortize for entries this sparse), consumed by a new `boo_spmm_tail_kernel`: one thread per nonzero, grid-strided over the tail so **CTA count is bounded by occupancy, not by tail size** — the direct fix for the CTA explosion. No smem, no barriers, no CSR dependency, so `boo_fraction` (nnz handled by *some* BOO-family kernel) stays 1.0 even though `compressed_fraction` (the strict block-encoded count) drops.
+
+Head-to-head, `diag_skewed`, all four size/feature cells:
+
+| N | f | `keep` | `remainder` | `tail_batch` | PBR `block` |
+|---|---|---|---|---|---|
+| 65536 | 128 | 2.38 ms | **1.01 ms** | 1.54 ms | 0.92 ms |
+| 65536 | 512 | 8.47 ms | **3.96 ms** | 6.45 ms | 3.50 ms |
+| 262144 | 128 | 28.11 ms | **4.67 ms** | 11.80 ms | 4.26 ms |
+| 262144 | 512 | 99.47 ms | **17.32 ms** | 53.60 ms | 16.12 ms |
+
+**`remainder` wins decisively, and the gap to `tail_batch` widens with scale** (1.5× at N=65536 → 2.5–3.7× at N=262144). The reason is architectural, not a tuning gap: PBR's CSR kernel already does row-grouped register accumulation with a compile-time `FEATURES` template and vectorized loads (one warp per row, register-accumulate across all of that row's nonzeros before a single atomic commit per feature — see the comment at `pbr_kernel.cu` around `csr_spmm_kernel_fast`). `boo_spmm_tail_kernel`'s one-atomic-per-nonzero-per-feature is naive by comparison, and multiple tail entries landing on the same row (common — a row's off-band noise nonzeros usually fall in several different, tiny column groups) cost `remainder` one atomic per row per feature but cost `tail_batch` one per *entry*.
+
+**Regression check** — neither policy hurts matrices where `keep` was already fine (`fem2d_permuted`, `fem2d`, `diag_b0.3`, `diag_b0.1`, `scattered_8x1`, all within ~0.2%, i.e. noise).
+
+### 15d. Decision
+
+**`remainder` (threshold 4) is now BOO's default**, replacing `keep`. `tail_batch` stays in the format (correct, tested, and a genuine 1.5–1.6× win over `keep` where it applies) as the base for a future row-grouped rewrite, but is not competitive with the already-optimized CSR kernel as implemented — re-deriving that optimization inside `boo_spmm_tail_kernel` would mean rebuilding much of what `launch_csr_spmm` already does well, for a benefit (avoiding a CSR dependency) that matters for format purity more than performance.
+
+---
+
+## 16. Full 4-way benchmark, after the fix
+
+Same methodology as §14 (14 matrices × 3 sizes × 2 feature counts, all four kernels in one build, interleaved, `remainder` thr=4 replacing `keep`). Raw CSVs: `results/bench_4way_remainder_{hem,identity}.csv`.
+
+| | vs `block` | vs `nnzflat_shared` | vs `nnzflat_onthefly` | fastest in |
+|---|---|---|---|---|
+| §14 (`keep`) | 1.026 | 1.175 | 1.760 | 28/82 |
+| **§16 (`remainder`)** | **1.073** | **1.234** | **1.849** | **30/82** |
+
+By size — BOO now wins at every tier, including the smallest:
+
+| size | vs `block` |
+|---|---|
+| 16,384 | 0.996 |
+| 65,536 | 1.102 |
+| 262,144 | **1.130** |
+
+`diag_skewed` itself: **0.917** overall (0.97× at both feature counts on the two confound-free cells; the two N=262144 cells carry PBR `compressed_fraction=0.92`, so read as indicative, not clean) — no longer the outlier, in line with the rest of the benchmark instead of 6× worse. The fix did not just repair one matrix; it lifted the whole comparison, since the same CTA-explosion mechanism was present, at lower intensity, wherever a clustering produced any near-empty blocks.
+
+`diag_b0.3`/`diag_b0.1` remain the strongest wins (2.10×/2.08×, `identity` clustering) and are unaffected by the small-block policy change — those matrices are already dense-block, not fragmented.

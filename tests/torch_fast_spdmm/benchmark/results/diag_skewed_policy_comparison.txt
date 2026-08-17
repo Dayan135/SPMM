@@ -1,0 +1,48 @@
+------------------------------------
+Mon 17 Aug 2026 11:07:41 IDT
+SLURM_JOBID:		20250516
+SLURM_JOB_NODELIST:	ise-pheno-10
+SLURM_SCRATCH_DIR:	
+Allocated Resouces:	cpu - 8 / mem - 65536 MB / gpu - 1
+SLURM_GPU_INDEX:	0
+Running as dayanb from erant account with erant QOS
+------------------------------------
+##### diag_skewed: keep vs remainder(thr=4) vs tail_batch(thr=4) #####
+--- N=65536 f=128 ---
+  keep thr=0    tail_nnz                 0   compressed_fraction      1.0   boo_fraction             1.0   num_blocks               94357 [time_ms] 2.3846 
+  remainder thr=4    tail_nnz                 0   compressed_fraction      0.9799715381080248   boo_fraction             0.9799715381080248   num_blocks               9042 [time_ms] 1.0123 
+  tail_batch thr=4    tail_nnz                 85727   compressed_fraction      0.9799708886666729   boo_fraction             1.0   num_blocks               9092 [time_ms] 1.5390 
+  PBR block (ref)  [time_ms] 0.9153 
+--- N=65536 f=512 ---
+  keep thr=0    tail_nnz                 0   compressed_fraction      1.0   boo_fraction             1.0   num_blocks               94318 [time_ms] 8.4724 
+  remainder thr=4    tail_nnz                 0   compressed_fraction      0.97998158925822   boo_fraction             0.97998158925822   num_blocks               9242 [time_ms] 3.9596 
+  tail_batch thr=4    tail_nnz                 85706   compressed_fraction      0.9799757482868431   boo_fraction             1.0   num_blocks               9180 [time_ms] 6.4498 
+  PBR block (ref)  [time_ms] 3.5019 
+--- N=262144 f=128 ---
+  keep thr=0    tail_nnz                 0   compressed_fraction      1.0   boo_fraction             1.0   num_blocks               1401887 [time_ms] 28.1071 
+  remainder thr=4    tail_nnz                 0   compressed_fraction      0.9243245840040398   boo_fraction             0.9243245840040398   num_blocks               36553 [time_ms] 4.6711 
+  tail_batch thr=4    tail_nnz                 1373585   compressed_fraction      0.9243255765651337   boo_fraction             1.0   num_blocks               36511 [time_ms] 11.7951 
+  PBR block (ref)  [time_ms] 4.2580 
+--- N=262144 f=512 ---
+  keep thr=0    tail_nnz                 0   compressed_fraction      1.0   boo_fraction             1.0   num_blocks               1401751 [time_ms] 99.4723 
+  remainder thr=4    tail_nnz                 0   compressed_fraction      0.9243277385808735   boo_fraction             0.9243277385808735   num_blocks               36583 [time_ms] 17.3234 
+  tail_batch thr=4    tail_nnz                 1373635   compressed_fraction      0.9243227885790924   boo_fraction             1.0   num_blocks               36451 [time_ms] 53.5968 
+  PBR block (ref)  [time_ms] 16.1200 
+
+##### regression check: does tail_batch hurt cells where keep already wins? #####
+--- fem2d_permuted cluster=hem N=65536 f=512 ---
+  keep thr=0    tail_nnz                 0   boo_fraction             1.0 [time_ms] 2.9172 
+  tail_batch thr=4    tail_nnz                 1   boo_fraction             1.0 [time_ms] 2.9225 
+--- fem2d cluster=hem N=65536 f=512 ---
+  keep thr=0    tail_nnz                 0   boo_fraction             1.0 [time_ms] 2.8652 
+  tail_batch thr=4    tail_nnz                 1   boo_fraction             1.0 [time_ms] 2.8713 
+--- diag_b0.3 cluster=identity N=65536 f=512 ---
+  keep thr=0    tail_nnz                 0   boo_fraction             1.0 [time_ms] 1.3332 
+  tail_batch thr=4    tail_nnz                 0   boo_fraction             1.0 [time_ms] 1.3372 
+--- diag_b0.1 cluster=identity N=65536 f=512 ---
+  keep thr=0    tail_nnz                 0   boo_fraction             1.0 [time_ms] 0.8057 
+  tail_batch thr=4    tail_nnz                 0   boo_fraction             1.0 [time_ms] 0.8091 
+--- scattered_8x1 cluster=hem N=65536 f=512 ---
+  keep thr=0    tail_nnz                 0   boo_fraction             1.0 [time_ms] 0.3404 
+  tail_batch thr=4    tail_nnz                 0   boo_fraction             1.0 [time_ms] 0.3392 
+POLICYCMP_DONE
