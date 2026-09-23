@@ -2,6 +2,7 @@
 
 python -m benchmark.bench_boo_opt --phase first --out results/boo-first
 python -m benchmark.bench_boo_opt --phase parameters --out results/boo-parameters
+python -m benchmark.bench_boo_opt --phase fastpath --out results/boo-fastpath
 """
 
 import argparse
@@ -26,6 +27,20 @@ def make_configs(a, phase):
         result.append(dict(base, config='boo_original_k32', target_nr=32, target_nc=32,
                            hem_feasible_first=False, launch_mode='legacy'))
         return result
+    if phase == 'fastpath':
+        # Isolate launch_mode='auto's pure-BOO fast path (idea 6). Stage 1's
+        # threshold=4 sweep couldn't show an effect: 'remainder' spills some
+        # nonzeros to the CSR stream on almost every real workload, so
+        # csr_nnz was rarely 0 and PURE_FAST_PATH rarely triggered. threshold=0
+        # means 'remainder' only spills a block with zero nonzeros (never
+        # happens), so csr_nnz == tail_nnz == 0 here and the fast path is
+        # actually exercised.
+        for launch in ('legacy', 'auto'):
+            result.append(dict(algorithm='boo', config=f'boo_pure_k32_{launch}', cluster='hem',
+                               target_nr=32, target_nc=32, threads=256, p=64,
+                               small_block_threshold=0, small_block_policy='remainder',
+                               hem_feasible_first=True, launch_mode=launch, phase=phase))
+        return result
     if phase == 'first':
         grid = itertools.product([(k, k) for k in a.boo_k], [4], [256], [64],
                                  [False, True], ['legacy', 'auto'])
@@ -48,6 +63,6 @@ def make_configs(a, phase):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--phase', choices=['first', 'parameters', 'plans'], required=True)
+    parser.add_argument('--phase', choices=['first', 'parameters', 'plans', 'fastpath'], required=True)
     selected, remaining = parser.parse_known_args()
     bench_spmm.main(remaining, configuration_factory=lambda a: make_configs(a, selected.phase))
