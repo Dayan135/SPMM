@@ -117,4 +117,27 @@ stage-1 binary and the plan binary are not attributed to an optimization.
 
 Stage 1 remote job 21628759: 1,201 tests passed, 13 expected skips. Each of
 memcheck, racecheck and synccheck passed all 32 marked tests, with zero errors
-or race hazards. Paired timings are running. Plan validation and timings pending.
+or race hazards.
+
+Stage 1 paired timings (`results/boo_optimization_20260923/first`, 384 BOO
+configurations, threshold=4): `hem_feasible_first=True` is a real win, geomean
+~7% faster than `False` (0.465-0.468ms vs 0.503-0.505ms). `launch_mode='auto'`
+vs `'legacy'` showed only a ~0.5% difference in that run, but threshold=4
+means `small_block_policy='remainder'` spills some nonzeros to the CSR stream
+on almost every workload, so `csr_nnz` was rarely 0 and the pure-BOO fast path
+(`PURE_FAST_PATH`) rarely triggered -- that comparison wasn't actually
+isolating the fast path.
+
+A follow-up `--phase fastpath` run (`results/boo-fastpath-20260923`,
+`small_block_threshold=0` so `remainder_nnz` is confirmed 0 in every one of
+the 24 paired cells, i.e. `PURE_FAST_PATH` genuinely engages) found the same
+result holds even when isolated: geomean `auto`/`legacy` ratio 0.997, with
+per-cell ratios scattered 0.92-1.02x and no consistent direction, including at
+N=16384 where fixed per-call overhead should matter most if the 3-stream/
+4-event fork-join were the bottleneck. **Idea 6 (skip stream/event setup for
+pure-BOO calls) does not measurably help** -- BOO's weaker small-matrix
+results have a different cause. `launch_mode='auto'` and `hem_feasible_first`
+remain independently opt-in; only `hem_feasible_first` is worth carrying
+forward as a default candidate.
+
+Plan validation and timings (stages 3/4) pending.
