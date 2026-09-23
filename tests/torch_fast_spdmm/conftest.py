@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 import torch
+import pytest
 from pytest import fixture
 from pytest_benchmark.plugin import BenchmarkSession, NameWrapper
 from scipy.sparse.linalg import LaplacianNd
@@ -8,6 +9,16 @@ from scipy.sparse.linalg import LaplacianNd
 from cuda_benchmark import CUDABenchmarkFixture
 from test_utils import (scipy_coo_to_torch_coo, scipy_csc_to_torch_csc, scipy_csr_to_torch_csr,
                         scipy_dtypes, torch_dtype_to_numpy_dtype, torch_dtypes)
+
+
+def pytest_addoption(parser):
+    parser.addoption('--boo-require-cuda', action='store_true',
+                     help='Fail instead of accepting a run with CUDA tests skipped.')
+
+
+def pytest_sessionstart(session):
+    if session.config.getoption('--boo-require-cuda') and not torch.cuda.is_available():
+        raise pytest.UsageError('--boo-require-cuda requires an available CUDA device')
 
 
 # --------------------------------------------------------------------------- #

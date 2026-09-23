@@ -24,6 +24,14 @@ CUDA = mark.skipif(not torch.cuda.is_available(), reason='CUDA not available')
 CLUSTERS = ['identity', 'hem', 'rcm', 'degree', 'random']
 
 
+@pytest.fixture(autouse=True)
+def _seed_dense_inputs():
+    # Reproduce failing feature matrices without perturbing another test's RNG.
+    with torch.random.fork_rng(devices=[]):
+        torch.random.default_generator.manual_seed(0)
+        yield
+
+
 def _square(n=256, density=0.05, seed=0, dtype=np.float32):
     rng = np.random.default_rng(seed)
     mat = sp.random(n, n, density=density, format='csr', random_state=seed)
@@ -189,8 +197,9 @@ def test_boo_determinism(policy, threshold):
              small_block_policy=policy, small_block_threshold=threshold)
     first = csr_to_boo(mat, **kw)
     second = csr_to_boo(mat, **kw)
-    for field in ('row_ids', 'col_ids', 'blk_row_grp', 'blk_col_grp',
+    for field in ('row_grp_ptr', 'row_ids', 'col_grp_ptr', 'col_ids', 'blk_row_grp', 'blk_col_grp',
                   'blk_nz_ptr', 'blk_shift', 'nz_idx', 'nz_val',
+                  'rem_indptr', 'rem_col_ind', 'rem_vals',
                   'tail_row', 'tail_col', 'tail_val'):
         assert np.array_equal(np.asarray(getattr(first, field)),
                               np.asarray(getattr(second, field))), field
