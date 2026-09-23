@@ -6,7 +6,12 @@ when an idea is evaluated.
 
 ## 1. Precompute per-block row boundaries in the CPU builder
 
-Status: proposed; not implemented or benchmarked.
+Status: implemented and measured negative -- see BOO_OPTIMIZATION.md's
+"Stages 3 and 4 implementation" section. Isolated from bucketing (one-bucket
+plan with precomputed rows vs without), it's a ~2% slowdown across all 36
+tested cells, no exceptions: the extra global-memory traffic for the stored
+boundary table outweighs the saved per-block binary search, as this
+writeup's own risk note anticipated. Not promoted.
 
 ### Observation
 

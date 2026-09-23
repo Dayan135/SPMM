@@ -168,6 +168,32 @@ python -m benchmark.bench_boo_opt --phase plans \
   --out results/boo-plans
 ```
 
+**Result (`results/boo-plans-20260923`, 6 configs × 36 workloads = 396 BOO
+rows, remote job 21644206; sanitizer-validated first -- `test_boo_plan.py` +
+`test_boo_edges.py`'s `boo_sanitizer` subset, 156 tests × memcheck/racecheck/
+synccheck, 0 errors/hazards):** every execution-plan variant is slower than
+the plain `boo_k{32,64}_auto` baseline, with **no exceptions across all
+36/36 cells** for any variant:
+
+| variant | k=32 geomean | k=64 geomean | worst cell |
+|---|---:|---:|---:|
+| one bucket, no row table (plan overhead alone) | 0.977x | 0.974x | 0.861x |
+| one bucket, precomputed rows | 0.979x | 0.979x | 0.883x |
+| bucketed, no row table | 0.913x | 0.935x | 0.729x |
+| bucketed, precomputed rows | 0.909x | 0.937x | 0.729x |
+
+Precomputed row boundaries alone (Research idea 1) do not pay for themselves:
+the extra global-memory traffic outweighs the saved per-block binary search,
+matching that idea's own stated risk. Bucketing is a real regression, not
+noise -- up to ~27% slower in the worst cells, consistently, both k values,
+every profile/size/feature combination tested. Neither is promoted; BOO
+matmul keeps its single-grid `launch_mode='auto'` dispatch, no execution
+plan. This is a fourth negative kernel-restructuring result for this
+codebase, alongside PBR's `rowgroup`/`colgroup`/`tile`/`chunk` attempts (see
+`CLAUDE.md`) -- consistent with the "increase the accumulation/atomic
+mechanism's complexity to reduce fixed per-block cost" family of ideas not
+paying off here so far.
+
 The kernel now accepts optional row-table pointers. Therefore each later run has
 its own same-binary baseline; differences between absolute timings from the
 stage-1 binary and the plan binary are not attributed to an optimization.
@@ -199,4 +225,7 @@ results have a different cause. `launch_mode='auto'` and `hem_feasible_first`
 remain independently opt-in; only `hem_feasible_first` is worth carrying
 forward as a default candidate.
 
-Plan validation and timings (stages 3/4) pending.
+Stages 3/4 sanitizer-validated (0 errors/hazards, see "Stages 3 and 4
+implementation" above) and timed: neither bucketing nor precomputed row
+boundaries beats the plain `auto` baseline in any of 36 cells; both are
+documented above and not promoted.
