@@ -53,13 +53,20 @@ def _pin_to_device(arr, device, dtype=None):
 
 def _boo_to_method(self, device='cuda'):
     """Stage the format onto the GPU, mirroring PBRMatrix.to()."""
-    target = 'cpu' if device is None else str(torch.device(device))
+    device = torch.device('cpu' if device is None else device)
+    if device.type not in ('cpu', 'cuda'):
+        raise ValueError('BOO supports only CPU and CUDA devices')
+    if device.type == 'cuda' and device.index is None:
+        device = torch.device('cuda', torch.cuda.current_device())
+    target = str(device)
     existing = getattr(self, '_gpu_meta', None)
     current = str(existing.nz_val.device) if existing else 'cpu'
     if current == target:
         return self
 
     if target != 'cpu':
+        if max(self.rows, self.cols, self.total_nnz) > np.iinfo(np.int32).max:
+            raise ValueError('BOO CUDA metadata must fit int32')
         # row_ids/col_ids are int32 unconditionally on the GPU regardless of the
         # host index_t -- halves index traffic and the pybind symbol count.
         self._gpu_meta = types.SimpleNamespace(
@@ -105,11 +112,15 @@ def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 
                nz_order: str = 'rowmajor', seed: int = 0,
                symmetric: Optional[bool] = None,
                row_labels: Optional[np.ndarray] = None,
-               col_labels: Optional[np.ndarray] = None):
+               col_labels: Optional[np.ndarray] = None,
+               hem_feasible_first: bool = False):
     """Cluster both axes, then assemble the BOO format.
 
     `row_labels`/`col_labels` bypass the clustering step entirely -- useful for
     reproducing a specific grid, and for the PBR-parity check.
+
+    `hem_feasible_first` excludes infeasible partners before HEM matching.
+    It is opt-in while the paired optimization experiments are evaluated.
 
     Default policy is `remainder` (threshold 4), not `keep`. On matrices with a
     long tail of near-empty blocks (diag_skewed: 97.4% of blocks hold <=3
@@ -130,10 +141,21 @@ def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 
         raise ValueError(f'small_block_policy must be one of {SMALL_BLOCK_POLICIES}')
     if nz_order not in NZ_ORDERS:
         raise ValueError(f'nz_order must be one of {NZ_ORDERS}')
+    for name, value in (('target_nr', target_nr), ('target_nc', target_nc),
+                        ('max_nr', max_nr), ('max_nc', max_nc),
+                        ('max_block_nnz', max_block_nnz)):
+        if value is not None and (not isinstance(value, (int, np.integer)) or value <= 0):
+            raise ValueError(f'{name} must be a positive integer')
+    if not isinstance(small_block_threshold, (int, np.integer)) or small_block_threshold < 0:
+        raise ValueError('small_block_threshold must be a nonnegative integer')
+    if (row_labels is None) != (col_labels is None):
+        raise ValueError('row_labels and col_labels must be supplied together')
 
     if isinstance(mat, torch.Tensor):
         if mat.device.type != 'cpu':
             raise ValueError('Input tensor must be on CPU')
+        if mat.layout != torch.sparse_csr or mat.dim() != 2:
+            raise ValueError('Input tensor must be a 2D sparse CSR tensor')
         csr = sp.csr_matrix(
             (mat.values().cpu().numpy(), mat.col_indices().numpy(), mat.crow_indices().numpy()),
             shape=tuple(mat.shape))
@@ -141,6 +163,9 @@ def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 
         csr = mat
     else:
         raise TypeError(f'Unsupported type {type(mat)}')
+    if csr.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise TypeError('BOO supports float32/float64 matrix values')
+    csr.check_format(full_check=True)
 
     # Caps default to the targets: the clustering aims for `target` and is not
     # allowed to overshoot, so the arena stays predictable.
@@ -153,7 +178,17 @@ def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 
         row_labels, col_labels = cluster_axes(
             csr, method=cluster, target_nr=target_nr, target_nc=target_nc,
             max_nr=max_nr, max_nc=max_nc, max_block_nnz=max_block_nnz,
-            seed=seed, symmetric=symmetric)
+            seed=seed, symmetric=symmetric, feasible_first=hem_feasible_first)
+
+    for name, labels, size in (('row_labels', row_labels, csr.shape[0]),
+                               ('col_labels', col_labels, csr.shape[1])):
+        labels = np.asarray(labels)
+        if labels.ndim != 1 or labels.size != size:
+            raise ValueError(f'{name} must be a 1D array matching the matrix dimension')
+        if not np.issubdtype(labels.dtype, np.integer):
+            raise TypeError(f'{name} must contain integer labels')
+        if labels.size and (labels.min() < 0 or labels.max() >= size):
+            raise ValueError(f'{name} labels must be in [0, {size})')
 
     return core.csr_to_boo(
         csr.indptr, csr.indices, csr.data,
@@ -184,20 +219,38 @@ def _build_boo_cuda_dispatch():
 
 
 def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
-               csr_mode: int = 0, row_seg: Optional[bool] = None) -> torch.Tensor:
+               csr_mode: int = 0, row_seg: Optional[bool] = None,
+               launch_mode: str = 'legacy', execution_plan=None) -> torch.Tensor:
     """Y = A @ X.  Dispatches on x.device.
 
-    `threads` in {128, 256, 512} and `p` in {8..128} are the two shared-memory
+    `threads` in {128, 256, 512} and `p` in {8, 16, 32, 64, 128} are the two shared-memory
     levers (BOO_FORMAT.md sec. 9); both are swept rather than fixed. Measured
     optimum for the row-segmented kernel is threads=256, p=64.
 
     `row_seg` selects the register-accumulating Step B; it defaults to True
     whenever the matrix was built rowmajor, and is ~1.6x faster than the
     shared-atomic variant (BOO_FORMAT.md sec. 13).
+
+    `launch_mode='auto'` uses the current stream directly for pure BOO inputs;
+    mixed inputs retain the legacy fork/join. 'legacy' is the paired baseline.
+    An explicit `execution_plan=prepare_boo_cuda(...)` requires auto launch and
+    row_seg=True, and never performs preparation inside this call.
     """
+    if launch_mode not in ('legacy', 'auto'):
+        raise ValueError("launch_mode must be 'legacy' or 'auto'")
     if x.dim() not in (2, 3):
         raise ValueError(f'Expected 2D or 3D input, got {x.dim()}D')
+    if x.layout != torch.strided or x.device.type not in ('cpu', 'cuda'):
+        raise ValueError('X must be a dense CPU or CUDA tensor')
+    if x.size(-2) != boo_mat.cols:
+        raise ValueError(f'X has {x.size(-2)} rows, expected {boo_mat.cols}')
+    expected_dtype = {np.float32: torch.float32, np.float64: torch.float64}[
+        _BOO_TYPE_MAP[type(boo_mat).__name__][1]]
+    if x.dtype != expected_dtype:
+        raise TypeError(f'X dtype must match BOO values ({expected_dtype}), got {x.dtype}')
 
+    if execution_plan is not None and not x.is_cuda:
+        raise ValueError('BOO execution plans require CUDA inputs')
     if not x.is_cuda:
         y = core.boo_batched_matmul_cpu(boo_mat, x)
         return y.squeeze(0) if x.dim() == 2 else y
@@ -205,6 +258,14 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
     meta = getattr(boo_mat, '_gpu_meta', None)
     if meta is None:
         raise RuntimeError("[boo_matmul] X is on GPU but BOOMatrix is not. Call .to('cuda') first.")
+    if meta.nz_val.device != x.device:
+        raise ValueError('BOO metadata and X must be on the same CUDA device')
+    if threads not in (128, 256, 512):
+        raise ValueError('threads must be one of 128, 256, 512')
+    if p not in (8, 16, 32, 64, 128):
+        raise ValueError('p must be one of 8, 16, 32, 64, 128')
+    if csr_mode not in (0, 1, 2):
+        raise ValueError('csr_mode must be one of 0, 1, 2')
 
     global _BOO_CUDA_DISPATCH
     if _BOO_CUDA_DISPATCH is None:
@@ -219,7 +280,22 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
     elif row_seg and int(boo_mat.nz_order) != _ORDER_CODE['rowmajor']:
         raise ValueError('row_seg=True requires a matrix built with nz_order="rowmajor"')
 
-    y = _BOO_CUDA_DISPATCH[x.dtype](
+    dispatch = _BOO_CUDA_DISPATCH[x.dtype]
+    if launch_mode == 'auto':
+        dispatch = (core.boo_spmm_cuda_auto_f32 if x.dtype == torch.float32
+                    else core.boo_spmm_cuda_auto_f64)
+    plan_args = ()
+    if execution_plan is not None:
+        from .boo_plan import BOOExecutionPlan
+        plan = execution_plan
+        if not isinstance(plan, BOOExecutionPlan) or plan.matrix is not boo_mat or plan.source_meta is not meta:
+            raise ValueError('Execution plan does not match this matrix and its current CUDA staging')
+        if launch_mode != 'auto' or not row_seg or p != plan.p:
+            raise ValueError('Execution plans require launch_mode="auto", row_seg=True and the prepared p')
+        meta = plan.meta
+        dispatch = core.boo_spmm_cuda_plan_f32 if x.dtype == torch.float32 else core.boo_spmm_cuda_plan_f64
+        plan_args = (plan.buckets, plan.row_ptr, plan.row_starts)
+    y = dispatch(
         boo_mat.rows, boo_mat.cols,
         int(boo_mat.max_nr), int(boo_mat.max_nc), int(boo_mat.max_nnz_blk),
         meta.row_grp_ptr, meta.row_ids, meta.col_grp_ptr, meta.col_ids,
@@ -227,7 +303,7 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
         meta.nz_idx, meta.nz_val,
         meta.rem_indptr, meta.rem_col_ind, meta.rem_vals,
         meta.tail_row, meta.tail_col, meta.tail_val,
-        x, threads, p, csr_mode, row_seg,
+        x, threads, p, csr_mode, row_seg, *plan_args,
     )
     return y.squeeze(0) if x.dim() == 2 else y
 

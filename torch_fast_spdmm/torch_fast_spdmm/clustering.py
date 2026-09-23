@@ -210,7 +210,8 @@ def _pair_hash(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 def _mutual_max_pairs(graph: sp.csr_matrix, active: np.ndarray,
                       size: np.ndarray, nnz: np.ndarray,
-                      max_size: Optional[int], max_nnz: Optional[int]
+                      max_size: Optional[int], max_nnz: Optional[int],
+                      feasible_first: bool = False,
                       ) -> Tuple[np.ndarray, np.ndarray]:
     """One round of locally-dominant (mutual-max) matching.
 
@@ -232,6 +233,13 @@ def _mutual_max_pairs(graph: sp.csr_matrix, active: np.ndarray,
         return np.empty(0, np.int64), np.empty(0, np.int64)
 
     live = active[coo.row] & active[coo.col]
+    # A preferred but infeasible edge must not hide a feasible alternative.
+    # Keep the legacy ordering selectable for paired performance experiments.
+    if feasible_first:
+        if max_size is not None:
+            live &= (size[coo.row] + size[coo.col]) <= max_size
+        if max_nnz is not None:
+            live &= (nnz[coo.row] + nnz[coo.col]) <= max_nnz
     r, c, d = coo.row[live], coo.col[live], coo.data[live]
     if r.size == 0:
         return np.empty(0, np.int64), np.empty(0, np.int64)
@@ -263,7 +271,8 @@ def _mutual_max_pairs(graph: sp.csr_matrix, active: np.ndarray,
 
 def _hem_labels(pat: sp.csr_matrix, target: int, max_size: Optional[int],
                 max_nnz: Optional[int], hub_degree: int, topk: Optional[int],
-                exact_recompute: bool = True, residual_rounds: int = 3) -> np.ndarray:
+                exact_recompute: bool = True, residual_rounds: int = 3,
+                feasible_first: bool = False) -> np.ndarray:
     """Multilevel heavy-edge matching.  Deterministic, no RNG, fully vectorized."""
     n = pat.shape[0]
     labels = np.arange(n, dtype=np.int64)
@@ -300,7 +309,7 @@ def _hem_labels(pat: sp.csr_matrix, target: int, max_size: Optional[int],
         pair_left, pair_right = [], []
         for _round in range(residual_rounds):
             left, right = _mutual_max_pairs(level_graph, active, size, nnz,
-                                            max_size, max_nnz)
+                                            max_size, max_nnz, feasible_first)
             if left.size == 0:
                 break
             pair_left.append(left)
@@ -408,7 +417,7 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
                  max_size: Optional[int] = None, max_nnz: Optional[int] = None,
                  seed: int = 0, hub_degree: int = DEFAULT_HUB_DEGREE,
                  topk: Optional[int] = DEFAULT_TOPK,
-                 exact_recompute: bool = True) -> np.ndarray:
+                 exact_recompute: bool = True, feasible_first: bool = False) -> np.ndarray:
     """Cluster the ROWS of `mat` into groups of about `target` rows.
 
     To cluster columns instead, pass ``mat.T``.  Returns an int32 label array of
@@ -447,7 +456,7 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
         except ImportError:
             warnings.warn("torch_cluster unavailable; falling back to 'hem'", RuntimeWarning)
             labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
-                                 exact_recompute)
+                                 exact_recompute, feasible_first=feasible_first)
     elif method == 'metis':
         try:
             labels = _metis_labels(pat, target, hub_degree, topk)
@@ -455,10 +464,10 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
             warnings.warn("torch_sparse METIS unavailable; falling back to 'hem'",
                           RuntimeWarning)
             labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
-                                 exact_recompute)
+                                 exact_recompute, feasible_first=feasible_first)
     else:  # 'hem'
         labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
-                             exact_recompute)
+                             exact_recompute, feasible_first=feasible_first)
 
     labels = _enforce_caps(labels, row_nnz, max_size, max_nnz)
     return _relabel_consecutive(labels).astype(np.int32)
@@ -471,7 +480,8 @@ def cluster_axes(mat: sp.spmatrix, method: str = 'hem',
                  symmetric: Optional[bool] = None,
                  hub_degree: int = DEFAULT_HUB_DEGREE,
                  topk: Optional[int] = DEFAULT_TOPK,
-                 exact_recompute: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+                 exact_recompute: bool = True,
+                 feasible_first: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """Cluster both axes, returning ``(row_labels, col_labels)``.
 
     When the pattern is symmetric and the two targets agree, `A` is a graph and a
@@ -487,7 +497,7 @@ def cluster_axes(mat: sp.spmatrix, method: str = 'hem',
     row_labels = cluster_axis(csr, method=method, target=target_nr,
                               max_size=max_nr, max_nnz=max_block_nnz, seed=seed,
                               hub_degree=hub_degree, topk=topk,
-                              exact_recompute=exact_recompute)
+                              exact_recompute=exact_recompute, feasible_first=feasible_first)
 
     if symmetric:
         return row_labels, row_labels.copy()
@@ -495,5 +505,5 @@ def cluster_axes(mat: sp.spmatrix, method: str = 'hem',
     col_labels = cluster_axis(csr.T.tocsr(), method=method, target=target_nc,
                               max_size=max_nc, max_nnz=max_block_nnz, seed=seed,
                               hub_degree=hub_degree, topk=topk,
-                              exact_recompute=exact_recompute)
+                              exact_recompute=exact_recompute, feasible_first=feasible_first)
     return row_labels, col_labels

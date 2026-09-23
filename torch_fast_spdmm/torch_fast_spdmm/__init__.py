@@ -433,3 +433,6 @@ __all__ = [
     'pbr_batched_matmul_nnzflat_cuda',
     'pbr_batched_matmul_variant_cuda',
 ]
+
+from .boo_plan import BOOExecutionPlan, prepare_boo_cuda
+__all__ += ['BOOExecutionPlan', 'prepare_boo_cuda']
