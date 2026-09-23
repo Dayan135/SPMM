@@ -2,10 +2,20 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAException.h>
 
 #include "../kernels/boo_kernels.hpp"
 #include "../kernels/csr_kernels.hpp"
 #include "../kernels/pbr_kernels.hpp"
+
+// An execution plan uses contiguous ranges in physically reordered block arrays.
+// Empty buckets selects the original single grid; optional row tables are local
+// nnz offsets, indexed through one pointer per block.
+struct BOOLaunchPlan {
+    std::vector<int64_t> buckets;
+    at::Tensor row_ptr, row_starts;
+};
 
 // BOO GPU entry point.
 //
@@ -20,7 +30,173 @@
 // exclusive at build time), but nothing here assumes that -- an empty leg is
 // simply skipped, so all three streams stay valid for every policy without a
 // later rewrite. All three commit into the same zeroed Y via atomicAdd.
-template <typename scalar_t>
+template <typename scalar_t, bool PURE_FAST_PATH = false>
+at::Tensor boo_spmm_cuda_impl(
+    int rows, int cols,
+    int max_nr, int max_nc, int max_nnz_blk,
+    const at::Tensor row_grp_ptr,
+    const at::Tensor row_ids,
+    const at::Tensor col_grp_ptr,
+    const at::Tensor col_ids,
+    const at::Tensor blk_row_grp,
+    const at::Tensor blk_col_grp,
+    const at::Tensor blk_nz_ptr,
+    const at::Tensor blk_shift,
+    const at::Tensor nz_idx,
+    const at::Tensor nz_val,
+    const at::Tensor rem_indptr,
+    const at::Tensor rem_col_ind,
+    const at::Tensor rem_vals,
+    const at::Tensor tail_row,
+    const at::Tensor tail_col,
+    const at::Tensor tail_val,
+    const at::Tensor X,
+    int threads = 128,
+    int p = 64,
+    int csr_mode = 0,
+    bool row_seg = true,
+    const BOOLaunchPlan* plan = nullptr
+) {
+    TORCH_CHECK(X.is_cuda(), "X must be a CUDA tensor");
+    TORCH_CHECK(X.dim() == 2 || X.dim() == 3, "X must be 2D or 3D");
+    TORCH_CHECK(X.size(-2) == cols, "X rows must match matrix columns");
+    TORCH_CHECK(threads == 128 || threads == 256 || threads == 512,
+                "threads must be 128, 256 or 512");
+    TORCH_CHECK(p == 8 || p == 16 || p == 32 || p == 64 || p == 128,
+                "p must be 8, 16, 32, 64 or 128");
+    TORCH_CHECK(csr_mode >= 0 && csr_mode <= 2, "invalid csr_mode");
+    for (const auto& tensor : {row_grp_ptr, row_ids, col_grp_ptr, col_ids,
+                              blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift,
+                              nz_idx, nz_val, rem_indptr, rem_col_ind, rem_vals,
+                              tail_row, tail_col, tail_val}) {
+        TORCH_CHECK(tensor.device() == X.device(), "BOO metadata and X must share a device");
+        TORCH_CHECK(tensor.is_contiguous(), "BOO metadata must be contiguous");
+    }
+    const c10::cuda::CUDAGuard device_guard(X.device());
+    const int num_blocks = (int)blk_row_grp.size(0);
+    const int csr_nnz    = (int)rem_col_ind.size(0);
+    const int tail_nnz   = (int)tail_col.size(0);
+    const int batch_size = (X.dim() == 3) ? (int)X.size(0) : 1;
+    const int features   = (int)X.size(-1);
+
+    at::Tensor X3 = ((X.dim() == 2) ? X.unsqueeze(0) : X).contiguous();
+    at::Tensor Y  = at::zeros({batch_size, rows, features}, X.options());
+
+    auto run_blocks = [&](cudaStream_t stream) {
+        auto launch_range = [&](int start, int count, int nr, int nc, int nnz) {
+            launch_boo_spmm<scalar_t>(
+                count, features, batch_size, rows, cols, nr, nc, nnz,
+                row_grp_ptr.data_ptr<int32_t>(), row_ids.data_ptr<int32_t>(),
+                col_grp_ptr.data_ptr<int32_t>(), col_ids.data_ptr<int32_t>(),
+                blk_row_grp.data_ptr<int32_t>() + start,
+                blk_col_grp.data_ptr<int32_t>() + start,
+                blk_nz_ptr.data_ptr<int32_t>() + start,
+                blk_shift.data_ptr<uint8_t>() + start,
+                reinterpret_cast<const uint16_t*>(nz_idx.data_ptr<int16_t>()),
+                nz_val.data_ptr<scalar_t>(), X3.data_ptr<scalar_t>(), Y.data_ptr<scalar_t>(),
+                stream, threads, p, row_seg,
+                plan && plan->row_ptr.numel() ? plan->row_ptr.data_ptr<int32_t>() + start : nullptr,
+                plan && plan->row_starts.numel() ? plan->row_starts.data_ptr<int32_t>() : nullptr);
+        };
+        if (num_blocks == 0) return;
+        if (!plan || plan->buckets.empty()) {
+            launch_range(0, num_blocks, max_nr, max_nc, max_nnz_blk);
+        } else {
+            for (size_t i = 0; i < plan->buckets.size(); i += 5) {
+                const auto* b = &plan->buckets[i];
+                launch_range(b[0], b[1], b[2], b[3], b[4]);
+            }
+        }
+    };
+    if (plan) {
+        TORCH_CHECK(row_seg, "BOO execution plans require row_seg=True");
+        TORCH_CHECK(plan->buckets.size() % 5 == 0, "invalid BOO bucket specifications");
+        int64_t covered = 0;
+        for (size_t i = 0; i < plan->buckets.size(); i += 5) {
+            const auto* b = &plan->buckets[i];
+            TORCH_CHECK(b[0] == covered && b[1] > 0 && b[1] <= num_blocks - covered,
+                        "BOO buckets must partition the blocks");
+            TORCH_CHECK(b[2] > 0 && b[2] <= max_nr && b[3] > 0 && b[3] <= max_nc &&
+                        b[4] > 0 && b[4] <= max_nnz_blk, "invalid BOO bucket maxima");
+            covered += b[1];
+        }
+        TORCH_CHECK(plan->buckets.empty() || covered == num_blocks, "incomplete BOO buckets");
+        for (const auto& table : {plan->row_ptr, plan->row_starts}) {
+            TORCH_CHECK(table.device() == X.device() && table.is_contiguous() &&
+                        table.scalar_type() == at::kInt && table.dim() == 1,
+                        "BOO row tables must be contiguous int32 vectors on X's device");
+        }
+        TORCH_CHECK((plan->row_ptr.numel() == 0 && plan->row_starts.numel() == 0) ||
+                    (plan->row_ptr.numel() == num_blocks + 1 &&
+                     plan->row_starts.numel() >= num_blocks), "invalid BOO row table sizes");
+    }
+    auto cur_stream = at::cuda::getCurrentCUDAStream();
+    if constexpr (PURE_FAST_PATH) {
+        if (csr_nnz == 0 && tail_nnz == 0) {
+            run_blocks(cur_stream.stream());
+            return Y;
+        }
+    }
+    auto block_stream = at::cuda::getStreamFromPool();
+    auto csr_stream   = at::cuda::getStreamFromPool();
+    auto tail_stream  = at::cuda::getStreamFromPool();
+
+    cudaEvent_t y_ready;
+    cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
+    cudaEventRecord(y_ready, cur_stream.stream());
+    cudaStreamWaitEvent(block_stream.stream(), y_ready, 0);
+    cudaStreamWaitEvent(csr_stream.stream(),   y_ready, 0);
+    cudaStreamWaitEvent(tail_stream.stream(),  y_ready, 0);
+    cudaEventDestroy(y_ready);
+
+    run_blocks(block_stream.stream());
+
+    if (csr_nnz > 0) {
+        launch_csr_spmm<int32_t, scalar_t>(
+            rows, features, batch_size, cols, csr_nnz,
+            rem_indptr.data_ptr<int32_t>(),
+            rem_col_ind.data_ptr<int32_t>(),
+            rem_vals.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            csr_stream.stream(),
+            csr_mode
+        );
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+    }
+
+    if (tail_nnz > 0) {
+        launch_boo_tail_spmm<scalar_t>(
+            tail_nnz, features, batch_size, rows, cols,
+            tail_row.data_ptr<int32_t>(),
+            tail_col.data_ptr<int32_t>(),
+            tail_val.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            tail_stream.stream(),
+            threads
+        );
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+    }
+
+    cudaEvent_t block_done, csr_done, tail_done;
+    cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&tail_done,  cudaEventDisableTiming);
+    cudaEventRecord(block_done, block_stream.stream());
+    cudaEventRecord(csr_done,   csr_stream.stream());
+    cudaEventRecord(tail_done,  tail_stream.stream());
+    cudaStreamWaitEvent(cur_stream.stream(), block_done, 0);
+    cudaStreamWaitEvent(cur_stream.stream(), csr_done,   0);
+    cudaStreamWaitEvent(cur_stream.stream(), tail_done,  0);
+    cudaEventDestroy(block_done);
+    cudaEventDestroy(csr_done);
+    cudaEventDestroy(tail_done);
+
+    return Y;
+}
+
+template <typename scalar_t, bool PURE_FAST_PATH = false>
 at::Tensor boo_spmm_cuda_dispatch(
     int rows, int cols,
     int max_nr, int max_nc, int max_nnz_blk,
@@ -41,99 +217,62 @@ at::Tensor boo_spmm_cuda_dispatch(
     const at::Tensor tail_col,
     const at::Tensor tail_val,
     const at::Tensor X,
-    int threads = 256,
+    int threads = 128,
     int p = 64,
     int csr_mode = 0,
     bool row_seg = true
 ) {
-    const int num_blocks = (int)blk_row_grp.size(0);
-    const int csr_nnz    = (int)rem_col_ind.size(0);
-    const int tail_nnz   = (int)tail_col.size(0);
-    const int batch_size = (X.dim() == 3) ? (int)X.size(0) : 1;
-    const int features   = (int)X.size(-1);
+    return boo_spmm_cuda_impl<scalar_t, PURE_FAST_PATH>(
+        rows, cols, max_nr, max_nc, max_nnz_blk,
+        row_grp_ptr, row_ids, col_grp_ptr, col_ids,
+        blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift, nz_idx, nz_val,
+        rem_indptr, rem_col_ind, rem_vals, tail_row, tail_col, tail_val,
+        X, threads, p, csr_mode, row_seg);
+}
 
-    at::Tensor X3 = (X.dim() == 2) ? X.unsqueeze(0) : X;
-    at::Tensor Y  = at::zeros({batch_size, rows, features}, X.options());
-
-    auto cur_stream   = at::cuda::getCurrentCUDAStream();
-    auto block_stream = at::cuda::getStreamFromPool();
-    auto csr_stream   = at::cuda::getStreamFromPool();
-    auto tail_stream  = at::cuda::getStreamFromPool();
-
-    cudaEvent_t y_ready;
-    cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
-    cudaEventRecord(y_ready, cur_stream.stream());
-    cudaStreamWaitEvent(block_stream.stream(), y_ready, 0);
-    cudaStreamWaitEvent(csr_stream.stream(),   y_ready, 0);
-    cudaStreamWaitEvent(tail_stream.stream(),  y_ready, 0);
-    cudaEventDestroy(y_ready);
-
-    if (num_blocks > 0) {
-        launch_boo_spmm<scalar_t>(
-            num_blocks, features, batch_size, rows, cols,
-            max_nr, max_nc, max_nnz_blk,
-            row_grp_ptr.data_ptr<int32_t>(),
-            row_ids.data_ptr<int32_t>(),
-            col_grp_ptr.data_ptr<int32_t>(),
-            col_ids.data_ptr<int32_t>(),
-            blk_row_grp.data_ptr<int32_t>(),
-            blk_col_grp.data_ptr<int32_t>(),
-            blk_nz_ptr.data_ptr<int32_t>(),
-            blk_shift.data_ptr<uint8_t>(),
-            reinterpret_cast<const uint16_t*>(nz_idx.data_ptr<int16_t>()),
-            nz_val.data_ptr<scalar_t>(),
-            X3.data_ptr<scalar_t>(),
-            Y.data_ptr<scalar_t>(),
-            block_stream.stream(),
-            threads, p, row_seg
-        );
-    }
-
-    if (csr_nnz > 0) {
-        launch_csr_spmm<int32_t, scalar_t>(
-            rows, features, batch_size, cols, csr_nnz,
-            rem_indptr.data_ptr<int32_t>(),
-            rem_col_ind.data_ptr<int32_t>(),
-            rem_vals.data_ptr<scalar_t>(),
-            X3.data_ptr<scalar_t>(),
-            Y.data_ptr<scalar_t>(),
-            csr_stream.stream(),
-            csr_mode
-        );
-    }
-
-    if (tail_nnz > 0) {
-        launch_boo_tail_spmm<scalar_t>(
-            tail_nnz, features, batch_size, rows, cols,
-            tail_row.data_ptr<int32_t>(),
-            tail_col.data_ptr<int32_t>(),
-            tail_val.data_ptr<scalar_t>(),
-            X3.data_ptr<scalar_t>(),
-            Y.data_ptr<scalar_t>(),
-            tail_stream.stream(),
-            threads
-        );
-    }
-
-    cudaEvent_t block_done, csr_done, tail_done;
-    cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
-    cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
-    cudaEventCreateWithFlags(&tail_done,  cudaEventDisableTiming);
-    cudaEventRecord(block_done, block_stream.stream());
-    cudaEventRecord(csr_done,   csr_stream.stream());
-    cudaEventRecord(tail_done,  tail_stream.stream());
-    cudaStreamWaitEvent(cur_stream.stream(), block_done, 0);
-    cudaStreamWaitEvent(cur_stream.stream(), csr_done,   0);
-    cudaStreamWaitEvent(cur_stream.stream(), tail_done,  0);
-    cudaEventDestroy(block_done);
-    cudaEventDestroy(csr_done);
-    cudaEventDestroy(tail_done);
-
-    return Y;
+template <typename scalar_t, bool PURE_FAST_PATH = false>
+at::Tensor boo_spmm_cuda_planned(
+    int rows, int cols,
+    int max_nr, int max_nc, int max_nnz_blk,
+    const at::Tensor row_grp_ptr,
+    const at::Tensor row_ids,
+    const at::Tensor col_grp_ptr,
+    const at::Tensor col_ids,
+    const at::Tensor blk_row_grp,
+    const at::Tensor blk_col_grp,
+    const at::Tensor blk_nz_ptr,
+    const at::Tensor blk_shift,
+    const at::Tensor nz_idx,
+    const at::Tensor nz_val,
+    const at::Tensor rem_indptr,
+    const at::Tensor rem_col_ind,
+    const at::Tensor rem_vals,
+    const at::Tensor tail_row,
+    const at::Tensor tail_col,
+    const at::Tensor tail_val,
+    const at::Tensor X,
+    int threads,
+    int p,
+    int csr_mode,
+    bool row_seg,
+    const std::vector<int64_t>& buckets,
+    const at::Tensor row_ptr, const at::Tensor row_starts
+) {
+    const BOOLaunchPlan plan{buckets, row_ptr, row_starts};
+    return boo_spmm_cuda_impl<scalar_t, true>(
+        rows, cols, max_nr, max_nc, max_nnz_blk,
+        row_grp_ptr, row_ids, col_grp_ptr, col_ids,
+        blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift, nz_idx, nz_val,
+        rem_indptr, rem_col_ind, rem_vals, tail_row, tail_col, tail_val,
+        X, threads, p, csr_mode, row_seg, &plan);
 }
 
 void bind_boo_functions(pybind11::module_& m) {
     m.def("boo_spmm_cuda_f32", &boo_spmm_cuda_dispatch<float>);
     m.def("boo_spmm_cuda_f64", &boo_spmm_cuda_dispatch<double>);
+    m.def("boo_spmm_cuda_auto_f32", &boo_spmm_cuda_dispatch<float, true>);
+    m.def("boo_spmm_cuda_auto_f64", &boo_spmm_cuda_dispatch<double, true>);
+    m.def("boo_spmm_cuda_plan_f32", &boo_spmm_cuda_planned<float>);
+    m.def("boo_spmm_cuda_plan_f64", &boo_spmm_cuda_planned<double>);
     m.def("boo_arena_bytes_cuda", &boo_arena_bytes);
 }

@@ -68,9 +68,9 @@ struct boo_matrix_t {
     const std::vector<index_t> col_ids;
 
     // --- blocks -------------------------------------------------------------
-    const std::vector<index_t> blk_row_grp;   // size nb
+    const std::vector<index_t> blk_row_grp;   // size = # of blocks = nb
     const std::vector<index_t> blk_col_grp;   // size nb
-    const std::vector<index_t> blk_nz_ptr;    // size nb+1
+    const std::vector<index_t> blk_nz_ptr;    // size nb+1 // points to nz_idx and nz_val
     const std::vector<uint8_t> blk_shift;     // size nb
     const std::vector<uint16_t> nz_idx;       // size compressed_nnz
     const std::vector<scalar_t> nz_val;       // size compressed_nnz

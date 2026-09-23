@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 #include <cstdint>
 #include <stdexcept>
+#include <c10/cuda/CUDAException.h>
 
 #include "kernels/boo_kernels.hpp"
 
@@ -68,7 +69,9 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_kern
     const uint16_t* __restrict__ nz_idx,
     const scalar_t* __restrict__ nz_val,
     const scalar_t* __restrict__ X,
-    scalar_t* __restrict__ Y
+    scalar_t* __restrict__ Y,
+    const int32_t* __restrict__ block_row_ptr,
+    const int32_t* __restrict__ row_starts
 ) {
     constexpr uint32_t P = 1u << P_LOG2;
     constexpr uint32_t P_MASK = P - 1u;
@@ -210,7 +213,9 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     const uint16_t* __restrict__ nz_idx,
     const scalar_t* __restrict__ nz_val,
     const scalar_t* __restrict__ X,
-    scalar_t* __restrict__ Y
+    scalar_t* __restrict__ Y,
+    const int32_t* __restrict__ block_row_ptr,
+    const int32_t* __restrict__ row_starts
 ) {
     constexpr uint32_t P = 1u << P_LOG2;
     constexpr uint32_t P_MASK = P - 1u;
@@ -223,21 +228,21 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     if (b_idx >= num_blocks || batch_idx >= batch_size) return;
 
     extern __shared__ __align__(16) char boo_smem_raw[];
-    scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);
-    scalar_t* smem_X = sh_nz_val + max_nnz_blk;
-    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + max_nc * P);
-    int32_t* sh_row_ids = sh_col_ids + max_nc;
-    int32_t* sh_row_start = sh_row_ids + max_nr;              // max_nr + 1 entries
-    uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_start + max_nr + 1);
+    scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);                // The Sparse Values
+    scalar_t* smem_X = sh_nz_val + max_nnz_blk;                                     // The Staged X Tile
+    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + max_nc * P);          // Global Column IDs
+    int32_t* sh_row_ids = sh_col_ids + max_nc;                                      // Global Row IDs
+    int32_t* sh_row_start = sh_row_ids + max_nr;                                    // Row-Start Table
+    uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_start + max_nr + 1);   // The Sparse Indices (packed local_row, local_col)
 
-    const uint32_t rg = blk_row_grp[b_idx];
-    const uint32_t cg = blk_col_grp[b_idx];
-    const uint32_t row_base = row_grp_ptr[rg];
-    const uint32_t n_r = row_grp_ptr[rg + 1] - row_base;
-    const uint32_t col_base = col_grp_ptr[cg];
-    const uint32_t n_c = col_grp_ptr[cg + 1] - col_base;
-    const uint32_t nz_base = blk_nz_ptr[b_idx];
-    const uint32_t n_nz = blk_nz_ptr[b_idx + 1] - nz_base;
+    const uint32_t rg = blk_row_grp[b_idx];                     // Row group index for this block
+    const uint32_t cg = blk_col_grp[b_idx];                     // Column group index for this block
+    const uint32_t row_base = row_grp_ptr[rg];                  // Base index into row_ids for this row group
+    const uint32_t n_r = row_grp_ptr[rg + 1] - row_base;        // Number of (active) rows in this row group
+    const uint32_t col_base = col_grp_ptr[cg];                  // Base index into col_ids for this column group
+    const uint32_t n_c = col_grp_ptr[cg + 1] - col_base;        // Number of (active) columns in this column group
+    const uint32_t nz_base = blk_nz_ptr[b_idx];                 // Base index into nz_idx/nz_val for this block
+    const uint32_t n_nz = blk_nz_ptr[b_idx + 1] - nz_base;      // Number of nonzeros in this block
 
     if (n_r == 0 || n_c == 0 || n_nz == 0) return;
 
@@ -259,6 +264,10 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     // needs no atomics, and handles rows with NO nonzero in this block (a row
     // group member the column group simply does not touch) for free.
     for (uint32_t r = tx; r <= n_r; r += THREADS) {
+        if (block_row_ptr != nullptr) {
+            sh_row_start[r] = row_starts[block_row_ptr[b_idx] + r];
+            continue;
+        }
         uint32_t lo = 0, hi = n_nz;
         while (lo < hi) {
             const uint32_t mid = (lo + hi) >> 1;
@@ -325,14 +334,18 @@ void launch_boo_spmm(
     const int32_t* blk_nz_ptr, const uint8_t* blk_shift,
     const uint16_t* nz_idx, const scalar_t* nz_val,
     const scalar_t* X, scalar_t* Y,
-    cudaStream_t stream, int threads, int p, bool row_seg
+    cudaStream_t stream, int threads, int p, bool row_seg,
+    const int32_t* block_row_ptr, const int32_t* row_starts
 ) {
+    if (threads != 128 && threads != 256 && threads != 512)
+        throw std::invalid_argument("BOO threads must be 128, 256 or 512");
+    if (p != 8 && p != 16 && p != 32 && p != 64 && p != 128)
+        throw std::invalid_argument("BOO p must be 8, 16, 32, 64 or 128");
     if (num_blocks == 0 || features == 0 || batch_size == 0) return;
 
-    // p is capped at `features` so a narrow feature dimension does not force the
-    // kernel to stage tiles it will never use -- one of the reasons for a small
-    // default p in the first place.
-    while (p > 1 && p > features) p >>= 1;
+    // Match an actual P specialization when sizing the arena. P=8 is the
+    // smallest kernel; narrower inputs use padding, not a smaller allocation.
+    while (p > 8 && p > features) p >>= 1;
 
     const int scalar_bytes = static_cast<int>(sizeof(scalar_t));
     const int arena = row_seg
@@ -350,8 +363,8 @@ void launch_boo_spmm(
             /* it an oversized arena fails at launch with a swallowed             */            \
             /* cudaErrorInvalidValue rather than anything diagnosable.            */            \
             if (arena > 48 * 1024) {                                                           \
-                cudaFuncSetAttribute(kernel,                                                   \
-                                     cudaFuncAttributeMaxDynamicSharedMemorySize, arena);      \
+                C10_CUDA_CHECK(cudaFuncSetAttribute(kernel,                                    \
+                                     cudaFuncAttributeMaxDynamicSharedMemorySize, arena));     \
             }                                                                                  \
             kernel<<<grid, dim3(T), arena, stream>>>(                                          \
                 (uint32_t)num_blocks, (uint32_t)features, (uint32_t)batch_size,                \
@@ -359,7 +372,8 @@ void launch_boo_spmm(
                 (uint32_t)max_nr, (uint32_t)max_nc, (uint32_t)max_nnz_blk,                     \
                 row_grp_ptr, row_ids, col_grp_ptr, col_ids,                                    \
                 blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift,                               \
-                nz_idx, nz_val, X, Y);                                                         \
+                nz_idx, nz_val, X, Y, block_row_ptr, row_starts);                                                         \
+            C10_CUDA_KERNEL_LAUNCH_CHECK();                                                    \
         } while (0)
 
     #define BOO_DISPATCH_P(T)                                                    \
@@ -383,13 +397,13 @@ template void launch_boo_spmm<float>(
     const int, const int, const int, const int, const int, const int, const int, const int,
     const int32_t*, const int32_t*, const int32_t*, const int32_t*,
     const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
-    const uint16_t*, const float*, const float*, float*, cudaStream_t, int, int, bool);
+    const uint16_t*, const float*, const float*, float*, cudaStream_t, int, int, bool, const int32_t*, const int32_t*);
 
 template void launch_boo_spmm<double>(
     const int, const int, const int, const int, const int, const int, const int, const int,
     const int32_t*, const int32_t*, const int32_t*, const int32_t*,
     const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
-    const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int, bool);
+    const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int, bool, const int32_t*, const int32_t*);
 
 
 // ===========================================================================

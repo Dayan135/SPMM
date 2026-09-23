@@ -41,7 +41,9 @@ void launch_boo_spmm(
     // row_seg: register-accumulating variant. Requires nz_order == rowmajor
     // (nz_idx sorted by local_row). Default; the caller falls back to false
     // for colmajor.
-    bool row_seg = true);
+    bool row_seg = true,
+    const int32_t* block_row_ptr = nullptr,
+    const int32_t* row_starts = nullptr);
 
 // Dynamic shared memory the launcher requests, in bytes.  Mirrors
 // torch_fast_spdmm.boo.boo_arena_bytes so the Python occupancy model and the
