@@ -53,6 +53,36 @@ Both options remain opt-in while measurements are pending. The binary exports
 separate legacy/auto entry points with the same argument lists, so old low-level
 callers retain their existing signatures.
 
+**`hem_feasible_first` resolution (2026-09-23):** the `[30,30,2,2]` toy example
+undersold this. Directly comparing `cluster_axes(..., feasible_first=False)`
+against `True` on all 14 benchmark profiles at N=65536, target=32 (CPU-only,
+no GPU needed -- clustering has no CUDA dependency):
+
+| profile | blocks, legacy | blocks, feasible_first | ratio | row-group median, legacy |
+|---|---:|---:|---:|---:|
+| diag_b0.3 | 244,688 | 4,096 | **59.7x** | 1 |
+| diag_b0.1 | 66,957 | 4,274 | **15.7x** | 1 |
+| fem2d / fem2d_permuted | 18,662 / 18,622 | 16,804 / 16,767 | 1.11x | 28 |
+| pattern_row_skewed | 3,587 | 3,226 | 1.11x | 1 |
+| diag_b1.0, diag_skewed, all scattered/pattern_diag_stripe/corner_cluster/checkerboard | -- | -- | 1.00x (no effect) | -- |
+
+On `diag_b0.1`/`diag_b0.3` (a 64-wide diagonal band at 10-30% density, i.e.
+wider than the target=32 group size but not so dense every row is maximally
+connected) legacy HEM matching nearly collapses: median row-group size 1 --
+most rows never merge with anyone. Mechanism: within a partially-dense band,
+many row pairs have similar-strength ties, so a preferred pair sitting at the
+size cap gets rejected and neither side looks at a feasible alternative in the
+same round -- not a rare edge case, the dominant outcome for this structure.
+Fully-dense bands (diag_b1.0/diag_skewed, density 1.0) don't hit this: every
+pair is comparably maximal, so the vectorized matching still finds *a* match
+each round even when the preferred one is capped out. The effect is a no-op to
++11% fewer blocks on the other 12 profiles -- never worse in this suite.
+
+**Promoted to default** (`csr_to_boo(..., hem_feasible_first=True)` as of this
+commit) on that basis: large, structure-specific win, zero measured downside.
+`launch_mode` stays opt-in (see "Validation and results" below -- measured no
+effect, even isolated).
+
 ```bash
 python -m benchmark.bench_boo_opt --phase first \
   --sizes 16384 65536 --features 128 512 \

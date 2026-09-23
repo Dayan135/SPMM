@@ -113,14 +113,23 @@ def csr_to_boo(mat, cluster: str = 'hem', target_nr: int = 32, target_nc: int = 
                symmetric: Optional[bool] = None,
                row_labels: Optional[np.ndarray] = None,
                col_labels: Optional[np.ndarray] = None,
-               hem_feasible_first: bool = False):
+               hem_feasible_first: bool = True):
     """Cluster both axes, then assemble the BOO format.
 
     `row_labels`/`col_labels` bypass the clustering step entirely -- useful for
     reproducing a specific grid, and for the PBR-parity check.
 
-    `hem_feasible_first` excludes infeasible partners before HEM matching.
-    It is opt-in while the paired optimization experiments are evaluated.
+    `hem_feasible_first` excludes infeasible partners before HEM matching, so a
+    preferred-but-oversized pair doesn't block a feasible alternative merge.
+    Default as of 2026-09-23: on `diag_b0.1`/`diag_b0.3` (64-wide diagonal
+    bands at partial density, N=65536, target=32), legacy matching collapses
+    almost entirely -- median row-group size 1, 15.7x/59.7x more blocks than
+    with `hem_feasible_first` -- because most rows in a partially-dense band
+    have similar-strength ties, so preferred pairs at the size cap keep
+    rejecting each other without looking at alternatives. On the other 12 of
+    14 benchmark profiles (scattered/pattern/fully-dense-diag/FEM) the effect
+    is a no-op to +11% fewer blocks -- never worse. See BOO_OPTIMIZATION.md's
+    Stage 2 section for the full per-profile block-count comparison.
 
     Default policy is `remainder` (threshold 4), not `keep`. On matrices with a
     long tail of near-empty blocks (diag_skewed: 97.4% of blocks hold <=3
