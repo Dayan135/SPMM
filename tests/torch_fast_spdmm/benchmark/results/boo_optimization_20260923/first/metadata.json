@@ -1,0 +1,391 @@
+{
+  "git_commit": "478fda3d92fc49eb913499e4122b770069149deb",
+  "git_status": "M optimizer/remote.py\n M pytest.ini\n M tests/torch_fast_spdmm/benchmark/matrices.py\n M tests/torch_fast_spdmm/benchmark/profile_pbr.py\n M tests/torch_fast_spdmm/benchmark/test_matrices.py\n M tests/torch_fast_spdmm/conftest.py\n M tests/torch_fast_spdmm/test_boo.py\n M torch_fast_spdmm/bindings/bindings_boo.cu\n M torch_fast_spdmm/boo_matrix/boo_matrix.hpp\n M torch_fast_spdmm/kernels/boo_kernel.cu\n M torch_fast_spdmm/torch_fast_spdmm/boo.py\n M torch_fast_spdmm/torch_fast_spdmm/clustering.py\n?? BOO_OPTIMIZATION.md\n?? BOO_TESTING.md\n?? RESEARCH_IDEAS.md\n?? SPMM_BENCHMARK.md\n?? tests/torch_fast_spdmm/benchmark/bench_boo_opt.py\n?? tests/torch_fast_spdmm/benchmark/bench_spmm.py\n?? tests/torch_fast_spdmm/benchmark/report_spmm.py\n?? tests/torch_fast_spdmm/benchmark/results/spmm_20260923/\n?? tests/torch_fast_spdmm/test_boo_edges.py\n?? tests/torch_fast_spdmm/test_boo_optimization.py",
+  "source_sha256": "71991478d54264a428b80ae1abda13faabfbb4091693656e64f80240a0fcb0b2",
+  "extension_path": "/home/dayanb/research/boo-opt-20260923-171109/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "a224af0b189d80b7cecec7d4679820a0860eb584e6e061dec09e661a45624bc7",
+  "python_package_path": "/home/dayanb/research/boo-opt-20260923-171109/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25298141184,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "21628759",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "benchmark_configurations": [
+    {
+      "algorithm": "cusparse_csr",
+      "config": "cusparse_csr"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b2_min2_sm2048",
+      "block_size": 2,
+      "min_nnz": 2,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b2_min3_sm2048",
+      "block_size": 2,
+      "min_nnz": 3,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b4_min2_sm2048",
+      "block_size": 4,
+      "min_nnz": 2,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b4_min4_sm2048",
+      "block_size": 4,
+      "min_nnz": 4,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b4_min8_sm2048",
+      "block_size": 4,
+      "min_nnz": 8,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b8_min2_sm2048",
+      "block_size": 8,
+      "min_nnz": 2,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b8_min8_sm2048",
+      "block_size": 8,
+      "min_nnz": 8,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "pbr",
+      "config": "pbr_b8_min12_sm2048",
+      "block_size": 8,
+      "min_nnz": 12,
+      "smem_size": 2048,
+      "kernel": "block"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_8x8_min4_t256_p64_feasible0_legacy",
+      "cluster": "hem",
+      "target_nr": 8,
+      "target_nc": 8,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_8x8_min4_t256_p64_feasible0_auto",
+      "cluster": "hem",
+      "target_nr": 8,
+      "target_nc": 8,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_8x8_min4_t256_p64_feasible1_legacy",
+      "cluster": "hem",
+      "target_nr": 8,
+      "target_nc": 8,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_8x8_min4_t256_p64_feasible1_auto",
+      "cluster": "hem",
+      "target_nr": 8,
+      "target_nc": 8,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_16x16_min4_t256_p64_feasible0_legacy",
+      "cluster": "hem",
+      "target_nr": 16,
+      "target_nc": 16,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_16x16_min4_t256_p64_feasible0_auto",
+      "cluster": "hem",
+      "target_nr": 16,
+      "target_nc": 16,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_16x16_min4_t256_p64_feasible1_legacy",
+      "cluster": "hem",
+      "target_nr": 16,
+      "target_nc": 16,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_16x16_min4_t256_p64_feasible1_auto",
+      "cluster": "hem",
+      "target_nr": 16,
+      "target_nc": 16,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_32x32_min4_t256_p64_feasible0_legacy",
+      "cluster": "hem",
+      "target_nr": 32,
+      "target_nc": 32,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_32x32_min4_t256_p64_feasible0_auto",
+      "cluster": "hem",
+      "target_nr": 32,
+      "target_nc": 32,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_32x32_min4_t256_p64_feasible1_legacy",
+      "cluster": "hem",
+      "target_nr": 32,
+      "target_nc": 32,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_32x32_min4_t256_p64_feasible1_auto",
+      "cluster": "hem",
+      "target_nr": 32,
+      "target_nc": 32,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_64x64_min4_t256_p64_feasible0_legacy",
+      "cluster": "hem",
+      "target_nr": 64,
+      "target_nc": 64,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_64x64_min4_t256_p64_feasible0_auto",
+      "cluster": "hem",
+      "target_nr": 64,
+      "target_nc": 64,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": false,
+      "launch_mode": "auto",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_64x64_min4_t256_p64_feasible1_legacy",
+      "cluster": "hem",
+      "target_nr": 64,
+      "target_nc": 64,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "legacy",
+      "phase": "first"
+    },
+    {
+      "algorithm": "boo",
+      "config": "boo_64x64_min4_t256_p64_feasible1_auto",
+      "cluster": "hem",
+      "target_nr": 64,
+      "target_nc": 64,
+      "threads": 256,
+      "p": 64,
+      "small_block_threshold": 4,
+      "small_block_policy": "remainder",
+      "hem_feasible_first": true,
+      "launch_mode": "auto",
+      "phase": "first"
+    }
+  ],
+  "arguments": {
+    "sizes": [
+      16384,
+      65536
+    ],
+    "features": [
+      128,
+      512
+    ],
+    "profiles": [
+      "fem2d",
+      "fem2d_permuted",
+      "diag_b0.3",
+      "diag_skewed",
+      "scattered_1x8",
+      "pattern_diag_stripe"
+    ],
+    "pbr_configs": [
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        8,
+        2
+      ],
+      [
+        8,
+        8
+      ],
+      [
+        8,
+        12
+      ]
+    ],
+    "pbr_smem": [
+      2048
+    ],
+    "boo_clusters": [
+      "hem"
+    ],
+    "boo_k": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "boo_threads": 256,
+    "boo_p": 64,
+    "warmup": 5,
+    "repeats": 20,
+    "seed": 0,
+    "out": "../../results/first",
+    "project": "torch-fast-spdmm",
+    "entity": null,
+    "name": "boo-opt-first-20260923",
+    "wandb_mode": "online"
+  },
+  "wandb_run_id": "f59lskqm",
+  "wandb_url": "https://wandb.ai/private-dayan/torch-fast-spdmm/runs/f59lskqm",
+  "status": "complete",
+  "completed_cells": 24
+}

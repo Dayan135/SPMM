@@ -1,0 +1,106 @@
+{
+  "git_commit": "478fda3d92fc49eb913499e4122b770069149deb",
+  "git_status": "M optimizer/remote.py\n M pytest.ini\n M tests/torch_fast_spdmm/benchmark/matrices.py\n M tests/torch_fast_spdmm/benchmark/profile_pbr.py\n M tests/torch_fast_spdmm/benchmark/test_matrices.py\n M tests/torch_fast_spdmm/conftest.py\n M tests/torch_fast_spdmm/test_boo.py\n M torch_fast_spdmm/bindings/bindings_boo.cu\n M torch_fast_spdmm/boo_matrix/boo_matrix.hpp\n M torch_fast_spdmm/kernels/boo_kernel.cu\n M torch_fast_spdmm/torch_fast_spdmm/boo.py\n?? BOO_TESTING.md\n?? RESEARCH_IDEAS.md\n?? SPMM_BENCHMARK.md\n?? tests/torch_fast_spdmm/benchmark/bench_spmm.py\n?? tests/torch_fast_spdmm/test_boo_edges.py",
+  "source_sha256": "50cb8625579f820bf686e9de26ca7891458de2107587fbfc1d70db5abe376111",
+  "extension_path": "/home/dayanb/research/spmm-compare-20260923-140004/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "f518219472e52da6e730e82ecb9929df0e98e0527665346a28bc7588bafe4df1",
+  "python_package_path": "/home/dayanb/research/spmm-compare-20260923-140004/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25296044032,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "21618650",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "arguments": {
+    "sizes": [
+      16384,
+      65536,
+      262144
+    ],
+    "features": [
+      128,
+      512
+    ],
+    "profiles": [
+      "fem2d",
+      "fem2d_permuted",
+      "diag_b1.0",
+      "pattern_corner_cluster",
+      "diag_b0.3",
+      "diag_b0.1",
+      "scattered_1x8",
+      "scattered_8x1",
+      "scattered_2x2",
+      "scattered_2x4",
+      "pattern_row_skewed",
+      "pattern_checkerboard",
+      "pattern_diag_stripe",
+      "diag_skewed"
+    ],
+    "pbr_configs": [
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        8,
+        2
+      ],
+      [
+        8,
+        8
+      ],
+      [
+        8,
+        12
+      ]
+    ],
+    "pbr_smem": [
+      2048
+    ],
+    "boo_clusters": [
+      "hem"
+    ],
+    "boo_k": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "boo_threads": 256,
+    "boo_p": 64,
+    "warmup": 5,
+    "repeats": 20,
+    "seed": 0,
+    "out": "../../results/full",
+    "project": "torch-fast-spdmm",
+    "entity": null,
+    "name": "spmm-pbr-boo-csr-20260923",
+    "wandb_mode": "online"
+  },
+  "wandb_run_id": "4nk9coe9",
+  "wandb_url": "https://wandb.ai/private-dayan/torch-fast-spdmm/runs/4nk9coe9",
+  "status": "complete",
+  "completed_cells": 84
+}

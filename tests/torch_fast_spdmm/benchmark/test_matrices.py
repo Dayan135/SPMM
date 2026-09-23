@@ -1,7 +1,8 @@
 import numpy as np
 from pytest import mark, raises
 
-from benchmark.matrices import generate_patterned_block_matrix, PBR_PATTERN_PRESETS
+from benchmark.matrices import (generate_patterned_block_matrix, PBR_PATTERN_PRESETS,
+                                generate_scattered_block_matrix, generate_diag_blocks_plus_noise)
 
 
 def test_presets_are_valid_8x8_masks():
@@ -32,6 +33,40 @@ def test_reproducible_with_same_seed():
     a = generate_patterned_block_matrix(1024, 8, [(PBR_PATTERN_PRESETS["diag_stripe"], 0.02)], seed=42)
     b = generate_patterned_block_matrix(1024, 8, [(PBR_PATTERN_PRESETS["diag_stripe"], 0.02)], seed=42)
     assert (a != b).nnz == 0
+
+
+@mark.parametrize('generator,kwargs', [
+    (generate_scattered_block_matrix, dict(block_size=8, profiles=[(2, 4, 0.02)])),
+    (generate_diag_blocks_plus_noise, dict(diag_density=0.3)),
+])
+def test_explicit_seed_is_reproducible_and_preserves_global_rng(generator, kwargs):
+    before = np.random.get_state()
+    a = generator(1024, seed=42, **kwargs)
+    b = generator(1024, seed=42, **kwargs)
+    c = generator(1024, seed=43, **kwargs)
+    after = np.random.get_state()
+    assert (a != b).nnz == 0
+    assert (a != c).nnz > 0
+    assert before[0] == after[0]
+    np.testing.assert_array_equal(before[1], after[1])
+    assert before[2:] == after[2:]
+
+
+@mark.parametrize('profile', ['scattered_2x4', 'diag_b0.3', 'pattern_checkerboard',
+                                   'fem2d', 'fem2d_permuted'])
+def test_benchmark_profile_seed_reproduces_exact_csr(profile):
+    from benchmark.profile_pbr import build_matrix
+    a = build_matrix(1024, profile, seed=42)
+    b = build_matrix(1024, profile, seed=42)
+    for field in ('indptr', 'indices', 'data'):
+        np.testing.assert_array_equal(getattr(a, field), getattr(b, field))
+
+
+def test_fem_pair_uses_same_values_before_permutation():
+    from benchmark.profile_pbr import build_matrix
+    a = build_matrix(1024, 'fem2d', seed=42)
+    b = build_matrix(1024, 'fem2d_permuted', seed=42)
+    np.testing.assert_array_equal(np.sort(a.data), np.sort(b.data))
 
 
 def test_low_density_nnz_matches_pattern_popcount_times_block_count():

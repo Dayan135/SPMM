@@ -81,9 +81,9 @@ _MATRIX_PROFILES = {
 _SCATTERED_DENSITY_AT_1024 = 0.005
 
 
-def build_matrix(size: int, matrix_profile: str):
+def build_matrix(size: int, matrix_profile: str, seed: int = None):
     """Build the raw scipy matrix for a --matrix-profile. Shared with
-    profile_cusparse.py so both drivers profile the identical matrix."""
+    profile_cusparse.py. Pass the same seed to reproduce identical matrices."""
     kind, cfg = _MATRIX_PROFILES[matrix_profile]
     if kind == "scattered":
         density = _SCATTERED_DENSITY_AT_1024 * 1024 / size
@@ -91,6 +91,7 @@ def build_matrix(size: int, matrix_profile: str):
             system_size=size,
             block_size=cfg["block_size"],
             profiles=[(cfg["rows_per_block"], cfg["cols_per_block"], density)],
+            seed=seed,
         ).astype(np.float32)
     elif kind == "diag":
         mat = generate_diag_blocks_plus_noise(
@@ -98,16 +99,18 @@ def build_matrix(size: int, matrix_profile: str):
             block_size=cfg["block_size"],
             diag_density=cfg["diag_density"],
             off_diag_density=cfg["off_diag_density"],
+            seed=seed,
         ).astype(np.float32)
     elif kind == "pattern":
         density = _SCATTERED_DENSITY_AT_1024 * 1024 / size
         mat = generate_patterned_block_matrix(
             system_size=size, block_size=8,
             patterns=[(PBR_PATTERN_PRESETS[cfg["preset"]], density)],
+            seed=seed,
         ).astype(np.float32)
     else:  # fem
         gen = generate_permuted_fem_2d if cfg["permuted"] else generate_fem_2d
-        mat = gen(system_size=size).astype(np.float32)
+        mat = gen(system_size=size, seed=seed).astype(np.float32)
     return mat
 
 

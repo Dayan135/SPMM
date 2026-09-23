@@ -3,7 +3,7 @@ import numpy as np
 import scipy.sparse as sp
 from typing import List, Tuple, Literal
 
-def generate_scattered_block_matrix(system_size: int, block_size: int, profiles: List[Tuple[int, int, float]]):
+def generate_scattered_block_matrix(system_size: int, block_size: int, profiles: List[Tuple[int, int, float]], seed: int = None):
     """
     Generates a synthetic, highly-structured block-sparse matrix for HPC benchmarking.
     
@@ -37,6 +37,7 @@ def generate_scattered_block_matrix(system_size: int, block_size: int, profiles:
     Raises:
         ValueError: If `system_size` is not divisible by `block_size` (handled upstream).
     """
+    rng = np.random if seed is None else np.random.RandomState(seed)
     grid_dim = system_size // block_size
     total_blocks = grid_dim * grid_dim
     all_rows, all_cols, all_data = [], [], []
@@ -50,14 +51,14 @@ def generate_scattered_block_matrix(system_size: int, block_size: int, profiles:
             )
             
         # 1. Randomly sample block positions from the global grid
-        block_idx = np.random.randint(0, total_blocks, size=num_blocks, dtype=np.int64)
+        block_idx = rng.randint(0, total_blocks, size=num_blocks, dtype=np.int64)
         grid_r = block_idx // grid_dim
         grid_c =  block_idx % grid_dim
         
         # 2. Pick n_r/n_c distinct local indices per block without replacement.
         #    argsort(random) produces a random permutation for each block row; slicing [:n_r] takes the first n_r.
-        local_rows = np.argsort(np.random.rand(num_blocks, block_size), axis=1)[:, :n_r]
-        local_cols = np.argsort(np.random.rand(num_blocks, block_size), axis=1)[:, :n_c]
+        local_rows = np.argsort(rng.rand(num_blocks, block_size), axis=1)[:, :n_r]
+        local_cols = np.argsort(rng.rand(num_blocks, block_size), axis=1)[:, :n_c]
         
         # 3. Broadcast local coordinates to global matrix coordinates
         global_r = (grid_r[:, None] * block_size) + local_rows  
@@ -68,7 +69,7 @@ def generate_scattered_block_matrix(system_size: int, block_size: int, profiles:
         c_mesh = np.broadcast_to(global_c[:, None, :], (num_blocks, n_r, n_c)).flatten()
         
         # 5. Generate random float data
-        data = np.random.randn(len(r_mesh)).astype(np.float32)
+        data = rng.randn(len(r_mesh)).astype(np.float32)
         
         all_rows.append(r_mesh)
         all_cols.append(c_mesh)
@@ -215,11 +216,12 @@ def generate_random_sparse(system_size: int, density: float):
     return sp.coo_matrix((data, (rows, cols)), shape=(system_size, system_size)).tocsr()
 
 
-def generate_diag_blocks_plus_noise(system_size: int, block_size: int = 64, diag_density: float = 0.5, off_diag_density: float = 0.00005):
+def generate_diag_blocks_plus_noise(system_size: int, block_size: int = 64, diag_density: float = 0.5, off_diag_density: float = 0.00005, seed: int = None):
     """
     Generates a sparse matrix with a dense block-diagonal structure and random global noise.
     Simulates real-world graph matrices with strong local clustering and sparse distant connections.
     """
+    rng = np.random if seed is None else np.random.RandomState(seed)
     B = block_size
 
     if system_size % B != 0:
@@ -227,13 +229,14 @@ def generate_diag_blocks_plus_noise(system_size: int, block_size: int = 64, diag
 
     num_noise_elements = int(system_size * system_size * off_diag_density)
 
-    temp_coo = sp.random(system_size, B, density=diag_density, format='coo', dtype=np.float32)
+    temp_coo = sp.random(system_size, B, density=diag_density, format='coo', dtype=np.float32,
+                         random_state=rng if seed is not None else None)
     all_rows = np.concatenate([temp_coo.row,
-                               np.random.randint(0, system_size, size=num_noise_elements, dtype=np.int32)])
+                               rng.randint(0, system_size, size=num_noise_elements, dtype=np.int32)])
     all_cols = np.concatenate([(temp_coo.row // B) * B + temp_coo.col,
-                               np.random.randint(0, system_size, size=num_noise_elements, dtype=np.int32)])
+                               rng.randint(0, system_size, size=num_noise_elements, dtype=np.int32)])
     all_data = np.concatenate([temp_coo.data,
-                               np.random.randn(num_noise_elements).astype(np.float32)])
+                               rng.randn(num_noise_elements).astype(np.float32)])
 
     return sp.csr_matrix((all_data, (all_rows, all_cols)), shape=(system_size, system_size))
 

@@ -1,0 +1,43 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/dayanb/research/spmm-compare-20260923-140004
+configfile: pytest.ini
+plugins: anyio-4.12.1, benchmark-5.2.3
+collected 1165 items
+
+tests/torch_fast_spdmm/test_boo.py ..................................... [  3%]
+.........................s....s....s....s....s....s....s....s....s....s. [  9%]
+...s....s............................................................... [ 15%]
+..........................                                               [ 17%]
+tests/torch_fast_spdmm/test_boo_edges.py ............................... [ 20%]
+........................................................................ [ 26%]
+........................................................................ [ 32%]
+........................................................................ [ 38%]
+..................s.........................                             [ 42%]
+tests/torch_fast_spdmm/test_pbr.py ..................................... [ 45%]
+........................................................................ [ 52%]
+........................................................................ [ 58%]
+........................................................................ [ 64%]
+........................................................................ [ 70%]
+........................................................................ [ 76%]
+........................................................................ [ 83%]
+.............................................................            [ 88%]
+tests/torch_fast_spdmm/test_csr.py ..................................... [ 91%]
+...........................................................              [ 96%]
+tests/torch_fast_spdmm/benchmark/test_matrices.py ....................   [ 98%]
+tests/optimizer/test_compare.py .....                                    [ 98%]
+tests/optimizer/test_grid.py ......                                      [ 99%]
+tests/optimizer/test_ledger.py .......                                   [ 99%]
+tests/optimizer/test_performance.py ...                                  [100%]
+
+=============================== warnings summary ===============================
+tests/torch_fast_spdmm/test_boo_edges.py::test_builder_input_contract_and_torch_csr
+  /home/dayanb/research/spmm-compare-20260923-140004/tests/torch_fast_spdmm/test_boo_edges.py:380: UserWarning: Sparse CSR tensor support is in beta state. If you miss a functionality in the sparse tensor support, please submit a feature request to https://github.com/pytorch/pytorch/issues. (Triggered internally at /pytorch/aten/src/ATen/SparseCsrTensorImpl.cpp:49.)
+    tensor = torch.sparse_csr_tensor(torch.from_numpy(mat.indptr), torch.from_numpy(mat.indices),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [12] tests/torch_fast_spdmm/test_boo.py:111: rcm requires a square matrix
+SKIPPED [1] tests/torch_fast_spdmm/test_boo_edges.py:283: requires two GPUs
+================= 1152 passed, 13 skipped, 1 warning in 24.73s =================

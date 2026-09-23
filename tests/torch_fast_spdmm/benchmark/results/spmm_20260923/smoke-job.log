@@ -1,0 +1,12 @@
+------------------------------------
+Wed 23 Sep 2026 14:03:36 IDT
+SLURM_JOBID:		21618321
+SLURM_JOB_NODELIST:	ise-3090-04
+SLURM_SCRATCH_DIR:	
+Allocated Resouces:	cpu - 8 / mem - 32768 MB / gpu - 1
+SLURM_GPU_INDEX:	1
+Running as dayanb from erant account with erant QOS
+------------------------------------
+/home/dayanb/research/spmm-compare-20260923-140004/torch_fast_spdmm/torch_fast_spdmm/__init__.py
+/home/dayanb/research/spmm-compare-20260923-140004/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so
+SMOKE_VERIFIED 78 summaries, 1560 samples https://wandb.ai/private-dayan/torch-fast-spdmm/runs/6tmocdmr

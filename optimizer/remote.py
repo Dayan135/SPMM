@@ -164,14 +164,12 @@ def sync_and_build(*, git_ref: str, host: str = REMOTE_HOST, timeout_s: int = 18
 
 
 def run_pytest_suite(*, host: str = REMOTE_HOST, timeout_s: int = 1800) -> CommandResult:
-    """Runs the existing correctness suite, ignoring the pre-existing,
-    unrelated test_sparse_block_mat.py collection error (see STALL_REASONS.md
-    / session history -- that file has a fixture bug unrelated to any kernel
-    or optimizer work)."""
+    """Run PBR, CSR, and BOO correctness, including BOO boundary regressions."""
     cmd = (
         f"cd {REMOTE_REPO_DIR} && srun --partition=rtx3090 --account=erant --qos=erant "
         f"--gres=gpu:rtx_3090:1 --time=00:30:00 --mem=16G bash -lc '"
         f"{BUILD_ENV_PREAMBLE} pytest tests/torch_fast_spdmm/test_pbr.py "
-        f"tests/torch_fast_spdmm/test_csr.py -q'"
+        f"tests/torch_fast_spdmm/test_csr.py tests/torch_fast_spdmm/test_boo.py "
+        f"tests/torch_fast_spdmm/test_boo_edges.py --boo-require-cuda -q'"
     )
     return ssh(cmd, host=host, timeout=timeout_s)
