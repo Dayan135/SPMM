@@ -77,6 +77,35 @@ Grid: group shapes 16×16, 32×32, 64×64, 16×64, 64×16, 32×64; remainder thr
 are enabled. Each workload also includes the original k=32/256-thread/P=64 BOO
 baseline, PBR configurations and CSR. Configuration records include every choice.
 
+**Result (`results/boo-parameters-20260923`, 109 BOO configs × 8 workloads,
+remote job 21641843):** no swept combination beats a `hem_feasible_first=True,
+launch_mode='auto'` baseline (unchanged k=32/threads=256/P=64/threshold=4) by a
+reproducible margin. Best geomean was +1.8% (`min16` threshold, k=32 otherwise)
+with a per-cell range of 0.92–1.09× -- inside run-to-run noise at 20 repeats,
+not a structural win. **Rectangular shapes paired with P=128 are a clear
+regression**, not noise: 16×64/32×64 groups at P=128 measured 0.51–0.64×
+geomean (up to ~50% slower) across every cell, both thresholds, all three
+thread counts -- plausibly shared-memory/occupancy pressure from staging a
+64-wide column tile at P=128 simultaneously. None of group shape, threshold,
+threads, or P are promoted; the existing k=32/threads=256/P=64/threshold=4
+defaults stand, now with `hem_feasible_first=True` layered on top.
+
+The real story in this data is `hem_feasible_first` itself, and it isn't the
+uniform ~7% Stage 1's aggregate geomean suggested: comparing
+`boo_original_k32` (the pre-Stage-1 defaults) against the same k=32 config
+with only `hem_feasible_first`+`launch_mode='auto'` added, **`diag_b0.3` at
+N=65536 improves ~2.6-3.1×** (1.08→0.37ms at f128, 3.39→1.30ms at f512) while
+`diag_skewed`, `fem2d_permuted`, and `scattered_1x8` move by low single
+digits either way. Stage 1's ~7% geomean was an average over profiles where
+the effect ranges from "irrelevant" to "3x" -- `diag_b0.3`'s block-diagonal
+density profile likely produces many groups sized near the target cap,
+exactly the "two same-size groups prefer each other, both rejected, neither
+looks at a feasible alternative" pathology `hem_feasible_first` fixes (see
+Stage 1 implementation notes above). Not yet confirmed by inspecting the
+actual cluster-size distribution; worth a follow-up if `hem_feasible_first`
+is promoted to default, to understand which matrix structures it helps and
+by how much before writing that into the general story.
+
 ## Stages 3 and 4 implementation
 
 `prepare_boo_cuda(boo, bucketed=True, precomputed_rows=True, p=64)` returns an
