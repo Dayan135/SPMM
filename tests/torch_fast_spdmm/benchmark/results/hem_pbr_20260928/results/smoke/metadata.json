@@ -1,0 +1,79 @@
+{
+  "git_commit": "unknown",
+  "git_status": "unknown",
+  "source_sha256": "13a7fae70a1c0b1f744e08ef38164c17ac071ffd70457911da0328ecff877d3a",
+  "extension_path": "/home/dayanb/research/hem-pbr-20260928/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "c10ff765360004030f1f00a2bcaff954a2c4b4b396aebfbb920c4efcfec756da",
+  "python_package_path": "/home/dayanb/research/hem-pbr-20260928/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25298141184,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "21719128",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "arguments": {
+    "sizes": [
+      1024
+    ],
+    "features": [
+      32
+    ],
+    "seeds": [
+      0
+    ],
+    "hem_k": [
+      8,
+      32
+    ],
+    "pbr_configs": [
+      [
+        4,
+        4
+      ],
+      [
+        8,
+        2
+      ]
+    ],
+    "warmup": 2,
+    "repeats": 3,
+    "out": "../../results/smoke"
+  },
+  "status": "complete",
+  "preparation": {
+    "n1024_s0": {
+      "matrix_build_ms": 10.493505280464888,
+      "k8": {
+        "hem_ms": 40.6751511618495,
+        "sparse_reorder_ms": 1.4855102635920048,
+        "groups": 135,
+        "group_min": 4,
+        "group_median": 8.0,
+        "group_max": 8
+      },
+      "k32": {
+        "hem_ms": 40.97225610166788,
+        "sparse_reorder_ms": 1.4600022695958614,
+        "groups": 38,
+        "group_min": 4,
+        "group_median": 29.5,
+        "group_max": 32
+      }
+    }
+  },
+  "completed_cells": 1,
+  "permutation_convention": "p[new]=old; Xprime=X[p]; Y[order]=Yprime",
+  "excluded_costs": "HEM, sparse permutation, format build, staging, dense input/output permutation",
+  "hem_feasible_first": true,
+  "pbr_smem": 2048,
+  "boo_threads": 256,
+  "boo_p": 64,
+  "boo_policy": "remainder",
+  "boo_threshold": 4,
+  "boo_launch": "legacy"
+}

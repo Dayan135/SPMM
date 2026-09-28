@@ -1,5 +1,10 @@
 # PBR / BOO / cuSPARSE CSR comparison
 
+For the controlled symmetric FEM experiment that applies the same HEM grouping
+to BOO and to a permutation before running existing PBR, see
+[HEM_PBR_EXPERIMENT.md](HEM_PBR_EXPERIMENT.md). It includes the four requested
+ordering/format cases, same-format BOO kernel controls, timings and raw results.
+
 Run `benchmark.bench_spmm` from `tests/torch_fast_spdmm` after building the current
 source on the remote GPU node (see `CLAUDE.md`). This harness is separate from
 the historical four-way PBR kernel experiment.

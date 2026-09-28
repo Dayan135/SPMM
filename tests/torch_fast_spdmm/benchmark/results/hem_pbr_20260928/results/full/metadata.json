@@ -1,0 +1,194 @@
+{
+  "git_commit": "unknown",
+  "git_status": "unknown",
+  "source_sha256": "13a7fae70a1c0b1f744e08ef38164c17ac071ffd70457911da0328ecff877d3a",
+  "extension_path": "/home/dayanb/research/hem-pbr-20260928/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "c10ff765360004030f1f00a2bcaff954a2c4b4b396aebfbb920c4efcfec756da",
+  "python_package_path": "/home/dayanb/research/hem-pbr-20260928/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25298141184,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "21719128",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "arguments": {
+    "sizes": [
+      16384,
+      65536,
+      262144
+    ],
+    "features": [
+      128,
+      512
+    ],
+    "seeds": [
+      0
+    ],
+    "hem_k": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "pbr_configs": [
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        8,
+        2
+      ],
+      [
+        8,
+        8
+      ],
+      [
+        8,
+        12
+      ]
+    ],
+    "warmup": 5,
+    "repeats": 20,
+    "out": "../../results/full"
+  },
+  "status": "complete",
+  "preparation": {
+    "n16384_s0": {
+      "matrix_build_ms": 120.59807404875755,
+      "k8": {
+        "hem_ms": 588.7615038082004,
+        "sparse_reorder_ms": 14.905891846865416,
+        "groups": 2122,
+        "group_min": 2,
+        "group_median": 8.0,
+        "group_max": 8
+      },
+      "k16": {
+        "hem_ms": 588.9819827862084,
+        "sparse_reorder_ms": 14.189261943101883,
+        "groups": 1111,
+        "group_min": 3,
+        "group_median": 16.0,
+        "group_max": 16
+      },
+      "k32": {
+        "hem_ms": 585.1956838741899,
+        "sparse_reorder_ms": 14.317706227302551,
+        "groups": 595,
+        "group_min": 4,
+        "group_median": 28.0,
+        "group_max": 32
+      },
+      "k64": {
+        "hem_ms": 590.8635458908975,
+        "sparse_reorder_ms": 14.835599344223738,
+        "groups": 317,
+        "group_min": 4,
+        "group_median": 56.0,
+        "group_max": 64
+      }
+    },
+    "n65536_s0": {
+      "matrix_build_ms": 392.0836541801691,
+      "k8": {
+        "hem_ms": 2245.678456965834,
+        "sparse_reorder_ms": 57.79734207317233,
+        "groups": 8428,
+        "group_min": 2,
+        "group_median": 8.0,
+        "group_max": 8
+      },
+      "k16": {
+        "hem_ms": 2272.828759159893,
+        "sparse_reorder_ms": 60.16184203326702,
+        "groups": 4457,
+        "group_min": 4,
+        "group_median": 16.0,
+        "group_max": 16
+      },
+      "k32": {
+        "hem_ms": 2294.5148050785065,
+        "sparse_reorder_ms": 66.8714321218431,
+        "groups": 2349,
+        "group_min": 4,
+        "group_median": 28.0,
+        "group_max": 32
+      },
+      "k64": {
+        "hem_ms": 2305.4718086495996,
+        "sparse_reorder_ms": 60.10622577741742,
+        "groups": 1246,
+        "group_min": 12,
+        "group_median": 56.0,
+        "group_max": 64
+      }
+    },
+    "n262144_s0": {
+      "matrix_build_ms": 1675.849738996476,
+      "k8": {
+        "hem_ms": 10274.206866975874,
+        "sparse_reorder_ms": 263.3625161834061,
+        "groups": 33653,
+        "group_min": 3,
+        "group_median": 8.0,
+        "group_max": 8
+      },
+      "k16": {
+        "hem_ms": 10575.098003726453,
+        "sparse_reorder_ms": 270.29268303886056,
+        "groups": 17710,
+        "group_min": 4,
+        "group_median": 16.0,
+        "group_max": 16
+      },
+      "k32": {
+        "hem_ms": 10647.53734599799,
+        "sparse_reorder_ms": 269.649351015687,
+        "groups": 9415,
+        "group_min": 4,
+        "group_median": 28.0,
+        "group_max": 32
+      },
+      "k64": {
+        "hem_ms": 10647.463785950094,
+        "sparse_reorder_ms": 270.90679900720716,
+        "groups": 4955,
+        "group_min": 4,
+        "group_median": 56.0,
+        "group_max": 64
+      }
+    }
+  },
+  "completed_cells": 6,
+  "permutation_convention": "p[new]=old; Xprime=X[p]; Y[order]=Yprime",
+  "excluded_costs": "HEM, sparse permutation, format build, staging, dense input/output permutation",
+  "hem_feasible_first": true,
+  "pbr_smem": 2048,
+  "boo_threads": 256,
+  "boo_p": 64,
+  "boo_policy": "remainder",
+  "boo_threshold": 4,
+  "boo_launch": "legacy"
+}
