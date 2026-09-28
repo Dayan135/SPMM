@@ -272,10 +272,16 @@ def _mutual_max_pairs(graph: sp.csr_matrix, active: np.ndarray,
 def _hem_labels(pat: sp.csr_matrix, target: int, max_size: Optional[int],
                 max_nnz: Optional[int], hub_degree: int, topk: Optional[int],
                 exact_recompute: bool = True, residual_rounds: int = 3,
-                feasible_first: bool = False) -> np.ndarray:
-    """Multilevel heavy-edge matching.  Deterministic, no RNG, fully vectorized."""
+                feasible_first: bool = False, hierarchy: Optional[list] = None) -> np.ndarray:
+    """Multilevel HEM, optionally recording original-vertex labels at every level.
+
+    ``hierarchy`` receives identity followed by each successful contraction,
+    finest to coarsest. Recording does not alter matching or returned labels.
+    """
     n = pat.shape[0]
     labels = np.arange(n, dtype=np.int64)
+    if hierarchy is not None:
+        hierarchy.append(labels.copy())
     if n <= 1 or target <= 1:
         return labels
 
@@ -333,6 +339,8 @@ def _hem_labels(pat: sp.csr_matrix, target: int, max_size: Optional[int],
         size = np.bincount(new_id, weights=size, minlength=n_new).astype(np.int64)
         nnz = np.bincount(new_id, weights=nnz, minlength=n_new).astype(np.int64)
         labels = new_id[labels]
+        if hierarchy is not None:
+            hierarchy.append(labels.copy())
 
         contraction = sp.csr_matrix(
             (np.ones(n_cur, dtype=np.int64), (new_id, np.arange(n_cur))),
@@ -417,12 +425,18 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
                  max_size: Optional[int] = None, max_nnz: Optional[int] = None,
                  seed: int = 0, hub_degree: int = DEFAULT_HUB_DEGREE,
                  topk: Optional[int] = DEFAULT_TOPK,
-                 exact_recompute: bool = True, feasible_first: bool = False) -> np.ndarray:
+                 exact_recompute: bool = True, feasible_first: bool = False,
+                 hem_hierarchy: Optional[list] = None) -> np.ndarray:
     """Cluster the ROWS of `mat` into groups of about `target` rows.
 
     To cluster columns instead, pass ``mat.T``.  Returns an int32 label array of
     length ``mat.shape[0]``; caps are enforced on the result regardless of method.
+    Pass an empty list as ``hem_hierarchy`` with method='hem' to record each
+    matching level, finest to coarsest, in original vertex coordinates. Final
+    cap enforcement/relabeling is represented by the returned labels separately.
     """
+    if hem_hierarchy is not None and (method != 'hem' or len(hem_hierarchy)):
+        raise ValueError('hem_hierarchy must be an empty list with method=hem')
     if method not in CLUSTER_METHODS:
         raise ValueError(f'unknown clustering method {method!r}; '
                          f'expected one of {CLUSTER_METHODS}')
@@ -432,6 +446,8 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
     row_nnz = np.diff(pat.indptr).astype(np.int64)
 
     if n == 0:
+        if hem_hierarchy is not None:
+            hem_hierarchy.append(np.zeros(0, dtype=np.int64))
         return np.zeros(0, dtype=np.int32)
 
     if method == 'identity':
@@ -467,7 +483,8 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
                                  exact_recompute, feasible_first=feasible_first)
     else:  # 'hem'
         labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
-                             exact_recompute, feasible_first=feasible_first)
+                             exact_recompute, feasible_first=feasible_first,
+                             hierarchy=hem_hierarchy)
 
     labels = _enforce_caps(labels, row_nnz, max_size, max_nnz)
     return _relabel_consecutive(labels).astype(np.int32)
