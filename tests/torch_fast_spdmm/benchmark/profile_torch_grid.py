@@ -38,7 +38,7 @@ def main():
                     name = f'{profile}_{n}_f{f}'
                     print(f'PROFILE {name}', flush=True)
                     nsys = os.environ.get('NSYS', 'nsys')
-                    command = [nsys, 'profile', '--trace=cuda,nvtx', '--sample=none',
+                    command = [nsys, 'profile', '--trace=cuda,nvtx', '--cuda-event-trace=false', '--sample=none',
                                '--cpuctxsw=none', '--capture-range=cudaProfilerApi',
                                '--capture-range-end=stop', '--export=sqlite', '-o',
                                str(a.out / name), sys.executable,
