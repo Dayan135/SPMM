@@ -1,0 +1,54 @@
+{
+  "git_commit": "84fea8f3775cf4f1411bd085d4a4c4fc995a9e9c",
+  "git_status": "",
+  "source_sha256": "832e0d25043c14d1c728c0df8bca88574adeef8e7b2257fa4f5d3577ce61f528",
+  "extension_path": "/home/dayanb/research/reorder-vs-boo-20260928/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "cb25a650873546fab37098731915eae105d1a424a4b63ca2f3074ff1f8b63f13",
+  "python_package_path": "/home/dayanb/research/reorder-vs-boo-20260928/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25296044032,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "21725373",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "A: natural FEM + PBR",
+  "node": "cs-pheno-09.auth.ad.bgu.ac.il",
+  "slurm_nodelist": "cs-pheno-09",
+  "arguments": {
+    "sizes": [
+      1024
+    ],
+    "features": [
+      32
+    ],
+    "hem_k": [
+      8,
+      32
+    ],
+    "pbr_configs": [
+      [
+        4,
+        4
+      ],
+      [
+        8,
+        2
+      ]
+    ],
+    "seed": 0,
+    "warmup": 2,
+    "repeats": 3,
+    "replicate": 0,
+    "out": "../../results/smoke"
+  },
+  "status": "complete",
+  "completed_cells": 1,
+  "occupancy": "boo_info SM86 shared-memory/thread-limit estimate; not measured achieved occupancy",
+  "x_loads": "sum of column-group sizes over BOO blocks, per feature; excludes CSR remainder",
+  "dense_permutation": "one GPU index_select per sample, allocation included; pre-staged indices",
+  "hierarchy": "identity and each contracted label vector, finest first; lexsort last key primary"
+}

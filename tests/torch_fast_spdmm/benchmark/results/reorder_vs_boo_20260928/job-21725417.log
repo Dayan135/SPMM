@@ -1,0 +1,23 @@
+------------------------------------
+Mon 28 Sep 2026 19:59:55 IDT
+SLURM_JOBID:		21725417
+SLURM_JOB_NODELIST:	cs-3090-02
+SLURM_SCRATCH_DIR:	/scratch/dayanb/21725417
+Allocated Resouces:	cpu - 8 / mem - 65536 MB / gpu - 1
+SLURM_GPU_INDEX:	5
+Running as dayanb from erant account with erant QOS
+------------------------------------
+/home/dayanb/research/reorder-vs-boo-20260928/torch_fast_spdmm/torch_fast_spdmm/__init__.py
+/home/dayanb/research/reorder-vs-boo-20260928/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so
+Prepared N=65536 k=8: node HEM 4202.1 ms
+Prepared N=65536 k=16: node HEM 4198.2 ms
+Prepared N=65536 k=32: node HEM 4262.0 ms
+Prepared N=65536 k=64: node HEM 4278.1 ms
+Completed N=65536, F=128: 104 validated configurations
+Completed N=65536, F=512: 104 validated configurations
+Prepared N=262144 k=8: node HEM 20179.5 ms
+Prepared N=262144 k=16: node HEM 20557.6 ms
+Prepared N=262144 k=32: node HEM 20570.1 ms
+Prepared N=262144 k=64: node HEM 20626.5 ms
+Completed N=262144, F=128: 104 validated configurations
+Completed N=262144, F=512: 104 validated configurations
