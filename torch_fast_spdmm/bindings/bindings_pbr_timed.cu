@@ -25,6 +25,7 @@ class PBRTimedSpMM {
                rem_indptr_, rem_col_ind_, rem_vals_, x3_, y_;
     int cols_, rows_, block_rows_, block_cols_, csr_mode_, smem_size_, device_;
     bool diagnostic_;
+    bool squeeze_output_;
     cudaStream_t cur_stream_ = nullptr, block_stream_ = nullptr, csr_stream_ = nullptr;
     cudaEvent_t start_ = nullptr, end_ = nullptr;
 
@@ -49,7 +50,7 @@ public:
           rem_vals_(rem_vals), x3_((x.dim() == 2) ? x.unsqueeze(0) : x),
           cols_(cols), rows_(rows), block_rows_(block_rows), block_cols_(block_cols),
           csr_mode_(csr_mode), smem_size_(smem_size), device_(x.get_device()),
-          diagnostic_(diagnostic_raw_store) {
+          diagnostic_(diagnostic_raw_store), squeeze_output_(x.dim() == 2) {
         TORCH_CHECK(x.is_cuda() && x.scalar_type() == at::kFloat,
                     "PBRTimedSpMM: X must be a CUDA FP32 tensor");
         TORCH_CHECK(x.dim() == 2 || x.dim() == 3, "PBRTimedSpMM: X must be 2D or 3D");
@@ -100,7 +101,8 @@ public:
             block_codes_, block_coords_, block_offsets_, block_data_,
             rem_indptr_, rem_col_ind_, rem_vals_, x3_, csr_mode_, smem_size_,
             cur_stream_, block_stream_, csr_stream_);
-        return y_;
+        // Matches pbr_matmul's y.squeeze(0) for 2D input.
+        return squeeze_output_ ? y_.squeeze(0) : y_;
     }
 
     // Brackets exactly: the Y memset, the block kernel, the CSR-remainder
@@ -136,7 +138,7 @@ public:
     at::Tensor output() const {
         TORCH_CHECK(!diagnostic_,
                     "PBRTimedSpMM(diagnostic_raw_store=True)'s output is not meaningful");
-        return y_;
+        return squeeze_output_ ? y_.squeeze(0) : y_;
     }
     py::dict info() const {
         py::dict d;
