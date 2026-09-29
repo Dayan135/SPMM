@@ -436,3 +436,6 @@ __all__ = [
 
 from .boo_plan import BOOExecutionPlan, prepare_boo_cuda
 __all__ += ['BOOExecutionPlan', 'prepare_boo_cuda']
+
+from .boo_rowexcl import BOORowExclusivePlan, prepare_boo_rowexcl, boo_rowexcl_matmul
+__all__ += ['BOORowExclusivePlan', 'prepare_boo_rowexcl', 'boo_rowexcl_matmul']
