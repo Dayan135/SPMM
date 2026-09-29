@@ -176,7 +176,7 @@ void bind_boo_timed_functions(py::module_& m) {
         .def(py::init<int, int, int, int, int, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
                       at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
                       at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
-                      int, int, int, bool, bool>(),
+                      at::Tensor, int, int, int, bool, bool>(),
              py::arg("rows"), py::arg("cols"), py::arg("max_nr"), py::arg("max_nc"),
              py::arg("max_nnz_blk"), py::arg("row_grp_ptr"), py::arg("row_ids"),
              py::arg("col_grp_ptr"), py::arg("col_ids"), py::arg("blk_row_grp"),

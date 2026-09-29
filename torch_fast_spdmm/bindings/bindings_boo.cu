@@ -384,13 +384,26 @@ at::Tensor boo_spmm_cuda_planned(
 }
 
 // Explicit instantiation so bindings_boo_timed.cu (a separate translation
-// unit) can call this template function -- only fp32 needed there.
+// unit) can call this template function -- only fp32 needed there. Must
+// match boo_run_into's declared parameter list exactly: Y; rows, cols,
+// max_nr, max_nc, max_nnz_blk; row_grp_ptr, row_ids, col_grp_ptr, col_ids;
+// blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift; nz_idx, nz_val;
+// rem_indptr, rem_col_ind, rem_vals; tail_row, tail_col, tail_val; X3;
+// threads, p, csr_mode; row_seg; cur/block/csr/tail_stream (17 Tensors
+// total after Y, not counting X3 separately from the rest -- X3 is the
+// 17th).
 template void boo_run_into<float>(
-    at::Tensor, int, int, int, int, int, const at::Tensor, const at::Tensor, const at::Tensor,
-    const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
-    const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
-    const at::Tensor, const at::Tensor, int, int, int, bool,
-    cudaStream_t, cudaStream_t, cudaStream_t, cudaStream_t);
+    /* Y */            at::Tensor,
+    /* rows..nnz_blk */ int, int, int, int, int,
+    /* row/col ptrs */  const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
+    /* blk_* */         const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
+    /* nz_idx/val */    const at::Tensor, const at::Tensor,
+    /* rem_* */         const at::Tensor, const at::Tensor, const at::Tensor,
+    /* tail_* */        const at::Tensor, const at::Tensor, const at::Tensor,
+    /* X3 */            const at::Tensor,
+    /* threads,p,csr_mode */ int, int, int,
+    /* row_seg */       bool,
+    /* streams */       cudaStream_t, cudaStream_t, cudaStream_t, cudaStream_t);
 
 void bind_boo_functions(pybind11::module_& m) {
     m.def("boo_spmm_cuda_f32", &boo_spmm_cuda_dispatch<float>);
