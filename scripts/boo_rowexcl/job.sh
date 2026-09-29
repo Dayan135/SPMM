@@ -38,6 +38,10 @@ if [ "$1" = validate ]; then
 elif [ "$1" = smoke ]; then
     cd tests/torch_fast_spdmm
     python -m benchmark.bench_boo_rowexcl --out ../../results/smoke --replicate 1 --sizes 1024 --profiles fem2d_permuted diag_skewed pattern_row_skewed --features 128 512 --boo-k 8 32 --warmup 2 --repeats 3
+elif [ "$1" = profile ]; then
+    cd tests/torch_fast_spdmm
+    ncu --version > ../../results/ncu_version.txt
+    python -m benchmark.profile_boo_rowexcl --grid --selection ../../results/phase_a_profile_selection.json --out ../../results/ncu
 else
     cd tests/torch_fast_spdmm
     python -m benchmark.bench_boo_rowexcl --out "../../results/phase_a_job$1" --replicate "$1"
