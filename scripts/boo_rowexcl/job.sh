@@ -35,6 +35,9 @@ for module in (m, core):
 CHECK
 if [ "$1" = validate ]; then
     python -m pytest tests/torch_fast_spdmm/test_boo_rowexcl.py tests/torch_fast_spdmm/test_boo.py tests/torch_fast_spdmm/test_cusparse_direct.py --boo-require-cuda -q > correctness.log 2>&1
+elif [ "$1" = smoke ]; then
+    cd tests/torch_fast_spdmm
+    python -m benchmark.bench_boo_rowexcl --out ../../results/smoke --replicate 1 --sizes 1024 --profiles fem2d_permuted diag_skewed pattern_row_skewed --features 128 512 --boo-k 8 32 --warmup 2 --repeats 3
 else
     cd tests/torch_fast_spdmm
     python -m benchmark.bench_boo_rowexcl --out "../../results/phase_a_job$1" --replicate "$1"
