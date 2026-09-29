@@ -158,7 +158,8 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_zero_idle_kern
 // global X and shared memory; the launcher guarantees this before dispatching.
 template <typename index_t, typename scalar_t,
           int BLOCK_ROWS, int BLOCK_COLS,
-          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE>
+          int TOTAL_SHARED, int THREADS_PER_BLOCK, int FEAT_BLOCK_SIZE,
+          bool DIAG_RAW_STORE = false>
 __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
     const uint32_t num_pbr_blocks,
     const uint32_t features,
@@ -306,7 +307,17 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 16) pbr_spmm_vec_kernel(
             yu.v = *reinterpret_cast<const vec_t*>(&smem_Y[pr * current_p + f_off]);
             #pragma unroll
             for (int l = 0; l < L; ++l) {
-                atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
+                // DIAG_RAW_STORE: diagnostic-only upper-bound timing variant.
+                // A plain store drops any other block's concurrent
+                // contribution to this same (row, feature) -- output is
+                // incorrect by construction. Never used outside
+                // PBRTimedSpMM(diagnostic_raw_store=True); see
+                // bindings_pbr_timed.cu.
+                if constexpr (DIAG_RAW_STORE) {
+                    Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l] = yu.s[l];
+                } else {
+                    atomicAdd(&Y[(batch_idx * rows * features) + (global_r * features) + base_f + f_off + l], yu.s[l]);
+                }
             }
         }
 
@@ -382,6 +393,72 @@ template void launch_pbr_spmm<int32_t, float>(const int, const int, const int, c
 template void launch_pbr_spmm<int64_t, float>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const float*, const float*, float*, cudaStream_t, int);
 template void launch_pbr_spmm<int32_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int32_t*, const int32_t*, const double*, const double*, double*, cudaStream_t, int);
 template void launch_pbr_spmm<int64_t, double>(const int, const int, const int, const int, const int, const int, const int, const int64_t*, const int64_t*, const int64_t*, const double*, const double*, double*, cudaStream_t, int);
+
+// Diagnostic-only upper-bound timing variant: the block kernel's Step C
+// atomicAdd is replaced with a plain store (DIAG_RAW_STORE=true). Output is
+// incorrect by construction (drops any other block's concurrent contribution
+// to the same (row, feature)) -- never call this expecting correct results.
+// fp32/int32 only, matching PBRTimedSpMM's scope. Only covers
+// pbr_spmm_vec_kernel, since that's the only variant launch_pbr_spmm ever
+// selects for this benchmark's feature counts (features % 4 == 0 for fp32 --
+// see the use_vec check above); throws otherwise rather than silently
+// building/profiling a variant nothing exercises.
+void launch_pbr_diag_block_spmm(
+    const int num_pbr_blocks,
+    const int features,
+    const int batch_size,
+    const int cols,
+    const int rows,
+    const int runtime_block_rows,
+    const int runtime_block_cols,
+    const int64_t* block_codes,
+    const int32_t* block_coords,
+    const int32_t* block_offsets,
+    const float* block_data,
+    const float* X,
+    float* Y,
+    cudaStream_t stream,
+    int smem_size
+) {
+    if (num_pbr_blocks == 0) {
+        return;
+    }
+
+    constexpr int THREADS_PER_BLOCK = 128;
+    constexpr int FEAT_BLOCK_SIZE   = 512;
+    constexpr int L = PbrVec<float>::lanes;
+
+    if (features % L != 0) {
+        throw std::invalid_argument(
+            "launch_pbr_diag_block_spmm only covers pbr_spmm_vec_kernel; "
+            "features must be a multiple of PbrVec<float>::lanes (4)");
+    }
+
+    const int feat_blocks = (features + FEAT_BLOCK_SIZE - 1) / FEAT_BLOCK_SIZE;
+    const dim3 grid(num_pbr_blocks, batch_size, feat_blocks);
+    const dim3 block(THREADS_PER_BLOCK);
+
+    #define PBR_DIAG_LAUNCH(BR, BC, TS)                                                              \
+        pbr_spmm_vec_kernel<int32_t, float, BR, BC, TS, THREADS_PER_BLOCK,                           \
+                            FEAT_BLOCK_SIZE, true><<<grid, block, 0, stream>>>(                       \
+            num_pbr_blocks, features, batch_size, cols, rows,                                        \
+            block_codes, block_coords, block_offsets, block_data, X, Y)
+
+    #define DISPATCH_SMEM_DIAG(BR, BC)                        \
+        do {                                                  \
+            if      (smem_size <= 512)  PBR_DIAG_LAUNCH(BR, BC,  512); \
+            else if (smem_size <= 1024) PBR_DIAG_LAUNCH(BR, BC, 1024); \
+            else                        PBR_DIAG_LAUNCH(BR, BC, 2048); \
+        } while (0)
+
+    if      (runtime_block_rows == 2 && runtime_block_cols == 2) DISPATCH_SMEM_DIAG(2, 2);
+    else if (runtime_block_rows == 4 && runtime_block_cols == 4) DISPATCH_SMEM_DIAG(4, 4);
+    else if (runtime_block_rows == 8 && runtime_block_cols == 8) DISPATCH_SMEM_DIAG(8, 8);
+    else throw std::invalid_argument("Unsupported block size for PBR diagnostic SpMM. Only 2x2, 4x4, and 8x8 are supported.");
+
+    #undef PBR_DIAG_LAUNCH
+    #undef DISPATCH_SMEM_DIAG
+}
 
 
 // ===========================================================================

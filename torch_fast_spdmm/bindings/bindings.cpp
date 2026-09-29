@@ -14,6 +14,8 @@
 void bind_cuda_functions(py::module_& m);
 void bind_boo_functions(py::module_& m);
 void bind_cusparse_functions(py::module_& m);
+void bind_pbr_timed_functions(py::module_& m);
+void bind_boo_timed_functions(py::module_& m);
 #endif
 
 // T and S must be macro parameters here: tokens named T/S inside a nested
@@ -224,5 +226,7 @@ PYBIND11_MODULE(torch_fast_spdmm_core, m) {
     bind_cuda_functions(m);
     bind_cusparse_functions(m);
     bind_boo_functions(m);
+    bind_pbr_timed_functions(m);
+    bind_boo_timed_functions(m);
     #endif
 }
