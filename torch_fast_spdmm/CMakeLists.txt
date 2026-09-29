@@ -27,7 +27,7 @@ find_package(CUDAToolkit REQUIRED)
 
 set(CPP_SOURCES bindings/bindings.cpp pbr_matrix/pbr_matrix.cpp)
 
-set(CU_SOURCES bindings/bindings_kernels.cu kernels/csr_kernels.cu kernels/pbr_kernel.cu)
+set(CU_SOURCES bindings/bindings_kernels.cu bindings/bindings_cusparse.cu kernels/csr_kernels.cu kernels/pbr_kernel.cu)
 add_definitions(-DCUDA_ENABLED=1)
 
 add_library(torch_fast_spdmm_core MODULE
@@ -51,6 +51,7 @@ target_compile_options(torch_fast_spdmm_core PRIVATE
 target_link_libraries(torch_fast_spdmm_core PRIVATE
   ${TORCH_LIBRARIES}
   pybind11::module
+  CUDA::cusparse
 )
 
 set_target_properties(torch_fast_spdmm_core PROPERTIES

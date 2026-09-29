@@ -27,6 +27,7 @@ if compile_cuda:
     extension = CUDAExtension(name='torch_fast_spdmm_core',
                               sources=cpp_files,
                               include_dirs=include_dirs,
+                              libraries=['cusparse'],
                               extra_compile_args={'nvcc': ['-std=c++20'],
                                                   'cxx': ['-DCUDA_ENABLED=1', '-O3', '-std=c++20', '-w']})
 else:

@@ -1,4 +1,4 @@
-"""Paired PBR / BOO / PyTorch cuSPARSE CSR benchmark.
+"""Paired PBR / BOO / PyTorch CSR and optional direct cuSPARSE benchmark.
 
 Run from tests/torch_fast_spdmm on a GPU node after rebuilding the extension:
     python -m benchmark.bench_spmm --out results/spmm
@@ -7,7 +7,8 @@ Each configuration receives five warmup calls and twenty individually timed
 calls by default. All variants use identical A and X in one process. Conversion,
 staging, validation and logging are outside the timed interval. Times are CUDA
 event elapsed milliseconds for a complete matmul call, including output
-initialization and stream joins, not isolated kernel durations.
+initialization and stream joins. With --direct-cusparse, direct plans instead
+reuse output and workspace and time only cusparseSpMM using C++ CUDA events.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import json
 import os
 from pathlib import Path
 import random
+import socket
 import statistics
 import subprocess
 import time
@@ -34,6 +36,7 @@ from benchmark.profile_pbr import _MATRIX_PROFILES, build_matrix
 
 
 PBR_CONFIGS = ['2:2', '2:3', '4:2', '4:4', '4:8', '8:2', '8:8', '8:12']
+DIRECT_ALGORITHMS = ['DEFAULT', 'CSR_ALG1', 'CSR_ALG2', 'CSR_ALG3']
 
 
 def pbr_config(value):
@@ -63,6 +66,8 @@ def parse_args(argv=None):
     p.add_argument('--warmup', type=int, default=5)
     p.add_argument('--repeats', type=int, default=20)
     p.add_argument('--seed', type=int, default=0)
+    p.add_argument('--direct-cusparse', action='store_true',
+                   help='Add four persistent cusparseSpMM plans; time only SpMM in C++ CUDA events')
     p.add_argument('--out', type=Path, default=Path('results/spmm'))
     p.add_argument('--project', default='torch-fast-spdmm')
     p.add_argument('--entity', default=None)
@@ -117,6 +122,7 @@ def source_metadata(root):
         'gpu': props.name, 'gpu_memory_bytes': props.total_memory,
         'gpu_capability': list(torch.cuda.get_device_capability(0)),
         'slurm_job_id': os.environ.get('SLURM_JOB_ID'),
+        'node': socket.gethostname(),
         'timing': 'CUDA event elapsed ms per complete matmul call; resident inputs',
         'baseline': 'torch.sparse.mm with CUDA CSR, float32 values, int32 indices',
     }
@@ -132,7 +138,8 @@ def configurations(a):
         for k in a.boo_k:
             result.append(dict(algorithm='boo', config=f'boo_{cluster}_k{k}', cluster=cluster,
                                k=k, threads=a.boo_threads, p=a.boo_p, kernel='rowseg',
-                               small_block_policy='remainder', small_block_threshold=4))
+                               small_block_policy='remainder', small_block_threshold=4,
+                               hem_feasible_first=False, launch_mode='legacy'))
     return result
 
 
@@ -193,6 +200,8 @@ def build_variants(mat, configs, seed):
 
 
 def matmul(config, obj, x):
+    if config['algorithm'] == 'cusparse_direct':
+        return obj.run()
     if config['algorithm'] == 'cusparse_csr':
         return torch.sparse.mm(obj, x)
     if config['algorithm'] == 'pbr':
@@ -211,13 +220,45 @@ def round_orders(count, repeats, seed):
     return [order[r % count:] + order[:r % count] for r in range(repeats)]
 
 
-def measure_cell(variants, mat, x_cpu, warmup, repeats, seed):
+def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=()):
     x = x_cpu.to('cuda')
+    variants = [(dict(config), obj) for config, obj in variants]
+    for config, obj in variants:
+        config['timing_scope'] = 'full_call'
+        if config['algorithm'] in ('pbr', 'boo'):
+            family = 'block' if config['algorithm'] == 'pbr' else 'boo'
+            config['execution_path'] = ('csr_only' if config['compressed_fraction'] == 0 else
+                                         f'{family}+csr' if config['remainder_nnz'] else family)
+        else:
+            config['execution_path'] = 'torch.sparse.mm'
+    if direct_algorithms:
+        csr = next(obj for config, obj in variants if config['algorithm'] == 'cusparse_csr')
+        for algorithm in direct_algorithms:
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            plan = core.DirectSpMM(csr.crow_indices(), csr.col_indices(), csr.values(), x, algorithm)
+            torch.cuda.synchronize()
+            config = dict(algorithm='cusparse_direct', config=f'direct_{algorithm}',
+                          direct_algorithm=algorithm, timing_scope='cusparseSpMM_only',
+                          execution_path='cusparseSpMM', alpha=1., beta=0., dense_layout='row_major',
+                          compressed_fraction=None, remainder_nnz=None, num_blocks=None,
+                          plan_build_ms=1000*(time.perf_counter()-t0), **plan.info())
+            variants.append((config, plan))
     # An independent reference from the original sparse matrix; never densify A.
     reference = mat.astype(np.float64) @ x_cpu.numpy().astype(np.float64)
     validation = {}
     for config, obj in variants:
-        y = matmul(config, obj, x)
+        if not config.get('supported', True):
+            validation[config['config']] = None
+            continue
+        try:
+            y = matmul(config, obj, x)
+        except RuntimeError as exc:
+            if config['algorithm'] != 'cusparse_direct' or 'CUSPARSE_STATUS_NOT_SUPPORTED' not in str(exc):
+                raise
+            config.update(supported=False, unsupported_reason=str(exc))
+            validation[config['config']] = None
+            continue
         actual = y.cpu().numpy().astype(np.float64)
         np.testing.assert_allclose(actual, reference, rtol=1e-4, atol=1e-4,
                                    err_msg=config['config'])
@@ -226,6 +267,8 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed):
     del reference
     # No conversions, checks, host transfers or logging during warmup/timing.
     for config, obj in variants:
+        if not config.get('supported', True):
+            continue
         for _ in range(warmup):
             matmul(config, obj, x)
     torch.cuda.synchronize()
@@ -239,27 +282,42 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed):
     for repeat, order in enumerate(round_orders(len(variants), repeats, seed)):
         for position, index in enumerate(order):
             config, obj = variants[index]
-            start.record()
-            y = matmul(config, obj, x)
-            end.record()
-            end.synchronize()
-            ms = start.elapsed_time(end)
+            if not config.get('supported', True):
+                continue
+            if config['algorithm'] == 'cusparse_direct':
+                ms = obj.timed_run()
+            else:
+                start.record()
+                y = matmul(config, obj, x)
+                end.record()
+                end.synchronize()
+                ms = start.elapsed_time(end)
+                del y
             if not np.isfinite(ms) or ms <= 0:
                 raise RuntimeError(f"Invalid elapsed time for {config['config']}: {ms}")
             samples.append(dict(config=config['config'], algorithm=config['algorithm'],
                                 repeat=repeat + 1, position=position, time_ms=ms))
-            del y
     summaries = []
     baseline = statistics.median(s['time_ms'] for s in samples if s['algorithm'] == 'cusparse_csr')
+    direct_medians = [statistics.median([s['time_ms'] for s in samples if s['config'] == c['config']])
+                      for c, _ in variants if c['algorithm'] == 'cusparse_direct' and c.get('supported', True)]
+    direct_baseline = min(direct_medians) if direct_medians else None
     for config, _ in variants:
         values = [s['time_ms'] for s in samples if s['config'] == config['config']]
+        if not values:
+            summaries.append(dict(config, time_ms=None, median_ms=None, mean_ms=None, min_ms=None,
+                                  max_ms=None, std_ms=None, p25_ms=None, p75_ms=None, repeats=0,
+                                  warmup=0, max_abs_error=None, correctness='not_supported',
+                                  speedup_vs_cusparse=None, speedup_vs_direct=None))
+            continue
         median = statistics.median(values)
         summaries.append(dict(config, time_ms=median, median_ms=median,
                               mean_ms=statistics.mean(values), min_ms=min(values), max_ms=max(values),
                               std_ms=statistics.stdev(values) if len(values) > 1 else 0.0,
                               p25_ms=float(np.percentile(values, 25)), p75_ms=float(np.percentile(values, 75)),
                               repeats=repeats, warmup=warmup, max_abs_error=validation[config['config']],
-                              correctness='passed', speedup_vs_cusparse=baseline / median))
+                              correctness='passed', speedup_vs_cusparse=baseline / median,
+                              speedup_vs_direct=direct_baseline / median if direct_baseline else None))
     return summaries, samples
 
 
@@ -288,6 +346,9 @@ def main(argv=None, configuration_factory=configurations):
     metadata = source_metadata(Path(__file__).resolve().parents[3])
     configs = configuration_factory(a)
     metadata['benchmark_configurations'] = configs
+    metadata['direct_algorithms'] = DIRECT_ALGORITHMS if a.direct_cusparse else []
+    metadata['direct_timing'] = ('C++ CUDA events bracket only cusparseSpMM; alpha=1 beta=0, row-major X/Y; '
+                                'per-algorithm descriptors, output/workspace reused; bufferSize and preprocess once outside timing')
     args_dict = dict(vars(a), out=str(a.out))
     run = wandb.init(project=a.project, entity=a.entity, name=a.name, mode=a.wandb_mode,
                      config=dict(args_dict, **metadata), dir=str(a.out))
@@ -318,7 +379,8 @@ def main(argv=None, configuration_factory=configurations):
                                       features=features, nnz=int(mat.nnz), dtype='float32', index_dtype='int32',
                                       seed=a.seed, matrix_sha256=matrix_hash, x_sha256=digest_arrays(x_cpu.numpy()),
                                       source_sha256=metadata['source_sha256'], wandb_run_id=run.id)
-                        summaries, samples = measure_cell(variants, mat, x_cpu, a.warmup, a.repeats, a.seed)
+                        summaries, samples = measure_cell(variants, mat, x_cpu, a.warmup, a.repeats, a.seed,
+                                                          DIRECT_ALGORITHMS if a.direct_cusparse else ())
                         summaries = [dict(common, **s) for s in summaries]
                         samples = [dict(common, **s) for s in samples]
                         if summary_columns is None:
@@ -330,6 +392,9 @@ def main(argv=None, configuration_factory=configurations):
                         # Small per-cell tables avoid W&B table row truncation.
                         run.log({f'summary/{cell}': table(summaries), f'samples/{cell}': table(samples)})
                         for row in summaries:
+                            if row['median_ms'] is None:
+                                print(f"{cell} {row['config']}: {row.get('unsupported_reason')}", flush=True)
+                                continue
                             print(f"{cell:42s} {row['config']:25s} {row['median_ms']:10.5f} ms "
                                   f"IQR [{row['p25_ms']:.5f}, {row['p75_ms']:.5f}] "
                                   f"speedup {row['speedup_vs_cusparse']:.3f}x", flush=True)
