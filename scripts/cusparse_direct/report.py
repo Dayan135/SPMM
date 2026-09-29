@@ -17,6 +17,9 @@ def read_csv(path):
 
 def write_csv(path, rows):
     columns = list(dict.fromkeys(k for r in rows for k in r))
+    if not columns:  # A trace may contain no memcpy/memset activities.
+        columns = ['profile', 'requested_size', 'features', 'slurm_job_id', 'node',
+                   'kind', 'start_ns', 'end_ns', 'duration_ms', 'bytes', 'stream', 'correlation_id']
     with path.open('w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=columns)
         writer.writeheader()
@@ -82,6 +85,7 @@ def profile_rows(root, expected):
                 activities.append(row)
                 cell_activities.append(row)
         union = merged_duration([(r['start_ns'], r['end_ns']) for r in cell_kernels+cell_activities])
+        spmm_union = merged_duration([(r['start_ns'], r['end_ns']) for r in cell_kernels if r['is_spmm']])
         summaries.append(dict(common, kernel_count=len(cell_kernels),
                               spmm_kernel_count=sum(r['is_spmm'] for r in cell_kernels),
                               all_kernel_ms=sum(r['duration_ms'] for r in cell_kernels),
@@ -89,6 +93,9 @@ def profile_rows(root, expected):
                               other_kernel_ms=sum(r['duration_ms'] for r in cell_kernels if not r['is_spmm']),
                               memory_activity_ms=sum(r['duration_ms'] for r in cell_activities),
                               gpu_activity_union_ms=union,
+                              spmm_activity_union_ms=spmm_union,
+                              outside_spmm_ms=meta['profiled_event_ms']-spmm_union,
+                              outside_spmm_fraction=1-spmm_union/meta['profiled_event_ms'],
                               profiled_event_ms=meta['profiled_event_ms'],
                               event_minus_gpu_activity_ms=meta['profiled_event_ms']-union,
                               host_call_ms=meta['host_call_ms']))
@@ -175,9 +182,15 @@ def main():
     with gzip.open(a.out / 'CUSPARSE_DIRECT_samples.csv.gz', 'wt', newline='') as f:
         w = csv.DictWriter(f, fieldnames=list(samples[0])); w.writeheader(); w.writerows(samples)
     (a.out / 'CUSPARSE_DIRECT_metadata.json').write_text(json.dumps(metas, indent=2)+'\n')
+    profile_metadata = [json.loads(p.read_text()) for p in sorted((a.results/'profiles').glob('*.json'))]
+    (a.out / 'CUSPARSE_DIRECT_profiles_metadata.json').write_text(json.dumps(profile_metadata, indent=2)+'\n')
+    profiler_version = (a.results / 'nsys_version.txt').read_text().strip()
+    validation = (a.results.parent / 'correctness.log').read_text().splitlines()[-1]
     lines = ['# Direct cuSPARSE comparison', '',
              f"Measured source commit: `{metas[0]['git_commit']}`. Source SHA256: `{metas[0]['source_sha256']}`. Extension SHA256: `{metas[0]['extension_sha256']}`.", '',
              f"GPU: {metas[0]['gpu']}; PyTorch {metas[0]['torch_version']}; PyTorch CUDA {metas[0]['cuda_version']}. Runtime cuSPARSE version(s): " + ', '.join(sorted({r['cusparse_version'] for r in raw if r.get('cusparse_version')})) + '.', '',
+             'cuSPARSE build-header version(s): ' + ', '.join(sorted({r['cusparse_header_version'] for r in raw if r.get('cusparse_header_version')})) + '. Runtime and header versions are recorded separately; the extension was built with the cluster conda CUDA 12.9 toolkit.', '',
+             f'Validation: `{validation}`. Profiler: {profiler_version}.', '',
              '| Replicate | Slurm job | GPU node |', '|---|---|---|']
     lines += [f"| {i} | {m['slurm_job_id']} | {m['node']} |" for i, m in enumerate(metas, 1)]
     lines += ['', 'All 84 workloads use FP32 CSR values, int32 indices, seeded identical A and X across methods and jobs: 14 profiles × N={16,384; 65,536; 262,144} × F={128; 512}. Matrix and X hashes are checked by the report generator. Every supported result passed an independent SciPy FP64 reference at rtol=atol=1e-4.', '',
@@ -202,15 +215,16 @@ def main():
     lines += ['', '## One-call torch.sparse.mm traces', '',
               'Nsight Systems captures exactly one warmed call per workload in a separate process, after the timed sweep in replicate 1. Capture uses cudaProfilerApi; no kernel filter. [Every launched kernel and its duration](CUSPARSE_DIRECT_torch_kernels.csv), [memory activities](CUSPARSE_DIRECT_torch_memory.csv), and [per-call decomposition](CUSPARSE_DIRECT_torch_profiles.csv) are retained. Kernel names containing `spmm` or `csrmm` are classified as SpMM; all names remain auditable.', '',
               'The table below uses the same profiled call for CUDA-event time and trace durations. GPU activity is the union of kernel and memory-operation intervals; event minus that union includes launch gaps and instrumentation overhead, not a pure CPU cost. Kernel durations can overlap, so their sum need not equal GPU busy time. Profiling perturbs execution: these traces are diagnostics, not the timing used for speedups. No subtraction is made between a profiled kernel time and an unprofiled benchmark time.', '',
-              '| Profile | N | F | Kernels | Profiled event ms | SpMM kernels ms | Other kernels ms | Memory ms | Event minus GPU busy ms |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
+              '| Profile | N | F | Kernels | Profiled event ms | SpMM kernels ms | Other kernels ms | Memory ms | Event minus GPU busy ms | Outside SpMM |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
     for r in sorted(profile_summary, key=lambda r: (r['requested_size'],r['features'],r['profile'])):
-        lines.append(f"| {r['profile']} | {r['requested_size']} | {r['features']} | {r['kernel_count']} | {r['profiled_event_ms']:.5f} | {r['spmm_kernel_ms']:.5f} | {r['other_kernel_ms']:.5f} | {r['memory_activity_ms']:.5f} | {r['event_minus_gpu_activity_ms']:.5f} |")
+        lines.append(f"| {r['profile']} | {r['requested_size']} | {r['features']} | {r['kernel_count']} | {r['profiled_event_ms']:.5f} | {r['spmm_kernel_ms']:.5f} | {r['other_kernel_ms']:.5f} | {r['memory_activity_ms']:.5f} | {r['event_minus_gpu_activity_ms']:.5f} | {r['outside_spmm_fraction']:.1%} |")
     lines += ['', '## Artifacts and reproduction', '',
               '- [All configurations, all three jobs](CUSPARSE_DIRECT_all_configs.csv), including compressed_fraction for every PBR/BOO result and direct preprocess status.',
               '- [All individual CUDA-event samples, gzip CSV](CUSPARSE_DIRECT_samples.csv.gz).',
               '- [Job metadata](CUSPARSE_DIRECT_metadata.json) and [geometric means](CUSPARSE_DIRECT_geomeans.csv).',
-              '- Submission recipe: `scripts/cusparse_direct/job.sh validate`, then separate `sbatch scripts/cusparse_direct/job.sh 1`, `2`, `3` submissions. Profiling runs after replicate 1.',
+              '- [Per-workload profiler metadata](CUSPARSE_DIRECT_profiles_metadata.json), including source, matrix and X hashes.',
+              '- Submission recipe: `sbatch scripts/cusparse_direct/job.sh validate`, then separate `sbatch scripts/cusparse_direct/job.sh 1`, `2`, `3` submissions. Set the snapshot path in the script for another checkout. Profiling runs after replicate 1.',
               '- Offline report: `python scripts/cusparse_direct/report.py <results-root>`. Raw Nsight SQLite/report files remain in `/home/dayanb/research/cusparse-direct-20260929/results/profiles`.', '']
     (a.out / 'CUSPARSE_DIRECT.md').write_text('\n'.join(lines))
     print(f'Wrote {len(raw)} configs, {len(samples)} samples, {len(kernels)} kernel events; all integrity checks passed.')

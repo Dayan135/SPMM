@@ -1,0 +1,713 @@
+[
+  {
+    "git_commit": "af0bfbc97f99a0e613fd5b4589a35b732a63e8b6",
+    "git_status": "",
+    "source_sha256": "18dabc207f3d714fe2d1a9fa59f2bec7bc4f3f7a1bfa8911da7a995bb6212e6b",
+    "extension_path": "/home/dayanb/research/cusparse-direct-20260929/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "6e0b47800d75ca19d96ad8219cac50b0cfd70b836db11ce557c837a8a886ba15",
+    "python_package_path": "/home/dayanb/research/cusparse-direct-20260929/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+    "torch_version": "2.10.0+cu128",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_memory_bytes": 25298141184,
+    "gpu_capability": [
+      8,
+      6
+    ],
+    "slurm_job_id": "21732456",
+    "node": "cs-3090-03.auth.ad.bgu.ac.il",
+    "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+    "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+    "benchmark_configurations": [
+      {
+        "algorithm": "cusparse_csr",
+        "config": "cusparse_csr"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b2_min2_sm2048",
+        "block_size": 2,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b2_min3_sm2048",
+        "block_size": 2,
+        "min_nnz": 3,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min2_sm2048",
+        "block_size": 4,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min4_sm2048",
+        "block_size": 4,
+        "min_nnz": 4,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min8_sm2048",
+        "block_size": 4,
+        "min_nnz": 8,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min2_sm2048",
+        "block_size": 8,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min8_sm2048",
+        "block_size": 8,
+        "min_nnz": 8,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min12_sm2048",
+        "block_size": 8,
+        "min_nnz": 12,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k8",
+        "cluster": "hem",
+        "k": 8,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k16",
+        "cluster": "hem",
+        "k": 16,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k32",
+        "cluster": "hem",
+        "k": 32,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k64",
+        "cluster": "hem",
+        "k": 64,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      }
+    ],
+    "direct_algorithms": [
+      "DEFAULT",
+      "CSR_ALG1",
+      "CSR_ALG2",
+      "CSR_ALG3"
+    ],
+    "direct_timing": "C++ CUDA events bracket only cusparseSpMM; alpha=1 beta=0, row-major X/Y; per-algorithm descriptors, output/workspace reused; bufferSize and preprocess once outside timing",
+    "arguments": {
+      "sizes": [
+        16384,
+        65536,
+        262144
+      ],
+      "features": [
+        128,
+        512
+      ],
+      "profiles": [
+        "fem2d",
+        "fem2d_permuted",
+        "diag_b1.0",
+        "pattern_corner_cluster",
+        "diag_b0.3",
+        "diag_b0.1",
+        "scattered_1x8",
+        "scattered_8x1",
+        "scattered_2x2",
+        "scattered_2x4",
+        "pattern_row_skewed",
+        "pattern_checkerboard",
+        "pattern_diag_stripe",
+        "diag_skewed"
+      ],
+      "pbr_configs": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          8,
+          2
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          12
+        ]
+      ],
+      "pbr_smem": [
+        2048
+      ],
+      "boo_clusters": [
+        "hem"
+      ],
+      "boo_k": [
+        8,
+        16,
+        32,
+        64
+      ],
+      "boo_threads": 256,
+      "boo_p": 64,
+      "warmup": 5,
+      "repeats": 20,
+      "seed": 0,
+      "direct_cusparse": true,
+      "out": "../../results/job1",
+      "project": "torch-fast-spdmm",
+      "entity": null,
+      "name": null,
+      "wandb_mode": "disabled"
+    },
+    "wandb_run_id": "mitzufqv",
+    "wandb_url": null,
+    "status": "complete",
+    "completed_cells": 84
+  },
+  {
+    "git_commit": "af0bfbc97f99a0e613fd5b4589a35b732a63e8b6",
+    "git_status": "",
+    "source_sha256": "18dabc207f3d714fe2d1a9fa59f2bec7bc4f3f7a1bfa8911da7a995bb6212e6b",
+    "extension_path": "/home/dayanb/research/cusparse-direct-20260929/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "6e0b47800d75ca19d96ad8219cac50b0cfd70b836db11ce557c837a8a886ba15",
+    "python_package_path": "/home/dayanb/research/cusparse-direct-20260929/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+    "torch_version": "2.10.0+cu128",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_memory_bytes": 25298141184,
+    "gpu_capability": [
+      8,
+      6
+    ],
+    "slurm_job_id": "21732457",
+    "node": "cs-3090-04.auth.ad.bgu.ac.il",
+    "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+    "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+    "benchmark_configurations": [
+      {
+        "algorithm": "cusparse_csr",
+        "config": "cusparse_csr"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b2_min2_sm2048",
+        "block_size": 2,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b2_min3_sm2048",
+        "block_size": 2,
+        "min_nnz": 3,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min2_sm2048",
+        "block_size": 4,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min4_sm2048",
+        "block_size": 4,
+        "min_nnz": 4,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min8_sm2048",
+        "block_size": 4,
+        "min_nnz": 8,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min2_sm2048",
+        "block_size": 8,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min8_sm2048",
+        "block_size": 8,
+        "min_nnz": 8,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min12_sm2048",
+        "block_size": 8,
+        "min_nnz": 12,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k8",
+        "cluster": "hem",
+        "k": 8,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k16",
+        "cluster": "hem",
+        "k": 16,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k32",
+        "cluster": "hem",
+        "k": 32,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k64",
+        "cluster": "hem",
+        "k": 64,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      }
+    ],
+    "direct_algorithms": [
+      "DEFAULT",
+      "CSR_ALG1",
+      "CSR_ALG2",
+      "CSR_ALG3"
+    ],
+    "direct_timing": "C++ CUDA events bracket only cusparseSpMM; alpha=1 beta=0, row-major X/Y; per-algorithm descriptors, output/workspace reused; bufferSize and preprocess once outside timing",
+    "arguments": {
+      "sizes": [
+        16384,
+        65536,
+        262144
+      ],
+      "features": [
+        128,
+        512
+      ],
+      "profiles": [
+        "fem2d",
+        "fem2d_permuted",
+        "diag_b1.0",
+        "pattern_corner_cluster",
+        "diag_b0.3",
+        "diag_b0.1",
+        "scattered_1x8",
+        "scattered_8x1",
+        "scattered_2x2",
+        "scattered_2x4",
+        "pattern_row_skewed",
+        "pattern_checkerboard",
+        "pattern_diag_stripe",
+        "diag_skewed"
+      ],
+      "pbr_configs": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          8,
+          2
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          12
+        ]
+      ],
+      "pbr_smem": [
+        2048
+      ],
+      "boo_clusters": [
+        "hem"
+      ],
+      "boo_k": [
+        8,
+        16,
+        32,
+        64
+      ],
+      "boo_threads": 256,
+      "boo_p": 64,
+      "warmup": 5,
+      "repeats": 20,
+      "seed": 0,
+      "direct_cusparse": true,
+      "out": "../../results/job2",
+      "project": "torch-fast-spdmm",
+      "entity": null,
+      "name": null,
+      "wandb_mode": "disabled"
+    },
+    "wandb_run_id": "h4qa4pq7",
+    "wandb_url": null,
+    "status": "complete",
+    "completed_cells": 84
+  },
+  {
+    "git_commit": "af0bfbc97f99a0e613fd5b4589a35b732a63e8b6",
+    "git_status": "",
+    "source_sha256": "18dabc207f3d714fe2d1a9fa59f2bec7bc4f3f7a1bfa8911da7a995bb6212e6b",
+    "extension_path": "/home/dayanb/research/cusparse-direct-20260929/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "6e0b47800d75ca19d96ad8219cac50b0cfd70b836db11ce557c837a8a886ba15",
+    "python_package_path": "/home/dayanb/research/cusparse-direct-20260929/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+    "torch_version": "2.10.0+cu128",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_memory_bytes": 25298141184,
+    "gpu_capability": [
+      8,
+      6
+    ],
+    "slurm_job_id": "21732458",
+    "node": "cs-3090-05.auth.ad.bgu.ac.il",
+    "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+    "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+    "benchmark_configurations": [
+      {
+        "algorithm": "cusparse_csr",
+        "config": "cusparse_csr"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b2_min2_sm2048",
+        "block_size": 2,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b2_min3_sm2048",
+        "block_size": 2,
+        "min_nnz": 3,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min2_sm2048",
+        "block_size": 4,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min4_sm2048",
+        "block_size": 4,
+        "min_nnz": 4,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b4_min8_sm2048",
+        "block_size": 4,
+        "min_nnz": 8,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min2_sm2048",
+        "block_size": 8,
+        "min_nnz": 2,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min8_sm2048",
+        "block_size": 8,
+        "min_nnz": 8,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "pbr",
+        "config": "pbr_b8_min12_sm2048",
+        "block_size": 8,
+        "min_nnz": 12,
+        "smem_size": 2048,
+        "kernel": "block"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k8",
+        "cluster": "hem",
+        "k": 8,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k16",
+        "cluster": "hem",
+        "k": 16,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k32",
+        "cluster": "hem",
+        "k": 32,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      },
+      {
+        "algorithm": "boo",
+        "config": "boo_hem_k64",
+        "cluster": "hem",
+        "k": 64,
+        "threads": 256,
+        "p": 64,
+        "kernel": "rowseg",
+        "small_block_policy": "remainder",
+        "small_block_threshold": 4,
+        "hem_feasible_first": false,
+        "launch_mode": "legacy"
+      }
+    ],
+    "direct_algorithms": [
+      "DEFAULT",
+      "CSR_ALG1",
+      "CSR_ALG2",
+      "CSR_ALG3"
+    ],
+    "direct_timing": "C++ CUDA events bracket only cusparseSpMM; alpha=1 beta=0, row-major X/Y; per-algorithm descriptors, output/workspace reused; bufferSize and preprocess once outside timing",
+    "arguments": {
+      "sizes": [
+        16384,
+        65536,
+        262144
+      ],
+      "features": [
+        128,
+        512
+      ],
+      "profiles": [
+        "fem2d",
+        "fem2d_permuted",
+        "diag_b1.0",
+        "pattern_corner_cluster",
+        "diag_b0.3",
+        "diag_b0.1",
+        "scattered_1x8",
+        "scattered_8x1",
+        "scattered_2x2",
+        "scattered_2x4",
+        "pattern_row_skewed",
+        "pattern_checkerboard",
+        "pattern_diag_stripe",
+        "diag_skewed"
+      ],
+      "pbr_configs": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          8,
+          2
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          12
+        ]
+      ],
+      "pbr_smem": [
+        2048
+      ],
+      "boo_clusters": [
+        "hem"
+      ],
+      "boo_k": [
+        8,
+        16,
+        32,
+        64
+      ],
+      "boo_threads": 256,
+      "boo_p": 64,
+      "warmup": 5,
+      "repeats": 20,
+      "seed": 0,
+      "direct_cusparse": true,
+      "out": "../../results/job3",
+      "project": "torch-fast-spdmm",
+      "entity": null,
+      "name": null,
+      "wandb_mode": "disabled"
+    },
+    "wandb_run_id": "keh011ed",
+    "wandb_url": null,
+    "status": "complete",
+    "completed_cells": 84
+  }
+]
