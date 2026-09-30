@@ -34,10 +34,16 @@ for module in (m, core):
     assert p.startswith(root), p
 CHECK
 if [ "$1" = validate ]; then
-    python -m pytest tests/torch_fast_spdmm/test_boo_rowexcl.py tests/torch_fast_spdmm/test_boo.py tests/torch_fast_spdmm/test_cusparse_direct.py --boo-require-cuda -q > correctness.log 2>&1
+    python -m pytest tests/torch_fast_spdmm/test_boo_rowexcl.py tests/torch_fast_spdmm/test_boo.py tests/torch_fast_spdmm/test_cusparse_direct.py tests/torch_fast_spdmm/test_pbr.py --boo-require-cuda -q > correctness.log 2>&1
 elif [ "$1" = smoke ]; then
     cd tests/torch_fast_spdmm
     python -m benchmark.bench_boo_rowexcl --out ../../results/smoke --replicate 1 --sizes 1024 --profiles fem2d_permuted diag_skewed pattern_row_skewed --features 128 512 --boo-k 8 32 --warmup 2 --repeats 3
+elif [ "$1" = symmetric-smoke ]; then
+    cd tests/torch_fast_spdmm
+    python -m benchmark.bench_boo_rowexcl_symmetric --sizes 1024 --profiles fem2d_permuted diag_skewed --features 100 512 --warmup 2 --repeats 3 --wandb-mode disabled --out ../../results/phase_b_smoke
+elif [ "$1" = symmetric ]; then
+    cd tests/torch_fast_spdmm
+    python -m benchmark.bench_boo_rowexcl_symmetric --replicate "$2" --wandb-mode disabled --out "../../results/phase_b_job$2"
 elif [ "$1" = profile ]; then
     cd tests/torch_fast_spdmm
     ncu --version > ../../results/ncu_version.txt

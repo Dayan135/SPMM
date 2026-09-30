@@ -1,0 +1,7 @@
+profile,mode,k,slab,kernel_count,duration_ms,achieved_occupancy_pct,no_instruction_pct,theoretical_resident_ctas,registers_per_thread,shared_bytes
+diag_b1.0,boo,64,64,1,11.029696,33.03,0.61,,,
+diag_b1.0,rowexcl,64,32,1,12.999424,66.29,1.7299999999999998,8,64,8192
+fem2d,boo,32,64,1,9.690176,99.63,1.27,,,
+fem2d_permuted,boo,32,64,1,11.070464,99.69,1.24,,,
+fem2d_permuted,rowexcl,32,32,1,13.790783999999999,66.35,1.4999999999999998,8,64,8192
+fem2d,rowexcl,32,32,1,11.677503999999999,66.27,1.6099999999999999,8,64,8192

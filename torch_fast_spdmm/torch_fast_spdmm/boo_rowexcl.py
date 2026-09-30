@@ -25,10 +25,14 @@ class BOORowExclusivePlan:
         if getattr(self.matrix, '_gpu_meta', None) is not self.source_meta:
             raise ValueError('Row-exclusive plan no longer matches the matrix staging')
 
-    def bind(self, x):
-        """Bind resident X and allocate persistent Y/events, outside timing."""
+    def bind(self, x, *, out=None):
+        """Bind resident X and persistent Y/events outside timing.
+
+        Optional out must be disjoint from all inputs; shared outputs require
+        serialized calls on the construction stream.
+        """
         self._check()
-        return self.core_plan.bind(x)
+        return self.core_plan.bind(x) if out is None else self.core_plan.bind_output(x, out)
 
 
 def prepare_boo_rowexcl(boo, *, slab=32, max_cta_nnz=2048, max_cta_rows=32,

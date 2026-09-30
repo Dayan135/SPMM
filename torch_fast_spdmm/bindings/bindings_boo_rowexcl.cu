@@ -1,3 +1,4 @@
+#include <ATen/MemoryOverlap.h>
 #include <torch/extension.h>
 #include <pybind11/stl.h>
 #include <c10/cuda/CUDAGuard.h>
@@ -136,7 +137,7 @@ class BoundRowPlan {
     cudaEvent_t start_=nullptr,end_=nullptr;
     cudaStream_t stream_;
 public:
-    BoundRowPlan(std::shared_ptr<RowPlan>,at::Tensor);
+    BoundRowPlan(std::shared_ptr<RowPlan>,at::Tensor,at::Tensor = at::Tensor());
     ~BoundRowPlan();
     at::Tensor run();
     float timed_run();
@@ -186,6 +187,13 @@ public:
         return y;
     }
     std::shared_ptr<BoundRowPlan> bind(const at::Tensor& x) {return std::make_shared<BoundRowPlan>(shared_from_this(),x);}
+    std::shared_ptr<BoundRowPlan> bind_output(const at::Tensor& x,const at::Tensor& y) {
+        TORCH_CHECK(y.is_cuda()&&y.get_device()==device&&y.scalar_type()==at::kFloat&&y.dim()==2&&y.is_contiguous()&&y.size(0)==rows&&y.size(1)==x.size(1),"Y must be contiguous CUDA FP32 [rows, features] on the plan device");
+        at::assert_no_overlap(y,x);
+        for(const auto& a:source_) at::assert_no_overlap(y,a);
+        for(const auto& a:schedule_) at::assert_no_overlap(y,a);
+        return std::make_shared<BoundRowPlan>(shared_from_this(),x,y);
+    }
     py::dict info() const {
         c10::cuda::CUDAGuard guard(source_[6].device());
         int regs,active;
@@ -195,11 +203,11 @@ public:
         return result;
     }
 };
-BoundRowPlan::BoundRowPlan(std::shared_ptr<RowPlan> plan,at::Tensor x):plan_(std::move(plan)),x_(x) {
+BoundRowPlan::BoundRowPlan(std::shared_ptr<RowPlan> plan,at::Tensor x,at::Tensor y):plan_(std::move(plan)),x_(x) {
     plan_->check_x(x);
     c10::cuda::CUDAGuard guard(x.device());
     stream_=c10::cuda::getCurrentCUDAStream(plan_->device).stream();
-    y_=at::empty({plan_->rows,x.size(1)},x.options());
+    y_=y.defined()?y:at::empty({plan_->rows,x.size(1)},x.options());
     try {
         C10_CUDA_CHECK(cudaEventCreate(&start_)); C10_CUDA_CHECK(cudaEventCreate(&end_));
         C10_CUDA_CHECK(cudaEventRecord(start_,stream_)); C10_CUDA_CHECK(cudaEventRecord(end_,stream_));
@@ -230,7 +238,7 @@ void bind_boo_rowexcl_functions(py::module_& m) {
     m.def("build_boo_rowexcl_schedule",&build_schedule);
     py::class_<RowPlan,std::shared_ptr<RowPlan>>(m,"BOORowExclusivePlan")
         .def(py::init<int,int,std::vector<at::Tensor>,std::vector<at::Tensor>,int,int>())
-        .def("matmul",&RowPlan::matmul).def("bind",&RowPlan::bind).def("info",&RowPlan::info);
+        .def("matmul",&RowPlan::matmul).def("bind",&RowPlan::bind).def("bind_output",&RowPlan::bind_output).def("info",&RowPlan::info);
     py::class_<BoundRowPlan,std::shared_ptr<BoundRowPlan>>(m,"BoundBOORowExclusive")
         .def("run",&BoundRowPlan::run).def("timed_run",&BoundRowPlan::timed_run)
         .def_property_readonly("output",&BoundRowPlan::output);

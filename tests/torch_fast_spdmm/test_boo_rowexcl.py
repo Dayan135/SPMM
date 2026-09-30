@@ -79,3 +79,21 @@ def test_input_validation_and_stale_plan():
     boo.to('cpu')
     with pytest.raises(ValueError, match='staging'):
         spmm.boo_rowexcl_matmul(plan, torch.randn(9, 100, device='cuda'))
+
+
+def test_shared_preallocated_output():
+    a = sparse.eye(9, format='csr', dtype=np.float32)
+    boo = spmm.csr_to_boo(a).to('cuda')
+    x = torch.randn(9, 100, device='cuda')
+    out = torch.empty_like(x)
+    plans = [spmm.prepare_boo_rowexcl(boo, slab=s) for s in (16, 32, 64)]
+    for plan in plans:
+        bound = plan.bind(x, out=out)
+        out.fill_(float('nan'))
+        assert bound.output.data_ptr() == out.data_ptr()
+        bound.timed_run()
+        torch.testing.assert_close(out, x)
+    with pytest.raises(RuntimeError):
+        plans[0].bind(x, out=x)
+    with pytest.raises(RuntimeError, match='Y must be'):
+        plans[0].bind(x, out=out[:, :50])

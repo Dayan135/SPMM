@@ -22,8 +22,14 @@ Scheduling splits oversized groups only by rows. The requested cap is 2,048 nonz
 
 GPU tests passed: 281 passed, 12 skipped across row-exclusive, existing BOO, and direct-cuSPARSE tests (job 21734489). Tests cover poisoned preallocated output, empty rows/matrices, rectangular shapes, feature tails, forced row splitting/chunking, and CSR-only remainder execution. All 84 benchmark workloads passed in all three jobs; every HEM target and slab also passed the 126 extra workload cells at F=100/200/520 in job 1.
 
-## Profiling and Phase B status
+## Profiling
 
-The six requested Nsight Compute captures are running in job 21766000. They compare row-exclusive with current BOO on identical HEM groups for fem2d, fem2d_permuted, and diag_b1.0 at N=262,144, F=512. Performance numbers above are unprofiled; diagnostic counter results will be added separately.
+[Six Nsight Compute captures](BOO_ROWEXCL_NCU.md) completed in job 21766000 on ise-pheno-10 at N=262,144, F=512, using identical HEM groups for each paired mode. Row-exclusive achieved 66.27–66.35% occupancy and 1.50–1.73% `no_instruction` stalls. Current BOO achieved 99.63–99.69% occupancy on FEM and 33.03% on diag_b1.0; its corresponding stalls were 1.24–1.27% and 0.61%.
 
-Phase B is pending the other agent's pushed `CUSPARSE_DIRECT_SYMMETRIC.md` and symmetric harness. A fetch on 2026-09-30 found no commit for that path in the available remote branches. This report does not claim to have run the five-family C++ comparison yet. All work is isolated on `feat/boo-rowexcl`; no other branch or shared cluster checkout is modified.
+At slab 32, row-exclusive uses 64 registers/thread and has a resource bound of eight resident 128-thread CTAs per SM, or 66.7% of the RTX 3090's 48 warps. Measured occupancy is close to that bound. These captures do not show severe instruction-fetch starvation, but FEM loses occupancy relative to current BOO. The current design therefore avoids a collapse in achieved occupancy while still losing performance. It does not establish that ownership alone solves the earlier rowgroup performance problem.
+
+Nearly all FEM row units require multiple X chunks at the selected k=32/slab=32 (99.45% natural, 99.24% permuted), whereas diag_b1.0 at k=64 requires none. Repeated block traversal, staging, and barriers remain plausible costs; these counters do not establish a causal breakdown. Profiler durations are diagnostic and are not substituted for benchmark timings. Raw captures and per-kernel counters are retained.
+
+## Phase B status
+
+Merged the other agent's symmetric harness and report at `c2ccde58c8d6849ebdc2b86956032516538f86fa` into `feat/boo-rowexcl` only. A separate adapter imports its unchanged PBR/BOO/diagnostic registry and adds row-exclusive. Validation and the three-replicate Phase B run are pending. All real methods use C++ CUDA events and preallocated output; the intentionally incorrect no-atomic/no-zero diagnostic remains separately labeled and excluded from correctness/performance rankings. Row-exclusive sweep entries share an output buffer with serialized calls to keep the full sweep within GPU memory; no rebinding or allocation is timed.
