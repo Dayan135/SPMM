@@ -1,0 +1,224 @@
+[
+  {
+    "git_commit": "f65e4b2257e2bf1a97923923251576810a3be4bd",
+    "git_status": "?? build.log\n?? correctness.log\n?? job-21734489.err\n?? job-21734489.log\n?? job-21734672.err\n?? job-21734672.log\n?? job-21734701.err\n?? job-21734701.log\n?? job-21734702.err\n?? job-21734702.log\n?? job-21734703.err\n?? job-21734703.log\n?? results/",
+    "source_sha256": "e59607e51f2d68f78cbd84f64adf6cf89833be15d0e4744d49ddeb93c0d0a710",
+    "extension_path": "/home/dayanb/research/boo-rowexcl-20260929/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "b5e6cda34a2281339cb8a960e0218a0e908dc28f6b3ecdc84120927441a8bd55",
+    "python_package_path": "/home/dayanb/research/boo-rowexcl-20260929/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+    "torch_version": "2.10.0+cu128",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_memory_bytes": 25298141184,
+    "gpu_capability": [
+      8,
+      6
+    ],
+    "slurm_job_id": "21734701",
+    "node": "cs-3090-03.auth.ad.bgu.ac.il",
+    "timing": "5 warmups / 20 rotated individual event samples by default; C++ and full-API scopes distinct",
+    "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+    "arguments": {
+      "out": "../../results/phase_a_job1",
+      "replicate": 1,
+      "sizes": [
+        16384,
+        65536,
+        262144
+      ],
+      "features": [
+        128,
+        512
+      ],
+      "validation_features": [
+        100,
+        200,
+        520
+      ],
+      "profiles": [
+        "fem2d",
+        "fem2d_permuted",
+        "diag_b1.0",
+        "pattern_corner_cluster",
+        "diag_b0.3",
+        "diag_b0.1",
+        "scattered_1x8",
+        "scattered_8x1",
+        "scattered_2x2",
+        "scattered_2x4",
+        "pattern_row_skewed",
+        "pattern_checkerboard",
+        "pattern_diag_stripe",
+        "diag_skewed"
+      ],
+      "boo_k": [
+        8,
+        16,
+        32,
+        64
+      ],
+      "slabs": [
+        16,
+        32,
+        64
+      ],
+      "max_cta_nnz": 2048,
+      "max_cta_rows": 32,
+      "smem_bytes": 8192,
+      "warmup": 5,
+      "repeats": 20,
+      "seed": 0
+    },
+    "status": "complete",
+    "completed_cells": 84,
+    "completed_validation_cells": 210
+  },
+  {
+    "git_commit": "f65e4b2257e2bf1a97923923251576810a3be4bd",
+    "git_status": "?? build.log\n?? correctness.log\n?? job-21734489.err\n?? job-21734489.log\n?? job-21734672.err\n?? job-21734672.log\n?? job-21734701.err\n?? job-21734701.log\n?? job-21734702.err\n?? job-21734702.log\n?? job-21734703.err\n?? job-21734703.log\n?? results/",
+    "source_sha256": "e59607e51f2d68f78cbd84f64adf6cf89833be15d0e4744d49ddeb93c0d0a710",
+    "extension_path": "/home/dayanb/research/boo-rowexcl-20260929/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "b5e6cda34a2281339cb8a960e0218a0e908dc28f6b3ecdc84120927441a8bd55",
+    "python_package_path": "/home/dayanb/research/boo-rowexcl-20260929/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+    "torch_version": "2.10.0+cu128",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_memory_bytes": 25298141184,
+    "gpu_capability": [
+      8,
+      6
+    ],
+    "slurm_job_id": "21734702",
+    "node": "cs-3090-04.auth.ad.bgu.ac.il",
+    "timing": "5 warmups / 20 rotated individual event samples by default; C++ and full-API scopes distinct",
+    "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+    "arguments": {
+      "out": "../../results/phase_a_job2",
+      "replicate": 2,
+      "sizes": [
+        16384,
+        65536,
+        262144
+      ],
+      "features": [
+        128,
+        512
+      ],
+      "validation_features": [
+        100,
+        200,
+        520
+      ],
+      "profiles": [
+        "fem2d",
+        "fem2d_permuted",
+        "diag_b1.0",
+        "pattern_corner_cluster",
+        "diag_b0.3",
+        "diag_b0.1",
+        "scattered_1x8",
+        "scattered_8x1",
+        "scattered_2x2",
+        "scattered_2x4",
+        "pattern_row_skewed",
+        "pattern_checkerboard",
+        "pattern_diag_stripe",
+        "diag_skewed"
+      ],
+      "boo_k": [
+        8,
+        16,
+        32,
+        64
+      ],
+      "slabs": [
+        16,
+        32,
+        64
+      ],
+      "max_cta_nnz": 2048,
+      "max_cta_rows": 32,
+      "smem_bytes": 8192,
+      "warmup": 5,
+      "repeats": 20,
+      "seed": 0
+    },
+    "status": "complete",
+    "completed_cells": 84,
+    "completed_validation_cells": 84
+  },
+  {
+    "git_commit": "f65e4b2257e2bf1a97923923251576810a3be4bd",
+    "git_status": "?? build.log\n?? correctness.log\n?? job-21734489.err\n?? job-21734489.log\n?? job-21734672.err\n?? job-21734672.log\n?? job-21734701.err\n?? job-21734701.log\n?? job-21734702.err\n?? job-21734702.log\n?? job-21734703.err\n?? job-21734703.log\n?? results/",
+    "source_sha256": "e59607e51f2d68f78cbd84f64adf6cf89833be15d0e4744d49ddeb93c0d0a710",
+    "extension_path": "/home/dayanb/research/boo-rowexcl-20260929/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "b5e6cda34a2281339cb8a960e0218a0e908dc28f6b3ecdc84120927441a8bd55",
+    "python_package_path": "/home/dayanb/research/boo-rowexcl-20260929/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+    "torch_version": "2.10.0+cu128",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_memory_bytes": 25298141184,
+    "gpu_capability": [
+      8,
+      6
+    ],
+    "slurm_job_id": "21734703",
+    "node": "cs-3090-04.auth.ad.bgu.ac.il",
+    "timing": "5 warmups / 20 rotated individual event samples by default; C++ and full-API scopes distinct",
+    "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+    "arguments": {
+      "out": "../../results/phase_a_job3",
+      "replicate": 3,
+      "sizes": [
+        16384,
+        65536,
+        262144
+      ],
+      "features": [
+        128,
+        512
+      ],
+      "validation_features": [
+        100,
+        200,
+        520
+      ],
+      "profiles": [
+        "fem2d",
+        "fem2d_permuted",
+        "diag_b1.0",
+        "pattern_corner_cluster",
+        "diag_b0.3",
+        "diag_b0.1",
+        "scattered_1x8",
+        "scattered_8x1",
+        "scattered_2x2",
+        "scattered_2x4",
+        "pattern_row_skewed",
+        "pattern_checkerboard",
+        "pattern_diag_stripe",
+        "diag_skewed"
+      ],
+      "boo_k": [
+        8,
+        16,
+        32,
+        64
+      ],
+      "slabs": [
+        16,
+        32,
+        64
+      ],
+      "max_cta_nnz": 2048,
+      "max_cta_rows": 32,
+      "smem_bytes": 8192,
+      "warmup": 5,
+      "repeats": 20,
+      "seed": 0
+    },
+    "status": "complete",
+    "completed_cells": 84,
+    "completed_validation_cells": 84
+  }
+]

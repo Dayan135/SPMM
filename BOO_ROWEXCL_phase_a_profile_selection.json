@@ -1,0 +1,38 @@
+[
+  {
+    "profile": "diag_b1.0",
+    "mode": "rowexcl",
+    "k": 64,
+    "slab": 32
+  },
+  {
+    "profile": "diag_b1.0",
+    "mode": "boo",
+    "k": 64,
+    "slab": 32
+  },
+  {
+    "profile": "fem2d",
+    "mode": "rowexcl",
+    "k": 32,
+    "slab": 32
+  },
+  {
+    "profile": "fem2d",
+    "mode": "boo",
+    "k": 32,
+    "slab": 32
+  },
+  {
+    "profile": "fem2d_permuted",
+    "mode": "rowexcl",
+    "k": 32,
+    "slab": 32
+  },
+  {
+    "profile": "fem2d_permuted",
+    "mode": "boo",
+    "k": 32,
+    "slab": 32
+  }
+]
