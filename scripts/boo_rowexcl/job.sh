@@ -41,6 +41,13 @@ elif [ "$1" = smoke ]; then
 elif [ "$1" = symmetric-smoke ]; then
     cd tests/torch_fast_spdmm
     python -m benchmark.bench_boo_rowexcl_symmetric --sizes 1024 --profiles fem2d_permuted diag_skewed --features 100 512 --warmup 2 --repeats 3 --wandb-mode disabled --out ../../results/phase_b_smoke
+elif [ "$1" = symmetric-gate ]; then
+    for tool in memcheck racecheck synccheck; do
+        compute-sanitizer --tool "$tool" --error-exitcode 86 python -m pytest tests/torch_fast_spdmm/test_boo_rowexcl.py --boo-require-cuda -q -k '(100 and remainder) or shared_preallocated_output' > "sanitizer-$tool.log" 2>&1
+    done
+    cd tests/torch_fast_spdmm
+    python -m benchmark.bench_boo_rowexcl_symmetric --sizes 1024 --profiles fem2d_permuted diag_skewed --features 100 512 --warmup 2 --repeats 3 --wandb-mode disabled --out ../../results/phase_b_smoke
+    python -m benchmark.bench_boo_rowexcl_symmetric --sizes 262144 --profiles diag_b1.0 --features 512 --warmup 1 --repeats 1 --wandb-mode disabled --out ../../results/phase_b_memory
 elif [ "$1" = symmetric ]; then
     cd tests/torch_fast_spdmm
     python -m benchmark.bench_boo_rowexcl_symmetric --replicate "$2" --wandb-mode disabled --out "../../results/phase_b_job$2"
