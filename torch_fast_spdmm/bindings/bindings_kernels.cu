@@ -7,6 +7,87 @@
 #include "../kernels/csr_kernels.hpp"
 #include "../kernels/pbr_kernels.hpp"
 
+// Zeroes Y (via memset, on cur_stream) then runs the block kernel and CSR
+// remainder concurrently on block_stream/csr_stream, joining both back into
+// cur_stream before returning. Y must already be allocated with the right
+// shape/dtype/device (uninitialized contents are fine -- this function is the
+// sole writer of the zero). Split out of pbr_spmm_cuda_dispatch so a
+// C++-only timing harness (PBRTimedSpMM) can bracket exactly this work with
+// CUDA events, with allocation and stream setup done once outside the timed
+// region -- see bindings_pbr_timed.cu.
+template <typename index_t, typename scalar_t>
+void pbr_run_into(
+    at::Tensor Y,
+    int cols, int rows,
+    int BLOCK_ROWS, int BLOCK_COLS,
+    const at::Tensor block_codes,
+    const at::Tensor block_coords,
+    const at::Tensor block_offsets,
+    const at::Tensor block_data,
+    const at::Tensor rem_indptr,
+    const at::Tensor rem_col_ind,
+    const at::Tensor rem_vals,
+    const at::Tensor X3,
+    int csr_mode,
+    int smem_size,
+    cudaStream_t cur_stream,
+    cudaStream_t block_stream,
+    cudaStream_t csr_stream
+) {
+    const int num_pbr_blocks = (int)block_codes.size(0);
+    const int csr_nnz        = (int)rem_col_ind.size(0);
+    const int batch_size     = (int)X3.size(0);
+    const int features       = (int)X3.size(-1);
+
+    cudaMemsetAsync(Y.data_ptr<scalar_t>(), 0, Y.numel() * sizeof(scalar_t), cur_stream);
+
+    // Both new streams wait for Y to be zeroed on cur_stream
+    cudaEvent_t y_ready;
+    cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
+    cudaEventRecord(y_ready, cur_stream);
+    cudaStreamWaitEvent(block_stream, y_ready, 0);
+    cudaStreamWaitEvent(csr_stream,   y_ready, 0);
+    cudaEventDestroy(y_ready);
+
+    if (num_pbr_blocks > 0) {
+        launch_pbr_spmm<index_t, scalar_t>(
+            num_pbr_blocks, features, batch_size, cols, rows, BLOCK_ROWS, BLOCK_COLS,
+            block_codes.data_ptr<int64_t>(),
+            block_coords.data_ptr<index_t>(),
+            block_offsets.data_ptr<index_t>(),
+            block_data.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            block_stream,
+            smem_size
+        );
+    }
+
+    if (csr_nnz > 0) {
+        launch_csr_spmm<index_t, scalar_t>(
+            rows, features, batch_size, cols, csr_nnz,
+            rem_indptr.data_ptr<index_t>(),
+            rem_col_ind.data_ptr<index_t>(),
+            rem_vals.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            csr_stream,
+            csr_mode
+        );
+    }
+
+    // Rejoin both streams into cur_stream before returning
+    cudaEvent_t block_done, csr_done;
+    cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
+    cudaEventRecord(block_done, block_stream);
+    cudaEventRecord(csr_done,   csr_stream);
+    cudaStreamWaitEvent(cur_stream, block_done, 0);
+    cudaStreamWaitEvent(cur_stream, csr_done,   0);
+    cudaEventDestroy(block_done);
+    cudaEventDestroy(csr_done);
+}
+
 template <typename index_t, typename scalar_t>
 at::Tensor pbr_spmm_cuda_dispatch(
     int cols, int rows,
@@ -22,63 +103,21 @@ at::Tensor pbr_spmm_cuda_dispatch(
     int csr_mode = 0,
     int smem_size = 2048
 ) {
-    const int num_pbr_blocks = (int)block_codes.size(0);
-    const int csr_nnz        = (int)rem_col_ind.size(0);
-    const int batch_size     = (X.dim() == 3) ? (int)X.size(0) : 1;
-    const int features       = (int)X.size(-1);
+    const int batch_size = (X.dim() == 3) ? (int)X.size(0) : 1;
+    const int features   = (int)X.size(-1);
 
     at::Tensor X3 = (X.dim() == 2) ? X.unsqueeze(0) : X;
-    at::Tensor Y  = at::zeros({batch_size, rows, features}, X.options());
+    at::Tensor Y  = at::empty({batch_size, rows, features}, X.options());
 
     auto cur_stream   = at::cuda::getCurrentCUDAStream();
     auto block_stream = at::cuda::getStreamFromPool();
     auto csr_stream   = at::cuda::getStreamFromPool();
 
-    // Both new streams wait for Y to be zeroed on cur_stream
-    cudaEvent_t y_ready;
-    cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
-    cudaEventRecord(y_ready, cur_stream.stream());
-    cudaStreamWaitEvent(block_stream.stream(), y_ready, 0);
-    cudaStreamWaitEvent(csr_stream.stream(),   y_ready, 0);
-    cudaEventDestroy(y_ready);
-
-    if (num_pbr_blocks > 0) {
-        launch_pbr_spmm<index_t, scalar_t>(
-            num_pbr_blocks, features, batch_size, cols, rows, BLOCK_ROWS, BLOCK_COLS,
-            block_codes.data_ptr<int64_t>(),
-            block_coords.data_ptr<index_t>(),
-            block_offsets.data_ptr<index_t>(),
-            block_data.data_ptr<scalar_t>(),
-            X3.data_ptr<scalar_t>(),
-            Y.data_ptr<scalar_t>(),
-            block_stream.stream(),
-            smem_size
-        );
-    }
-
-    if (csr_nnz > 0) {
-        launch_csr_spmm<index_t, scalar_t>(
-            rows, features, batch_size, cols, csr_nnz,
-            rem_indptr.data_ptr<index_t>(),
-            rem_col_ind.data_ptr<index_t>(),
-            rem_vals.data_ptr<scalar_t>(),
-            X3.data_ptr<scalar_t>(),
-            Y.data_ptr<scalar_t>(),
-            csr_stream.stream(),
-            csr_mode
-        );
-    }
-
-    // Rejoin both streams into cur_stream before returning Y
-    cudaEvent_t block_done, csr_done;
-    cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
-    cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
-    cudaEventRecord(block_done, block_stream.stream());
-    cudaEventRecord(csr_done,   csr_stream.stream());
-    cudaStreamWaitEvent(cur_stream.stream(), block_done, 0);
-    cudaStreamWaitEvent(cur_stream.stream(), csr_done,   0);
-    cudaEventDestroy(block_done);
-    cudaEventDestroy(csr_done);
+    pbr_run_into<index_t, scalar_t>(
+        Y, cols, rows, BLOCK_ROWS, BLOCK_COLS,
+        block_codes, block_coords, block_offsets, block_data,
+        rem_indptr, rem_col_ind, rem_vals, X3, csr_mode, smem_size,
+        cur_stream.stream(), block_stream.stream(), csr_stream.stream());
 
     return Y;
 }
@@ -383,6 +422,13 @@ at::Tensor pbr_nnzflat_onthefly_spmm_cuda_dispatch(
 
     return Y;
 }
+
+// Explicit instantiation so bindings_pbr_timed.cu (a separate translation
+// unit) can call this template function -- only fp32/int32 needed there.
+template void pbr_run_into<int32_t, float>(
+    at::Tensor, int, int, int, int, const at::Tensor, const at::Tensor, const at::Tensor,
+    const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
+    int, int, cudaStream_t, cudaStream_t, cudaStream_t);
 
 void bind_cuda_functions(py::module_& m) {
     m.def("spdmm_csr_naive", &spdmm_csr_naive);

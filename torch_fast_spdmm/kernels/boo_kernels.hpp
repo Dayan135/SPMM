@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cuda_runtime.h>
+#include <ATen/core/Tensor.h>
 
 // Launch the BOO SpMM kernel.  See BOO_FORMAT.md sec. 6.
 //
@@ -44,6 +45,55 @@ void launch_boo_spmm(
     bool row_seg = true,
     const int32_t* block_row_ptr = nullptr,
     const int32_t* row_starts = nullptr);
+
+// Diagnostic-only upper-bound timing variant of launch_boo_spmm: the rowseg
+// kernel's Step B+C atomicAdd -> plain store. Output incorrect by
+// construction. fp32 only; row_seg-only; no precomputed row-boundary table.
+// See boo_kernel.cu.
+void launch_boo_diag_spmm(
+    const int num_blocks,
+    const int features,
+    const int batch_size,
+    const int rows,
+    const int cols,
+    const int max_nr,
+    const int max_nc,
+    const int max_nnz_blk,
+    const int32_t* row_grp_ptr,
+    const int32_t* row_ids,
+    const int32_t* col_grp_ptr,
+    const int32_t* col_ids,
+    const int32_t* blk_row_grp,
+    const int32_t* blk_col_grp,
+    const int32_t* blk_nz_ptr,
+    const uint8_t* blk_shift,
+    const uint16_t* nz_idx,
+    const float* nz_val,
+    const float* X,
+    float* Y,
+    cudaStream_t stream = 0,
+    int threads = 256,
+    int p = 64);
+
+// Zeroes Y then runs the plain (non-bucketed) three-way fork/join. Declared
+// here (defined in bindings_boo.cu, alongside boo_spmm_cuda_impl which also
+// calls it) so bindings_boo_timed.cu's BOOTimedSpMM can reuse the exact same
+// production code path for its C++-only timing. See bindings_boo.cu.
+template <typename scalar_t>
+void boo_run_into(
+    at::Tensor Y,
+    int rows, int cols, int max_nr, int max_nc, int max_nnz_blk,
+    const at::Tensor row_grp_ptr, const at::Tensor row_ids,
+    const at::Tensor col_grp_ptr, const at::Tensor col_ids,
+    const at::Tensor blk_row_grp, const at::Tensor blk_col_grp,
+    const at::Tensor blk_nz_ptr, const at::Tensor blk_shift,
+    const at::Tensor nz_idx, const at::Tensor nz_val,
+    const at::Tensor rem_indptr, const at::Tensor rem_col_ind, const at::Tensor rem_vals,
+    const at::Tensor tail_row, const at::Tensor tail_col, const at::Tensor tail_val,
+    const at::Tensor X3, int threads, int p, int csr_mode, bool row_seg,
+    cudaStream_t cur_stream, cudaStream_t block_stream,
+    cudaStream_t csr_stream, cudaStream_t tail_stream
+);
 
 // Dynamic shared memory the launcher requests, in bytes.  Mirrors
 // torch_fast_spdmm.boo.boo_arena_bytes so the Python occupancy model and the

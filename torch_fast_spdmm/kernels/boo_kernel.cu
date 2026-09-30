@@ -192,7 +192,7 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_kern
 // per-block row-start table can be recovered by binary search. The launcher
 // falls back to the nnzflat kernel for colmajor.
 
-template <typename scalar_t, int THREADS, int P_LOG2>
+template <typename scalar_t, int THREADS, int P_LOG2, bool DIAG_RAW_STORE = false>
 __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kernel(
     const uint32_t num_blocks,
     const uint32_t features,
@@ -312,10 +312,21 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
             }
 
             if (acc != scalar_t(0) && global_f < features) {
-                atomicAdd(&Y[y_batch_base
-                             + static_cast<size_t>(sh_row_ids[r]) * features
-                             + global_f],
-                          acc);
+                const size_t y_idx = y_batch_base
+                    + static_cast<size_t>(sh_row_ids[r]) * features + global_f;
+                // DIAG_RAW_STORE: diagnostic-only upper-bound timing variant.
+                // Unlike PBR's, this atomicAdd is not purely a synchronization
+                // tax -- a row's contribution is genuinely split across
+                // multiple blocks in its row-group, so a plain store here
+                // drops real cross-block accumulation, not just atomic
+                // overhead. Output is incorrect by construction. Never used
+                // outside BOOTimedSpMM(diagnostic_raw_store=True); see
+                // bindings_boo_timed.cu.
+                if constexpr (DIAG_RAW_STORE) {
+                    Y[y_idx] = acc;
+                } else {
+                    atomicAdd(&Y[y_idx], acc);
+                }
             }
         }
         __syncthreads();
@@ -404,6 +415,71 @@ template void launch_boo_spmm<double>(
     const int32_t*, const int32_t*, const int32_t*, const int32_t*,
     const int32_t*, const int32_t*, const int32_t*, const uint8_t*,
     const uint16_t*, const double*, const double*, double*, cudaStream_t, int, int, bool, const int32_t*, const int32_t*);
+
+// Diagnostic-only upper-bound timing variant: the rowseg kernel's Step
+// B+C atomicAdd is replaced with a plain store (DIAG_RAW_STORE=true).
+// Output is incorrect by construction (drops real cross-block row
+// accumulation -- see the comment at the atomicAdd call site). fp32 only,
+// matching BOOTimedSpMM's scope; row_seg-only (no nnzflat/colmajor
+// diagnostic); no precomputed row-boundary table support (block_row_ptr/
+// row_starts always null -- binary search only).
+void launch_boo_diag_spmm(
+    const int num_blocks, const int features, const int batch_size,
+    const int rows, const int cols,
+    const int max_nr, const int max_nc, const int max_nnz_blk,
+    const int32_t* row_grp_ptr, const int32_t* row_ids,
+    const int32_t* col_grp_ptr, const int32_t* col_ids,
+    const int32_t* blk_row_grp, const int32_t* blk_col_grp,
+    const int32_t* blk_nz_ptr, const uint8_t* blk_shift,
+    const uint16_t* nz_idx, const float* nz_val,
+    const float* X, float* Y,
+    cudaStream_t stream, int threads, int p
+) {
+    if (threads != 128 && threads != 256 && threads != 512)
+        throw std::invalid_argument("BOO threads must be 128, 256 or 512");
+    if (p != 8 && p != 16 && p != 32 && p != 64 && p != 128)
+        throw std::invalid_argument("BOO p must be 8, 16, 32, 64 or 128");
+    if (num_blocks == 0 || features == 0 || batch_size == 0) return;
+
+    while (p > 8 && p > features) p >>= 1;
+
+    const int arena = boo_arena_bytes_rowseg(max_nr, max_nc, max_nnz_blk, p, (int)sizeof(float));
+    const int feat_slabs = (features + BOO_FEAT_BLOCK - 1) / BOO_FEAT_BLOCK;
+    const dim3 grid(num_blocks, batch_size, feat_slabs);
+
+    #define BOO_DIAG_LAUNCH(T, PL)                                                               \
+        do {                                                                                     \
+            auto kernel = boo_spmm_rowseg_kernel<float, T, PL, true>;                            \
+            if (arena > 48 * 1024) {                                                             \
+                C10_CUDA_CHECK(cudaFuncSetAttribute(kernel,                                      \
+                                     cudaFuncAttributeMaxDynamicSharedMemorySize, arena));       \
+            }                                                                                    \
+            kernel<<<grid, dim3(T), arena, stream>>>(                                            \
+                (uint32_t)num_blocks, (uint32_t)features, (uint32_t)batch_size,                  \
+                (uint32_t)rows, (uint32_t)cols,                                                  \
+                (uint32_t)max_nr, (uint32_t)max_nc, (uint32_t)max_nnz_blk,                       \
+                row_grp_ptr, row_ids, col_grp_ptr, col_ids,                                      \
+                blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift,                                 \
+                nz_idx, nz_val, X, Y, nullptr, nullptr);                                         \
+            C10_CUDA_KERNEL_LAUNCH_CHECK();                                                      \
+        } while (0)
+
+    #define BOO_DIAG_DISPATCH_P(T)                                          \
+        do {                                                                \
+            if      (p <= 8)   BOO_DIAG_LAUNCH(T, 3);                       \
+            else if (p <= 16)  BOO_DIAG_LAUNCH(T, 4);                       \
+            else if (p <= 32)  BOO_DIAG_LAUNCH(T, 5);                       \
+            else if (p <= 64)  BOO_DIAG_LAUNCH(T, 6);                       \
+            else               BOO_DIAG_LAUNCH(T, 7);                       \
+        } while (0)
+
+    if      (threads <= 128) BOO_DIAG_DISPATCH_P(128);
+    else if (threads <= 256) BOO_DIAG_DISPATCH_P(256);
+    else                     BOO_DIAG_DISPATCH_P(512);
+
+    #undef BOO_DIAG_DISPATCH_P
+    #undef BOO_DIAG_LAUNCH
+}
 
 
 // ===========================================================================

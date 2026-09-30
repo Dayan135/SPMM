@@ -9,6 +9,12 @@ staging, validation and logging are outside the timed interval. Times are CUDA
 event elapsed milliseconds for a complete matmul call, including output
 initialization and stream joins. With --direct-cusparse, direct plans instead
 reuse output and workspace and time only cusparseSpMM using C++ CUDA events.
+With --symmetric (implies --direct-cusparse), every method also gets a
+matching C++-only timing (PBRTimedSpMM/BOOTimedSpMM for PBR/BOO, obj.run()
+routed through the normal Python loop for direct) so cuSPARSE and PBR/BOO
+are compared at the same measurement scope in both directions, plus a
+diagnostic upper-bound variant (Y memset removed, atomicAdd -> plain store;
+output incorrect by construction, not a real timing) for PBR/BOO.
 """
 
 from __future__ import annotations
@@ -68,6 +74,12 @@ def parse_args(argv=None):
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('--direct-cusparse', action='store_true',
                    help='Add four persistent cusparseSpMM plans; time only SpMM in C++ CUDA events')
+    p.add_argument('--symmetric', action='store_true',
+                   help='Implies --direct-cusparse. Add an API-level (Python full-call) timing '
+                       'for direct cuSPARSE, and a C++-only timing (PBRTimedSpMM/BOOTimedSpMM, '
+                       'matching DirectSpMM.timed_run()\'s scope) plus a diagnostic upper-bound '
+                       '(Y memset removed, Step-C atomicAdd -> plain store; output incorrect by '
+                       'construction) for every PBR/BOO config already in the sweep.')
     p.add_argument('--out', type=Path, default=Path('results/spmm'))
     p.add_argument('--project', default='torch-fast-spdmm')
     p.add_argument('--entity', default=None)
@@ -200,6 +212,11 @@ def build_variants(mat, configs, seed):
 
 
 def matmul(config, obj, x):
+    # cusparseSpMM_only (DirectSpMM) and cpp_only (PBRTimedSpMM/BOOTimedSpMM)
+    # both expose .run() for the untimed/correctness-check call; timed_run()
+    # is called directly from the sampling loop, never through here.
+    if config.get('timing_scope') in ('cusparseSpMM_only', 'cpp_only'):
+        return obj.run()
     if config['algorithm'] == 'cusparse_direct':
         return obj.run()
     if config['algorithm'] == 'cusparse_csr':
@@ -220,7 +237,47 @@ def round_orders(count, repeats, seed):
     return [order[r % count:] + order[:r % count] for r in range(repeats)]
 
 
-def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=()):
+def _symmetric_variants(variants, x):
+    """For every PBR/BOO config already in the sweep, build a C++-only timed
+    entry (PBRTimedSpMM/BOOTimedSpMM, same scope as DirectSpMM.timed_run())
+    and a diagnostic upper-bound entry (Y memset removed, Step-C atomicAdd ->
+    plain store) wrapping the SAME already-staged GPU object -- no extra
+    format construction. Skips execution-plan (bucketed) BOO configs: the
+    timed harness only supports the plain three-way fork/join."""
+    extra = []
+    for config, obj in variants:
+        if config['algorithm'] == 'pbr':
+            meta = obj._gpu_meta
+            args = (obj.cols, obj.rows, obj.block_rows, obj.block_cols,
+                    meta.codes, meta.coords, meta.offsets, meta.data,
+                    meta.rem_indptr, meta.rem_col_ind, meta.rem_vals, x,
+                    config.get('csr_mode', 0), config['smem_size'])
+            timed = core.PBRTimedSpMM(*args, False)
+            extra.append((dict(config, config=config['config'] + '_cpp',
+                               timing_scope='cpp_only'), timed))
+            diag = core.PBRTimedSpMM(*args, True)
+            extra.append((dict(config, algorithm='pbr_diagnostic', config=config['config'] + '_diag',
+                               timing_scope='diagnostic_upper_bound', execution_path='diagnostic'), diag))
+        elif config['algorithm'] == 'boo':
+            if config.get('execution_plan', False):
+                continue
+            meta = obj._gpu_meta
+            args = (obj.rows, obj.cols, obj.max_nr, obj.max_nc, obj.max_nnz_blk,
+                    meta.row_grp_ptr, meta.row_ids, meta.col_grp_ptr, meta.col_ids,
+                    meta.blk_row_grp, meta.blk_col_grp, meta.blk_nz_ptr, meta.blk_shift,
+                    meta.nz_idx, meta.nz_val, meta.rem_indptr, meta.rem_col_ind, meta.rem_vals,
+                    meta.tail_row, meta.tail_col, meta.tail_val, x,
+                    config['threads'], config['p'], config.get('csr_mode', 0), True)
+            timed = core.BOOTimedSpMM(*args, False)
+            extra.append((dict(config, config=config['config'] + '_cpp',
+                               timing_scope='cpp_only'), timed))
+            diag = core.BOOTimedSpMM(*args, True)
+            extra.append((dict(config, algorithm='boo_diagnostic', config=config['config'] + '_diag',
+                               timing_scope='diagnostic_upper_bound', execution_path='diagnostic'), diag))
+    return extra
+
+
+def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=(), symmetric=False):
     x = x_cpu.to('cuda')
     variants = [(dict(config), obj) for config, obj in variants]
     for config, obj in variants:
@@ -231,6 +288,8 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=
                                          f'{family}+csr' if config['remainder_nnz'] else family)
         else:
             config['execution_path'] = 'torch.sparse.mm'
+    if symmetric:
+        variants.extend(_symmetric_variants(variants, x))
     if direct_algorithms:
         csr = next(obj for config, obj in variants if config['algorithm'] == 'cusparse_csr')
         for algorithm in direct_algorithms:
@@ -238,17 +297,21 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=
             t0 = time.perf_counter()
             plan = core.DirectSpMM(csr.crow_indices(), csr.col_indices(), csr.values(), x, algorithm)
             torch.cuda.synchronize()
-            config = dict(algorithm='cusparse_direct', config=f'direct_{algorithm}',
-                          direct_algorithm=algorithm, timing_scope='cusparseSpMM_only',
-                          execution_path='cusparseSpMM', alpha=1., beta=0., dense_layout='row_major',
-                          compressed_fraction=None, remainder_nnz=None, num_blocks=None,
-                          plan_build_ms=1000*(time.perf_counter()-t0), **plan.info())
-            variants.append((config, plan))
+            base = dict(algorithm='cusparse_direct', direct_algorithm=algorithm,
+                        execution_path='cusparseSpMM', alpha=1., beta=0., dense_layout='row_major',
+                        compressed_fraction=None, remainder_nnz=None, num_blocks=None,
+                        plan_build_ms=1000*(time.perf_counter()-t0), **plan.info())
+            variants.append((dict(base, config=f'direct_{algorithm}', timing_scope='cusparseSpMM_only'), plan))
+            if symmetric:
+                variants.append((dict(base, config=f'direct_{algorithm}_api', timing_scope='full_call'), plan))
     # An independent reference from the original sparse matrix; never densify A.
     reference = mat.astype(np.float64) @ x_cpu.numpy().astype(np.float64)
     validation = {}
     for config, obj in variants:
-        if not config.get('supported', True):
+        if not config.get('supported', True) or config.get('timing_scope') == 'diagnostic_upper_bound':
+            # Diagnostic variants' output is incorrect by construction (no Y
+            # zero, atomicAdd -> plain store) -- never checked against the
+            # reference, and .run() throws for them by design.
             validation[config['config']] = None
             continue
         try:
@@ -269,8 +332,9 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=
     for config, obj in variants:
         if not config.get('supported', True):
             continue
+        diagnostic = config.get('timing_scope') == 'diagnostic_upper_bound'
         for _ in range(warmup):
-            matmul(config, obj, x)
+            obj.timed_run() if diagnostic else matmul(config, obj, x)
     torch.cuda.synchronize()
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -284,7 +348,7 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=
             config, obj = variants[index]
             if not config.get('supported', True):
                 continue
-            if config['algorithm'] == 'cusparse_direct':
+            if config.get('timing_scope') in ('cusparseSpMM_only', 'cpp_only', 'diagnostic_upper_bound'):
                 ms = obj.timed_run()
             else:
                 start.record()
@@ -299,6 +363,11 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=
                                 repeat=repeat + 1, position=position, time_ms=ms))
     summaries = []
     baseline = statistics.median(s['time_ms'] for s in samples if s['algorithm'] == 'cusparse_csr')
+    # In --symmetric mode this mixes cusparseSpMM_only and full_call direct
+    # entries into one convenience baseline (min across both scopes) --
+    # loose but harmless, since report_symmetric.py computes its two-level
+    # comparison directly from each row's own timing_scope rather than
+    # trusting this field.
     direct_medians = [statistics.median([s['time_ms'] for s in samples if s['config'] == c['config']])
                       for c, _ in variants if c['algorithm'] == 'cusparse_direct' and c.get('supported', True)]
     direct_baseline = min(direct_medians) if direct_medians else None
@@ -346,9 +415,21 @@ def main(argv=None, configuration_factory=configurations):
     metadata = source_metadata(Path(__file__).resolve().parents[3])
     configs = configuration_factory(a)
     metadata['benchmark_configurations'] = configs
-    metadata['direct_algorithms'] = DIRECT_ALGORITHMS if a.direct_cusparse else []
+    metadata['direct_algorithms'] = DIRECT_ALGORITHMS if (a.direct_cusparse or a.symmetric) else []
     metadata['direct_timing'] = ('C++ CUDA events bracket only cusparseSpMM; alpha=1 beta=0, row-major X/Y; '
                                 'per-algorithm descriptors, output/workspace reused; bufferSize and preprocess once outside timing')
+    metadata['symmetric'] = a.symmetric
+    if a.symmetric:
+        metadata['symmetric_timing'] = (
+            'Every PBR/BOO config gets three timing_scope rows: full_call (Python-side event '
+            'wrap around pbr_matmul/boo_matmul, includes Python/pybind overhead -- the original '
+            'scope), cpp_only (PBRTimedSpMM/BOOTimedSpMM, C++ events around only the Y memset + '
+            'kernel(s) + join, same scope as direct cuSPARSE\'s cusparseSpMM_only), and '
+            'diagnostic_upper_bound (cpp_only but no Y memset, block kernel only, Step-C '
+            'atomicAdd -> plain store -- output is INCORRECT by construction, never validated, '
+            'not a real timing, upper-bound diagnostic only). Direct cuSPARSE gets both '
+            'cusparseSpMM_only (existing) and full_call (routed through the same Python-side '
+            'event wrap as everyone else, i.e. obj.run() instead of obj.timed_run()) rows.')
     args_dict = dict(vars(a), out=str(a.out))
     run = wandb.init(project=a.project, entity=a.entity, name=a.name, mode=a.wandb_mode,
                      config=dict(args_dict, **metadata), dir=str(a.out))
@@ -379,8 +460,10 @@ def main(argv=None, configuration_factory=configurations):
                                       features=features, nnz=int(mat.nnz), dtype='float32', index_dtype='int32',
                                       seed=a.seed, matrix_sha256=matrix_hash, x_sha256=digest_arrays(x_cpu.numpy()),
                                       source_sha256=metadata['source_sha256'], wandb_run_id=run.id)
-                        summaries, samples = measure_cell(variants, mat, x_cpu, a.warmup, a.repeats, a.seed,
-                                                          DIRECT_ALGORITHMS if a.direct_cusparse else ())
+                        summaries, samples = measure_cell(
+                            variants, mat, x_cpu, a.warmup, a.repeats, a.seed,
+                            DIRECT_ALGORITHMS if (a.direct_cusparse or a.symmetric) else (),
+                            symmetric=a.symmetric)
                         summaries = [dict(common, **s) for s in summaries]
                         samples = [dict(common, **s) for s in samples]
                         if summary_columns is None:

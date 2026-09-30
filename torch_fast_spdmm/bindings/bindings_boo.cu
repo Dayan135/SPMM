@@ -17,19 +17,111 @@ struct BOOLaunchPlan {
     at::Tensor row_ptr, row_starts;
 };
 
+// Zeroes Y (via memset, on cur_stream) then runs the three-way fork/join:
+// block_stream runs the main BOO-block kernel; csr_stream the shared CSR
+// remainder kernel (BOO_REMAINDER policy); tail_stream the in-format tail
+// kernel (BOO_TAIL_BATCH policy). Exactly one of csr_nnz/tail_nnz is normally
+// nonzero (the two small-block policies are mutually exclusive at build
+// time), but nothing here assumes that -- an empty leg is simply skipped.
+// All three commit into the same zeroed Y via atomicAdd. Y must already be
+// allocated with the right shape/dtype/device; this function is the sole
+// writer of the zero. Split out of boo_spmm_cuda_impl's plain (non-fast-path,
+// non-plan) body so a C++-only timing harness (BOOTimedSpMM) can bracket
+// exactly this work with CUDA events, with allocation and stream setup done
+// once outside the timed region -- see bindings_boo_timed.cu. Bucketed plans
+// and the PURE_FAST_PATH single-stream shortcut stay in boo_spmm_cuda_impl,
+// out of scope for the timing harness.
+template <typename scalar_t>
+void boo_run_into(
+    at::Tensor Y,
+    int rows, int cols, int max_nr, int max_nc, int max_nnz_blk,
+    const at::Tensor row_grp_ptr, const at::Tensor row_ids,
+    const at::Tensor col_grp_ptr, const at::Tensor col_ids,
+    const at::Tensor blk_row_grp, const at::Tensor blk_col_grp,
+    const at::Tensor blk_nz_ptr, const at::Tensor blk_shift,
+    const at::Tensor nz_idx, const at::Tensor nz_val,
+    const at::Tensor rem_indptr, const at::Tensor rem_col_ind, const at::Tensor rem_vals,
+    const at::Tensor tail_row, const at::Tensor tail_col, const at::Tensor tail_val,
+    const at::Tensor X3, int threads, int p, int csr_mode, bool row_seg,
+    cudaStream_t cur_stream, cudaStream_t block_stream,
+    cudaStream_t csr_stream, cudaStream_t tail_stream
+) {
+    const int num_blocks = (int)blk_row_grp.size(0);
+    const int csr_nnz    = (int)rem_col_ind.size(0);
+    const int tail_nnz   = (int)tail_col.size(0);
+    const int batch_size = (int)X3.size(0);
+    const int features   = (int)X3.size(-1);
+
+    cudaMemsetAsync(Y.data_ptr<scalar_t>(), 0, Y.numel() * sizeof(scalar_t), cur_stream);
+
+    cudaEvent_t y_ready;
+    cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
+    cudaEventRecord(y_ready, cur_stream);
+    cudaStreamWaitEvent(block_stream, y_ready, 0);
+    cudaStreamWaitEvent(csr_stream,   y_ready, 0);
+    cudaStreamWaitEvent(tail_stream,  y_ready, 0);
+    cudaEventDestroy(y_ready);
+
+    if (num_blocks > 0) {
+        launch_boo_spmm<scalar_t>(
+            num_blocks, features, batch_size, rows, cols, max_nr, max_nc, max_nnz_blk,
+            row_grp_ptr.data_ptr<int32_t>(), row_ids.data_ptr<int32_t>(),
+            col_grp_ptr.data_ptr<int32_t>(), col_ids.data_ptr<int32_t>(),
+            blk_row_grp.data_ptr<int32_t>(), blk_col_grp.data_ptr<int32_t>(),
+            blk_nz_ptr.data_ptr<int32_t>(), blk_shift.data_ptr<uint8_t>(),
+            reinterpret_cast<const uint16_t*>(nz_idx.data_ptr<int16_t>()),
+            nz_val.data_ptr<scalar_t>(), X3.data_ptr<scalar_t>(), Y.data_ptr<scalar_t>(),
+            block_stream, threads, p, row_seg, nullptr, nullptr);
+    }
+
+    if (csr_nnz > 0) {
+        launch_csr_spmm<int32_t, scalar_t>(
+            rows, features, batch_size, cols, csr_nnz,
+            rem_indptr.data_ptr<int32_t>(),
+            rem_col_ind.data_ptr<int32_t>(),
+            rem_vals.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            csr_stream,
+            csr_mode
+        );
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+    }
+
+    if (tail_nnz > 0) {
+        launch_boo_tail_spmm<scalar_t>(
+            tail_nnz, features, batch_size, rows, cols,
+            tail_row.data_ptr<int32_t>(),
+            tail_col.data_ptr<int32_t>(),
+            tail_val.data_ptr<scalar_t>(),
+            X3.data_ptr<scalar_t>(),
+            Y.data_ptr<scalar_t>(),
+            tail_stream,
+            threads
+        );
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+    }
+
+    cudaEvent_t block_done, csr_done, tail_done;
+    cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&csr_done,   cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&tail_done,  cudaEventDisableTiming);
+    cudaEventRecord(block_done, block_stream);
+    cudaEventRecord(csr_done,   csr_stream);
+    cudaEventRecord(tail_done,  tail_stream);
+    cudaStreamWaitEvent(cur_stream, block_done, 0);
+    cudaStreamWaitEvent(cur_stream, csr_done,   0);
+    cudaStreamWaitEvent(cur_stream, tail_done,  0);
+    cudaEventDestroy(block_done);
+    cudaEventDestroy(csr_done);
+    cudaEventDestroy(tail_done);
+}
+
 // BOO GPU entry point.
 //
 // Index arrays are int32 unconditionally -- BOO does not template on index_t
 // the way PBR does, which halves both the index traffic and the pybind symbol
 // count (2 symbols instead of 4).
-//
-// Three-way fork/join. block_stream runs the main BOO-block kernel; csr_stream
-// the shared CSR remainder kernel (BOO_REMAINDER policy); tail_stream the
-// in-format tail kernel (BOO_TAIL_BATCH policy). Exactly one of csr_nnz/
-// tail_nnz is normally nonzero (the two small-block policies are mutually
-// exclusive at build time), but nothing here assumes that -- an empty leg is
-// simply skipped, so all three streams stay valid for every policy without a
-// later rewrite. All three commit into the same zeroed Y via atomicAdd.
 template <typename scalar_t, bool PURE_FAST_PATH = false>
 at::Tensor boo_spmm_cuda_impl(
     int rows, int cols,
@@ -80,7 +172,12 @@ at::Tensor boo_spmm_cuda_impl(
     const int features   = (int)X.size(-1);
 
     at::Tensor X3 = ((X.dim() == 2) ? X.unsqueeze(0) : X).contiguous();
-    at::Tensor Y  = at::zeros({batch_size, rows, features}, X.options());
+    // Allocated here, zeroed by whichever branch below actually runs (each
+    // needs Y zeroed on cur_stream before any worker stream's atomicAdd) --
+    // keeps the zero a single memset instead of double-zeroing when the
+    // plain (non-plan, non-fast-path) branch delegates to boo_run_into,
+    // which does its own zero for the C++-only timing harness's benefit.
+    at::Tensor Y  = at::empty({batch_size, rows, features}, X.options());
 
     auto run_blocks = [&](cudaStream_t stream) {
         auto launch_range = [&](int start, int count, int nr, int nc, int nnz) {
@@ -133,13 +230,32 @@ at::Tensor boo_spmm_cuda_impl(
     auto cur_stream = at::cuda::getCurrentCUDAStream();
     if constexpr (PURE_FAST_PATH) {
         if (csr_nnz == 0 && tail_nnz == 0) {
+            cudaMemsetAsync(Y.data_ptr<scalar_t>(), 0, Y.numel() * sizeof(scalar_t), cur_stream.stream());
             run_blocks(cur_stream.stream());
             return Y;
         }
     }
+
     auto block_stream = at::cuda::getStreamFromPool();
     auto csr_stream   = at::cuda::getStreamFromPool();
     auto tail_stream  = at::cuda::getStreamFromPool();
+
+    if (!plan) {
+        // Plain (non-bucketed) path: delegate to the shared helper also used
+        // by BOOTimedSpMM's C++-only timing harness (bindings_boo_timed.cu).
+        boo_run_into<scalar_t>(
+            Y, rows, cols, max_nr, max_nc, max_nnz_blk,
+            row_grp_ptr, row_ids, col_grp_ptr, col_ids,
+            blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift, nz_idx, nz_val,
+            rem_indptr, rem_col_ind, rem_vals, tail_row, tail_col, tail_val,
+            X3, threads, p, csr_mode, row_seg,
+            cur_stream.stream(), block_stream.stream(), csr_stream.stream(), tail_stream.stream());
+        return Y;
+    }
+
+    // Bucketed/plan path: boo_run_into doesn't support buckets, so this keeps
+    // the original inline zero + run_blocks(with bucket iteration) + join.
+    cudaMemsetAsync(Y.data_ptr<scalar_t>(), 0, Y.numel() * sizeof(scalar_t), cur_stream.stream());
 
     cudaEvent_t y_ready;
     cudaEventCreateWithFlags(&y_ready, cudaEventDisableTiming);
@@ -266,6 +382,28 @@ at::Tensor boo_spmm_cuda_planned(
         rem_indptr, rem_col_ind, rem_vals, tail_row, tail_col, tail_val,
         X, threads, p, csr_mode, row_seg, &plan);
 }
+
+// Explicit instantiation so bindings_boo_timed.cu (a separate translation
+// unit) can call this template function -- only fp32 needed there. Must
+// match boo_run_into's declared parameter list exactly: Y; rows, cols,
+// max_nr, max_nc, max_nnz_blk; row_grp_ptr, row_ids, col_grp_ptr, col_ids;
+// blk_row_grp, blk_col_grp, blk_nz_ptr, blk_shift; nz_idx, nz_val;
+// rem_indptr, rem_col_ind, rem_vals; tail_row, tail_col, tail_val; X3;
+// threads, p, csr_mode; row_seg; cur/block/csr/tail_stream (17 Tensors
+// total after Y, not counting X3 separately from the rest -- X3 is the
+// 17th).
+template void boo_run_into<float>(
+    /* Y */            at::Tensor,
+    /* rows..nnz_blk */ int, int, int, int, int,
+    /* row/col ptrs */  const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
+    /* blk_* */         const at::Tensor, const at::Tensor, const at::Tensor, const at::Tensor,
+    /* nz_idx/val */    const at::Tensor, const at::Tensor,
+    /* rem_* */         const at::Tensor, const at::Tensor, const at::Tensor,
+    /* tail_* */        const at::Tensor, const at::Tensor, const at::Tensor,
+    /* X3 */            const at::Tensor,
+    /* threads,p,csr_mode */ int, int, int,
+    /* row_seg */       bool,
+    /* streams */       cudaStream_t, cudaStream_t, cudaStream_t, cudaStream_t);
 
 void bind_boo_functions(pybind11::module_& m) {
     m.def("boo_spmm_cuda_f32", &boo_spmm_cuda_dispatch<float>);
