@@ -17,7 +17,6 @@ import argparse
 import csv
 import json
 from pathlib import Path
-import random
 import statistics
 import time
 
@@ -60,16 +59,19 @@ def parse_args(argv=None):
     return a
 
 
-def round_orders(count, repeats, seed):
-    order = list(range(count))
-    random.Random(seed).shuffle(order)
-    return [order[r % count:] + order[:r % count] for r in range(repeats)]
+def iter_cpp_only_variants(mat, configs, seed, x):
+    """Yields (config, obj) ONE AT A TIME for PBR/BOO cpp_only entries and for
+    direct cuSPARSE cusparseSpMM_only entries. The caller must del(obj) and
+    torch.cuda.empty_cache() before the generator is asked for the next item.
 
-
-def cpp_only_variants(mat, configs, seed, x):
-    """PBR/BOO cpp_only entries (via _symmetric_variants, filtered to drop its
-    diagnostic entries) plus direct cuSPARSE cusparseSpMM_only entries --
-    exactly the 4+8+4=16 configs/workload this benchmark needs, nothing else.
+    Each PBRTimedSpMM/BOOTimedSpMM/DirectSpMM holds its own persistent output
+    buffer (batch*rows*features*4 bytes -- ~2 GiB at N=1,048,576, F=512) for
+    its whole lifetime. Building all 8 PBR + 4 BOO + 4 direct configs (plus,
+    via _symmetric_variants, an equal number of diagnostic siblings this
+    benchmark never times) simultaneously is 24+ such buffers alive at once
+    -- 50+ GiB, which is exactly what OOM'd three real jobs at the first
+    N=1,048,576 workload (see DENSITY_BANDS.md). Building and tearing down
+    one at a time bounds peak extra GPU memory to a single buffer.
     """
     base_variants = build_variants(mat, [c for c in configs if c['algorithm'] != 'cusparse_csr'], seed)
     for config, _ in base_variants:
@@ -77,13 +79,24 @@ def cpp_only_variants(mat, configs, seed, x):
             family = 'block' if config['algorithm'] == 'pbr' else 'boo'
             config['execution_path'] = ('csr_only' if config['compressed_fraction'] == 0 else
                                          f"{family}+csr" if config['remainder_nnz'] else family)
-    extra = _symmetric_variants(base_variants, x)
-    cpp_only = [(c, o) for c, o in extra if c['timing_scope'] == 'cpp_only']
+
+    for base_config, base_obj in base_variants:
+        if base_config['algorithm'] not in ('pbr', 'boo'):
+            continue
+        # _symmetric_variants always builds a cpp_only + diagnostic pair for
+        # every base variant passed in; calling it with a single-element list
+        # bounds this to exactly one pair, and the unused diagnostic sibling
+        # is deleted immediately rather than living until the whole workload
+        # finishes.
+        (cpp_entry, diag_entry) = _symmetric_variants([(base_config, base_obj)], x)
+        _, diag_obj = diag_entry
+        del diag_obj
+        torch.cuda.empty_cache()
+        yield cpp_entry
 
     csr = torch.sparse_csr_tensor(torch.from_numpy(mat.indptr.copy()),
                                   torch.from_numpy(mat.indices.copy()),
                                   torch.from_numpy(mat.data.copy()), size=mat.shape).cuda()
-    direct = []
     for algorithm in DIRECT_ALGORITHMS:
         torch.cuda.synchronize()
         t0 = time.perf_counter()
@@ -93,58 +106,58 @@ def cpp_only_variants(mat, configs, seed, x):
                       direct_algorithm=algorithm, timing_scope='cusparseSpMM_only',
                       execution_path='cusparseSpMM', compressed_fraction=None, remainder_nnz=None,
                       num_blocks=None, plan_build_ms=1000 * (time.perf_counter() - t0), **plan.info())
-        direct.append((config, plan))
-    return cpp_only + direct
+        yield config, plan
+    del csr
 
 
 def measure_cell(mat, configs, x_cpu, warmup, repeats, seed):
     x = x_cpu.to('cuda')
-    variants = cpp_only_variants(mat, configs, seed, x)
-
     reference = mat.astype(np.float64) @ x_cpu.numpy().astype(np.float64)
+
+    # No cross-config interleaving (unlike bench_spmm.py's round_orders) --
+    # each config is fully measured and torn down before the next is built,
+    # which is what keeps peak GPU memory bounded (see iter_cpp_only_variants).
+    # Loses protection against configs drifting apart from shared thermal/
+    # clock trends across a long sweep; gains the ability to run at all.
+    completed_configs = []
+    samples = []
     validation = {}
-    for config, obj in variants:
-        if not config.get('supported', True):
-            validation[config['config']] = None
-            continue
+    for config, obj in iter_cpp_only_variants(mat, configs, seed, x):
+        completed_configs.append(config)
         try:
-            y = obj.run()
+            if config.get('supported', True):
+                y = obj.run()
+                actual = y.cpu().numpy().astype(np.float64)
+                np.testing.assert_allclose(actual, reference, rtol=1e-4, atol=1e-4, err_msg=config['config'])
+                validation[config['config']] = float(np.max(np.abs(actual - reference)))
+                del y, actual
+
+                for _ in range(warmup):
+                    obj.timed_run()
+                torch.cuda.synchronize()
+                for repeat in range(repeats):
+                    ms = obj.timed_run()
+                    if not np.isfinite(ms) or ms <= 0:
+                        raise RuntimeError(f"Invalid elapsed time for {config['config']}: {ms}")
+                    samples.append(dict(config=config['config'], algorithm=config['algorithm'],
+                                        repeat=repeat + 1, position=0, time_ms=ms))
+            else:
+                validation[config['config']] = None
         except RuntimeError as exc:
             if config['algorithm'] != 'cusparse_direct' or 'CUSPARSE_STATUS_NOT_SUPPORTED' not in str(exc):
                 raise
             config.update(supported=False, unsupported_reason=str(exc))
             validation[config['config']] = None
-            continue
-        actual = y.cpu().numpy().astype(np.float64)
-        np.testing.assert_allclose(actual, reference, rtol=1e-4, atol=1e-4, err_msg=config['config'])
-        validation[config['config']] = float(np.max(np.abs(actual - reference)))
-        del y, actual
+        finally:
+            del obj
+            torch.cuda.empty_cache()
     del reference
-
-    for config, obj in variants:
-        if not config.get('supported', True):
-            continue
-        for _ in range(warmup):
-            obj.timed_run()
-    torch.cuda.synchronize()
-
-    samples = []
-    for repeat, order in enumerate(round_orders(len(variants), repeats, seed)):
-        for position, index in enumerate(order):
-            config, obj = variants[index]
-            if not config.get('supported', True):
-                continue
-            ms = obj.timed_run()
-            if not np.isfinite(ms) or ms <= 0:
-                raise RuntimeError(f"Invalid elapsed time for {config['config']}: {ms}")
-            samples.append(dict(config=config['config'], algorithm=config['algorithm'],
-                                repeat=repeat + 1, position=position, time_ms=ms))
 
     summaries = []
     direct_medians = [statistics.median([s['time_ms'] for s in samples if s['config'] == c['config']])
-                      for c, _ in variants if c['algorithm'] == 'cusparse_direct' and c.get('supported', True)]
+                      for c in completed_configs if c['algorithm'] == 'cusparse_direct' and c.get('supported', True)]
     direct_baseline = min(direct_medians) if direct_medians else None
-    for config, _ in variants:
+    for config in completed_configs:
         values = [s['time_ms'] for s in samples if s['config'] == config['config']]
         if not values:
             summaries.append(dict(config, time_ms=None, median_ms=None, mean_ms=None, min_ms=None,
