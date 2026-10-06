@@ -148,9 +148,11 @@ For a fixed target of 32, CPU clustering times at N=65536 (seconds):
 | diag_b0.3 | 25.97 | 6.60 | 4.18 |
 | diag_b1.0 | 4.31 | 2.98 | 2.14 |
 
-These preprocessing numbers are single CPU wall-clock measurements. Graclus
-reduced preprocessing time on all four tested profiles. Its SpMM times were
-generally close to HEM; neither new backend establishes a universal runtime win.
+These preprocessing numbers are single CPU wall-clock measurements. Matmul time
+is the primary metric here (preprocessing is amortized over repeated
+multiplications), and on that metric Graclus is generally close to HEM; neither
+new backend establishes a universal runtime win. Graclus did reduce preprocessing
+time on all four tested profiles, which is a secondary benefit only.
 
 Actual 256-row FEM groups pass validation, but are slower: on permuted FEM,
 N=65536/F=512, METIS takes 7.116 ms at target 256 versus 2.964 ms at target 32;
@@ -162,3 +164,42 @@ but effective group sizes around 16–64 were preferable on these matrices.
 Detailed outputs: [N=16384 summary](tests/torch_fast_spdmm/benchmark/results/clustering_20261006/results/full/summary.csv),
 [N=65536 summary](tests/torch_fast_spdmm/benchmark/results/clustering_20261006/results/large/summary.csv),
 [final GPU validation log](tests/torch_fast_spdmm/benchmark/results/clustering_20261006/job-22331033.log).
+
+## Plots
+
+Generated locally from the two main sweeps (no GPU needed):
+
+```bash
+cd tests/torch_fast_spdmm
+conda run -n fem python -m benchmark.plot_clustering   # -> plots/clustering_20261006/
+```
+
+| Figure | Question |
+|---|---|
+| `A1_time_vs_target_{16k,64k}.png` | Matmul time vs target group size, per profile × F (p25–p75 band, cuSPARSE dashed, × = unsupported) |
+| `A2_best_speedup.png` | Best-target speedup over cuSPARSE per backend |
+| `A3_relative_heatmap.png` | Every (backend, target) relative to the best config per (profile, F, N) |
+| `B4_group_sizes_*.png` | Requested target vs actual mean/max row and column group size |
+| `B5_structure_vs_time_*.png` | Remainder fraction, max nnz/block, #blocks, X-row loads/N, smem arena vs time |
+| `B6_tile_p_*.png` | Feature tile P selected by the shared-memory fit |
+| `C7_scaling.png` | Best speedup at N=16k vs 65k |
+| `C8_distributions_*.png` | Per-sample timings of the top-3 configs + cuSPARSE |
+| `D9_breakeven.png` | Matmuls needed to amortize preprocessing vs cuSPARSE (secondary) |
+| `best_per_backend.{csv,md}` | Table view of the best config per backend |
+
+Observations from the plots (matmul time; same single-session caveat as above):
+
+- **Backend choice barely matters once rows are clustered.** At the best target, HEM, METIS
+  and Graclus are within 10% of each other on every profile, with METIS usually the slowest
+  on FEM (5–9%). `identity` is equally good except on `fem2d_permuted`, where it is
+  1.7–2.2× slower. Clustering pays off
+  only when the input ordering is scrambled.
+- **Target ≈32 is the robust choice.** In A3 it is best or within 1.10× of the best in
+  nearly every column for every backend.
+- **BOO beats cuSPARSE only in a few cells:** `diag_b1.0` at N=65536 (1.03–1.09×)
+  and `fem2d_permuted` F=512 at N=65536 (HEM 1.01×, Graclus 1.03×). Everywhere else
+  it is slower, down to about 0.55× on `fem2d`. The gap to cuSPARSE shrinks from 16k to 65k (C7).
+- **The large-group slowdown is not only the tile shrink.** On FEM, time already roughly
+  doubles at target 128 while P is still 64 (B6). P drops to 32 only at 256.
+- In B5, X-row loads/N is the clearest predictor of the worst (identity) configs; the other
+  structural metrics separate configs weakly when all profiles are pooled.
