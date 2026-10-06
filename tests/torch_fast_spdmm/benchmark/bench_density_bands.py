@@ -22,6 +22,7 @@ import time
 
 import numpy as np
 import torch
+import torch_fast_spdmm as spmm
 import torch_fast_spdmm_core as core
 import wandb
 
@@ -52,6 +53,12 @@ def parse_args(argv=None):
     p.add_argument('--entity', default=None)
     p.add_argument('--name', default=None)
     p.add_argument('--wandb-mode', choices=['online', 'offline', 'disabled'], default='online')
+    p.add_argument('--precluster-dir', type=Path, default=None,
+                   help='Directory of precluster_density_bands.py .npz caches '
+                        '(row_labels/col_labels per profile/N/k) -- when a cache file exists for a '
+                        '(profile, actual N, k), BOO construction loads it and skips HEM clustering '
+                        'entirely via csr_to_boo(row_labels=, col_labels=). Missing caches fall back '
+                        'to clustering as normal.')
     a = p.parse_args(argv)
     a.boo_clusters = ['hem']  # configurations() expects this; density profiles don't sweep it
     if min(a.sizes + a.features + a.boo_k) <= 0 or a.repeats < 1 or a.warmup < 0:
@@ -59,7 +66,44 @@ def parse_args(argv=None):
     return a
 
 
-def iter_cpp_only_variants(mat, configs, seed, x):
+def build_boo_variant(mat, config, seed, precluster_dir, profile):
+    """Mirrors bench_spmm.py's build_variants' BOO branch exactly (same
+    csr_to_boo kwargs, including hem_feasible_first=False -- see that
+    function), except it first checks precluster_dir for a cached
+    row_labels/col_labels .npz (written by precluster_density_bands.py) keyed
+    on (profile, actual matrix N, k) and passes them straight through to
+    csr_to_boo, which then skips HEM clustering entirely. Kept out of
+    build_variants itself since that function has no precomputed-label
+    support and is shared, unmodified, with bench_spmm.py.
+    """
+    nr = nc = config.get('target_nr', config.get('k'))
+    threshold = config.get('small_block_threshold', 4)
+    row_labels = col_labels = None
+    if precluster_dir is not None:
+        cache_path = precluster_dir / f"{profile.replace('@', '_at_')}_N{mat.shape[0]}_k{config['k']}.npz"
+        if cache_path.exists():
+            cached = np.load(cache_path)
+            row_labels, col_labels = cached['row_labels'], cached['col_labels']
+    start = time.perf_counter()
+    obj = spmm.csr_to_boo(mat, cluster=config['cluster'], target_nr=nr, target_nc=nc, seed=seed,
+                          small_block_policy='remainder', small_block_threshold=threshold,
+                          nz_order='rowmajor', hem_feasible_first=config.get('hem_feasible_first', False),
+                          row_labels=row_labels, col_labels=col_labels)
+    stats = dict(compressed_fraction=obj.compressed_nnz() / max(mat.nnz, 1),
+                 remainder_nnz=int(obj.remainder_nnz()), num_blocks=len(obj.blk_row_grp),
+                 max_nr=int(obj.max_nr), max_nc=int(obj.max_nc), max_nnz_blk=int(obj.max_nnz_blk),
+                 precluster_cache_hit=row_labels is not None)
+    build_ms = (time.perf_counter() - start) * 1000
+    torch.cuda.synchronize()
+    start = time.perf_counter()
+    obj = obj.to('cuda')
+    torch.cuda.synchronize()
+    staging_ms = (time.perf_counter() - start) * 1000
+    stats.update(build_ms=build_ms, staging_ms=staging_ms)
+    return dict(config, **stats), obj
+
+
+def iter_cpp_only_variants(mat, configs, seed, x, precluster_dir=None, profile=None):
     """Yields (config, obj) ONE AT A TIME for PBR/BOO cpp_only entries and for
     direct cuSPARSE cusparseSpMM_only entries. The caller must del(obj) and
     torch.cuda.empty_cache() before the generator is asked for the next item.
@@ -72,8 +116,15 @@ def iter_cpp_only_variants(mat, configs, seed, x):
     -- 50+ GiB, which is exactly what OOM'd three real jobs at the first
     N=1,048,576 workload (see DENSITY_BANDS.md). Building and tearing down
     one at a time bounds peak extra GPU memory to a single buffer.
+
+    BOO configs are built via build_boo_variant (not build_variants) so a
+    precomputed cluster cache can be used; PBR configs still go through
+    build_variants unmodified.
     """
-    base_variants = build_variants(mat, [c for c in configs if c['algorithm'] != 'cusparse_csr'], seed)
+    pbr_configs = [c for c in configs if c['algorithm'] == 'pbr']
+    boo_configs = [c for c in configs if c['algorithm'] == 'boo']
+    base_variants = build_variants(mat, pbr_configs, seed)
+    base_variants += [build_boo_variant(mat, dict(c), seed, precluster_dir, profile) for c in boo_configs]
     for config, _ in base_variants:
         if config['algorithm'] in ('pbr', 'boo'):
             family = 'block' if config['algorithm'] == 'pbr' else 'boo'
@@ -110,7 +161,7 @@ def iter_cpp_only_variants(mat, configs, seed, x):
     del csr
 
 
-def measure_cell(mat, configs, x_cpu, warmup, repeats, seed):
+def measure_cell(mat, configs, x_cpu, warmup, repeats, seed, precluster_dir=None, profile=None):
     x = x_cpu.to('cuda')
     reference = mat.astype(np.float64) @ x_cpu.numpy().astype(np.float64)
 
@@ -122,7 +173,7 @@ def measure_cell(mat, configs, x_cpu, warmup, repeats, seed):
     completed_configs = []
     samples = []
     validation = {}
-    for config, obj in iter_cpp_only_variants(mat, configs, seed, x):
+    for config, obj in iter_cpp_only_variants(mat, configs, seed, x, precluster_dir, profile):
         completed_configs.append(config)
         try:
             if config.get('supported', True):
@@ -222,7 +273,8 @@ def main(argv=None):
                                      features=features, nnz=int(mat.nnz), dtype='float32', index_dtype='int32',
                                      seed=a.seed, matrix_sha256=matrix_hash, x_sha256=digest_arrays(x_cpu.numpy()),
                                      source_sha256=metadata['source_sha256'], wandb_run_id=run.id)
-                        summaries, samples = measure_cell(mat, configs, x_cpu, a.warmup, a.repeats, a.seed)
+                        summaries, samples = measure_cell(mat, configs, x_cpu, a.warmup, a.repeats, a.seed,
+                                                           a.precluster_dir, profile)
                         summaries = [dict(common, **s) for s in summaries]
                         samples = [dict(common, **s) for s in samples]
                         if summary_columns is None:
