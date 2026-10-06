@@ -1,0 +1,342 @@
+------------------------------------
+Tue 06 Oct 2026 22:06:50 IDT
+SLURM_JOBID:		22331033
+SLURM_JOB_NODELIST:	dt-3090-01
+SLURM_SCRATCH_DIR:	/scratch/dayanb/22331033
+Allocated Resouces:	cpu - 8 / mem - 32768 MB / gpu - 1
+SLURM_GPU_INDEX:	0
+Running as dayanb from erant account with erant QOS
+------------------------------------
+........................................................................ [ 13%]
+........................................................................ [ 27%]
+........................................................................ [ 41%]
+........................................................................ [ 55%]
+.s...................................................................... [ 68%]
+.................s....s....s....s....s....s....s....s....s....s....s.... [ 82%]
+s....................................................................... [ 96%]
+..................                                                       [100%]
+=============================== warnings summary ===============================
+tests/torch_fast_spdmm/test_boo_edges.py:74
+  /home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/test_boo_edges.py:74: PytestUnknownMarkWarning: Unknown pytest.mark.boo_sanitizer - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.boo_sanitizer
+
+tests/torch_fast_spdmm/test_boo_edges.py:96
+  /home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/test_boo_edges.py:96: PytestUnknownMarkWarning: Unknown pytest.mark.boo_sanitizer - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.boo_sanitizer
+
+tests/torch_fast_spdmm/test_boo_edges.py:185
+  /home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/test_boo_edges.py:185: PytestUnknownMarkWarning: Unknown pytest.mark.boo_sanitizer - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.boo_sanitizer
+
+tests/torch_fast_spdmm/test_boo_edges.py:200
+  /home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/test_boo_edges.py:200: PytestUnknownMarkWarning: Unknown pytest.mark.boo_sanitizer - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.boo_sanitizer
+
+tests/torch_fast_spdmm/test_boo_edges.py:263
+  /home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/test_boo_edges.py:263: PytestUnknownMarkWarning: Unknown pytest.mark.boo_sanitizer - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.boo_sanitizer
+
+tests/torch_fast_spdmm/test_boo_edges.py::test_builder_input_contract_and_torch_csr
+  /home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/test_boo_edges.py:380: UserWarning: Sparse CSR tensor support is in beta state. If you miss a functionality in the sparse tensor support, please submit a feature request to https://github.com/pytorch/pytorch/issues. (Triggered internally at /pytorch/aten/src/ATen/SparseCsrTensorImpl.cpp:49.)
+    tensor = torch.sparse_csr_tensor(torch.from_numpy(mat.indptr), torch.from_numpy(mat.indices),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+509 passed, 13 skipped, 6 warnings in 24.45s
+/home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/benchmark/bench_clustering.py:82: UserWarning: Sparse CSR tensor support is in beta state. If you miss a functionality in the sparse tensor support, please submit a feature request to https://github.com/pytorch/pytorch/issues. (Triggered internally at /pytorch/aten/src/ATen/SparseCsrTensorImpl.cpp:49.)
+  csr = torch.sparse_csr_tensor(torch.from_numpy(mat.indptr),
+prepare fem2d N=65536 identity_k8
+prepare fem2d N=65536 identity_k16
+prepare fem2d N=65536 identity_k32
+prepare fem2d N=65536 identity_k64
+prepare fem2d N=65536 identity_k128
+prepare fem2d N=65536 identity_k256
+prepare fem2d N=65536 hem_k8
+prepare fem2d N=65536 hem_k16
+prepare fem2d N=65536 hem_k32
+prepare fem2d N=65536 hem_k64
+prepare fem2d N=65536 hem_k128
+prepare fem2d N=65536 hem_k256
+prepare fem2d N=65536 metis_k8
+prepare fem2d N=65536 metis_k16
+prepare fem2d N=65536 metis_k32
+prepare fem2d N=65536 metis_k64
+prepare fem2d N=65536 metis_k128
+prepare fem2d N=65536 metis_k256
+prepare fem2d N=65536 graclus_k8
+prepare fem2d N=65536 graclus_k16
+prepare fem2d N=65536 graclus_k32
+prepare fem2d N=65536 graclus_k64
+prepare fem2d N=65536 graclus_k128
+prepare fem2d N=65536 graclus_k256
+fem2d N=65536 F=128 cusparse_csr: 0.3983199894428253 ms (passed)
+fem2d N=65536 F=128 identity_k8: 1.0224640369415283 ms (passed)
+fem2d N=65536 F=128 identity_k16: 0.8313120007514954 ms (passed)
+fem2d N=65536 F=128 identity_k32: 0.7361440062522888 ms (passed)
+fem2d N=65536 F=128 identity_k64: 0.7608320116996765 ms (passed)
+fem2d N=65536 F=128 identity_k128: 0.9646080136299133 ms (passed)
+fem2d N=65536 F=128 identity_k256: 1.3961759805679321 ms (passed)
+fem2d N=65536 F=128 hem_k8: 0.988288015127182 ms (passed)
+fem2d N=65536 F=128 hem_k16: 0.7976959943771362 ms (passed)
+fem2d N=65536 F=128 hem_k32: 0.719871997833252 ms (passed)
+fem2d N=65536 F=128 hem_k64: 0.8447999954223633 ms (passed)
+fem2d N=65536 F=128 hem_k128: 1.536895990371704 ms (passed)
+fem2d N=65536 F=128 hem_k256: 1.580016016960144 ms (passed)
+fem2d N=65536 F=128 metis_k8: 1.1315039992332458 ms (passed)
+fem2d N=65536 F=128 metis_k16: 0.8974719941616058 ms (passed)
+fem2d N=65536 F=128 metis_k32: 0.769567996263504 ms (passed)
+fem2d N=65536 F=128 metis_k64: 0.9134079813957214 ms (passed)
+fem2d N=65536 F=128 metis_k128: 1.6931840181350708 ms (passed)
+fem2d N=65536 F=128 metis_k256: 1.7135840058326721 ms (passed)
+fem2d N=65536 F=128 graclus_k8: 0.9954400062561035 ms (passed)
+fem2d N=65536 F=128 graclus_k16: 0.8084480166435242 ms (passed)
+fem2d N=65536 F=128 graclus_k32: 0.7197440266609192 ms (passed)
+fem2d N=65536 F=128 graclus_k64: 0.8400799930095673 ms (passed)
+fem2d N=65536 F=128 graclus_k128: 1.5831040143966675 ms (passed)
+fem2d N=65536 F=128 graclus_k256: 1.6404640078544617 ms (passed)
+fem2d N=65536 F=512 cusparse_csr: 1.558064043521881 ms (passed)
+fem2d N=65536 F=512 identity_k8: 3.1288000345230103 ms (passed)
+fem2d N=65536 F=512 identity_k16: 2.76582407951355 ms (passed)
+fem2d N=65536 F=512 identity_k32: 2.6208800077438354 ms (passed)
+fem2d N=65536 F=512 identity_k64: 2.7934720516204834 ms (passed)
+fem2d N=65536 F=512 identity_k128: 3.6720640659332275 ms (passed)
+fem2d N=65536 F=512 identity_k256: 5.3432159423828125 ms (passed)
+fem2d N=65536 F=512 hem_k8: 3.0119519233703613 ms (passed)
+fem2d N=65536 F=512 hem_k16: 2.730496048927307 ms (passed)
+fem2d N=65536 F=512 hem_k32: 2.6577919721603394 ms (passed)
+fem2d N=65536 F=512 hem_k64: 3.2931840419769287 ms (passed)
+fem2d N=65536 F=512 hem_k128: 6.935023784637451 ms (passed)
+fem2d N=65536 F=512 hem_k256: 6.996335983276367 ms (passed)
+fem2d N=65536 F=512 metis_k8: 3.4289920330047607 ms (passed)
+fem2d N=65536 F=512 metis_k16: 3.00654399394989 ms (passed)
+fem2d N=65536 F=512 metis_k32: 2.7628639936447144 ms (passed)
+fem2d N=65536 F=512 metis_k64: 3.3643521070480347 ms (passed)
+fem2d N=65536 F=512 metis_k128: 6.653439998626709 ms (passed)
+fem2d N=65536 F=512 metis_k256: 7.227951765060425 ms (passed)
+fem2d N=65536 F=512 graclus_k8: 3.115007996559143 ms (passed)
+fem2d N=65536 F=512 graclus_k16: 2.7310080528259277 ms (passed)
+fem2d N=65536 F=512 graclus_k32: 2.595855951309204 ms (passed)
+fem2d N=65536 F=512 graclus_k64: 3.3428479433059692 ms (passed)
+fem2d N=65536 F=512 graclus_k128: 7.059823989868164 ms (passed)
+fem2d N=65536 F=512 graclus_k256: 7.254960060119629 ms (passed)
+prepare fem2d_permuted N=65536 identity_k8
+prepare fem2d_permuted N=65536 identity_k16
+prepare fem2d_permuted N=65536 identity_k32
+prepare fem2d_permuted N=65536 identity_k64
+prepare fem2d_permuted N=65536 identity_k128
+prepare fem2d_permuted N=65536 identity_k256
+prepare fem2d_permuted N=65536 hem_k8
+prepare fem2d_permuted N=65536 hem_k16
+prepare fem2d_permuted N=65536 hem_k32
+prepare fem2d_permuted N=65536 hem_k64
+prepare fem2d_permuted N=65536 hem_k128
+prepare fem2d_permuted N=65536 hem_k256
+prepare fem2d_permuted N=65536 metis_k8
+prepare fem2d_permuted N=65536 metis_k16
+prepare fem2d_permuted N=65536 metis_k32
+prepare fem2d_permuted N=65536 metis_k64
+prepare fem2d_permuted N=65536 metis_k128
+prepare fem2d_permuted N=65536 metis_k256
+prepare fem2d_permuted N=65536 graclus_k8
+prepare fem2d_permuted N=65536 graclus_k16
+prepare fem2d_permuted N=65536 graclus_k32
+prepare fem2d_permuted N=65536 graclus_k64
+prepare fem2d_permuted N=65536 graclus_k128
+prepare fem2d_permuted N=65536 graclus_k256
+fem2d_permuted N=65536 F=128 cusparse_csr: 0.7367840111255646 ms (passed)
+fem2d_permuted N=65536 F=128 identity_k8: 1.6973280310630798 ms (passed)
+fem2d_permuted N=65536 F=128 identity_k16: 2.1882879734039307 ms (passed)
+fem2d_permuted N=65536 F=128 identity_k32: 3.2075999975204468 ms (passed)
+fem2d_permuted N=65536 F=128 identity_k64: 5.860719919204712 ms (passed)
+fem2d_permuted N=65536 F=128 identity_k128: 20.396960258483887 ms (passed)
+fem2d_permuted N=65536 F=128 identity_k256: 41.8384952545166 ms (passed)
+fem2d_permuted N=65536 F=128 hem_k8: 1.055232048034668 ms (passed)
+fem2d_permuted N=65536 F=128 hem_k16: 0.8585119843482971 ms (passed)
+fem2d_permuted N=65536 F=128 hem_k32: 0.7572479844093323 ms (passed)
+fem2d_permuted N=65536 F=128 hem_k64: 0.9430080056190491 ms (passed)
+fem2d_permuted N=65536 F=128 hem_k128: 1.8584319949150085 ms (passed)
+fem2d_permuted N=65536 F=128 hem_k256: 1.8564800024032593 ms (passed)
+fem2d_permuted N=65536 F=128 metis_k8: 1.1705920100212097 ms (passed)
+fem2d_permuted N=65536 F=128 metis_k16: 0.9174239933490753 ms (passed)
+fem2d_permuted N=65536 F=128 metis_k32: 0.7873919904232025 ms (passed)
+fem2d_permuted N=65536 F=128 metis_k64: 0.9041279852390289 ms (passed)
+fem2d_permuted N=65536 F=128 metis_k128: 1.6694879531860352 ms (passed)
+fem2d_permuted N=65536 F=128 metis_k256: 1.691215991973877 ms (passed)
+fem2d_permuted N=65536 F=128 graclus_k8: 1.0607840418815613 ms (passed)
+fem2d_permuted N=65536 F=128 graclus_k16: 0.8590719997882843 ms (passed)
+fem2d_permuted N=65536 F=128 graclus_k32: 0.7652639746665955 ms (passed)
+fem2d_permuted N=65536 F=128 graclus_k64: 0.9405440092086792 ms (passed)
+fem2d_permuted N=65536 F=128 graclus_k128: 1.9074400067329407 ms (passed)
+fem2d_permuted N=65536 F=128 graclus_k256: 1.8375840187072754 ms (passed)
+fem2d_permuted N=65536 F=512 cusparse_csr: 2.895456075668335 ms (passed)
+fem2d_permuted N=65536 F=512 identity_k8: 5.136384010314941 ms (passed)
+fem2d_permuted N=65536 F=512 identity_k16: 7.461375951766968 ms (passed)
+fem2d_permuted N=65536 F=512 identity_k32: 12.377087593078613 ms (passed)
+fem2d_permuted N=65536 F=512 identity_k64: 23.078304290771484 ms (passed)
+fem2d_permuted N=65536 F=512 identity_k128: 78.1322250366211 ms (passed)
+fem2d_permuted N=65536 F=512 identity_k256: 163.55782318115234 ms (passed)
+fem2d_permuted N=65536 F=512 hem_k8: 3.1744800806045532 ms (passed)
+fem2d_permuted N=65536 F=512 hem_k16: 2.970080018043518 ms (passed)
+fem2d_permuted N=65536 F=512 hem_k32: 2.8743679523468018 ms (passed)
+fem2d_permuted N=65536 F=512 hem_k64: 3.403775930404663 ms (passed)
+fem2d_permuted N=65536 F=512 hem_k128: 7.656527996063232 ms (passed)
+fem2d_permuted N=65536 F=512 hem_k256: 7.438336133956909 ms (passed)
+fem2d_permuted N=65536 F=512 metis_k8: 3.636191964149475 ms (passed)
+fem2d_permuted N=65536 F=512 metis_k16: 3.1254079341888428 ms (passed)
+fem2d_permuted N=65536 F=512 metis_k32: 2.9639679193496704 ms (passed)
+fem2d_permuted N=65536 F=512 metis_k64: 3.460096001625061 ms (passed)
+fem2d_permuted N=65536 F=512 metis_k128: 7.099792003631592 ms (passed)
+fem2d_permuted N=65536 F=512 metis_k256: 7.115776062011719 ms (passed)
+fem2d_permuted N=65536 F=512 graclus_k8: 3.468832015991211 ms (passed)
+fem2d_permuted N=65536 F=512 graclus_k16: 2.8252480030059814 ms (passed)
+fem2d_permuted N=65536 F=512 graclus_k32: 2.865648031234741 ms (passed)
+fem2d_permuted N=65536 F=512 graclus_k64: 3.4339998960494995 ms (passed)
+fem2d_permuted N=65536 F=512 graclus_k128: 7.4019999504089355 ms (passed)
+fem2d_permuted N=65536 F=512 graclus_k256: 7.612415790557861 ms (passed)
+prepare diag_b0.3 N=65536 identity_k8
+prepare diag_b0.3 N=65536 identity_k16
+prepare diag_b0.3 N=65536 identity_k32
+prepare diag_b0.3 N=65536 identity_k64
+prepare diag_b0.3 N=65536 identity_k128
+prepare diag_b0.3 N=65536 identity_k256
+prepare diag_b0.3 N=65536 hem_k8
+prepare diag_b0.3 N=65536 hem_k16
+prepare diag_b0.3 N=65536 hem_k32
+prepare diag_b0.3 N=65536 hem_k64
+prepare diag_b0.3 N=65536 hem_k128
+prepare diag_b0.3 N=65536 hem_k256
+prepare diag_b0.3 N=65536 metis_k8
+prepare diag_b0.3 N=65536 metis_k16
+prepare diag_b0.3 N=65536 metis_k32
+prepare diag_b0.3 N=65536 metis_k64
+prepare diag_b0.3 N=65536 metis_k128
+prepare diag_b0.3 N=65536 metis_k256
+prepare diag_b0.3 N=65536 graclus_k8
+prepare diag_b0.3 N=65536 graclus_k16
+prepare diag_b0.3 N=65536 graclus_k32
+prepare diag_b0.3 N=65536 graclus_k64
+prepare diag_b0.3 N=65536 graclus_k128
+prepare diag_b0.3 N=65536 graclus_k256
+diag_b0.3 N=65536 F=128 cusparse_csr: 0.3003999888896942 ms (passed)
+diag_b0.3 N=65536 F=128 identity_k8: 0.8616960048675537 ms (passed)
+diag_b0.3 N=65536 F=128 identity_k16: 0.46935999393463135 ms (passed)
+diag_b0.3 N=65536 F=128 identity_k32: 0.3619839996099472 ms (passed)
+diag_b0.3 N=65536 F=128 identity_k64: 0.36604800820350647 ms (passed)
+diag_b0.3 N=65536 F=128 identity_k128: 0.40870401263237 ms (passed)
+diag_b0.3 N=65536 F=128 identity_k256: 0.5980160236358643 ms (passed)
+diag_b0.3 N=65536 F=128 hem_k8: 0.8570879995822906 ms (passed)
+diag_b0.3 N=65536 F=128 hem_k16: 0.4787200093269348 ms (passed)
+diag_b0.3 N=65536 F=128 hem_k32: 0.3681280016899109 ms (passed)
+diag_b0.3 N=65536 F=128 hem_k64: 0.36403200030326843 ms (passed)
+diag_b0.3 N=65536 F=128 hem_k128: 0.362527996301651 ms (passed)
+diag_b0.3 N=65536 F=128 hem_k256: 0.36399999260902405 ms (passed)
+diag_b0.3 N=65536 F=128 metis_k8: 0.8621279895305634 ms (passed)
+diag_b0.3 N=65536 F=128 metis_k16: 0.4702720046043396 ms (passed)
+diag_b0.3 N=65536 F=128 metis_k32: 0.3635199964046478 ms (passed)
+diag_b0.3 N=65536 F=128 metis_k64: 0.36452800035476685 ms (passed)
+diag_b0.3 N=65536 F=128 metis_k128: 0.4837919920682907 ms (passed)
+diag_b0.3 N=65536 F=128 metis_k256: 1.1161600351333618 ms (passed)
+diag_b0.3 N=65536 F=128 graclus_k8: 0.9048479795455933 ms (passed)
+diag_b0.3 N=65536 F=128 graclus_k16: 0.5237760245800018 ms (passed)
+diag_b0.3 N=65536 F=128 graclus_k32: 0.3978240042924881 ms (passed)
+diag_b0.3 N=65536 F=128 graclus_k64: 0.3633919954299927 ms (passed)
+diag_b0.3 N=65536 F=128 graclus_k128: 0.37119999527931213 ms (passed)
+diag_b0.3 N=65536 F=128 graclus_k256: 0.36292800307273865 ms (passed)
+diag_b0.3 N=65536 F=512 cusparse_csr: 1.134496033191681 ms (passed)
+diag_b0.3 N=65536 F=512 identity_k8: 2.455552101135254 ms (passed)
+diag_b0.3 N=65536 F=512 identity_k16: 1.59688001871109 ms (passed)
+diag_b0.3 N=65536 F=512 identity_k32: 1.287168025970459 ms (passed)
+diag_b0.3 N=65536 F=512 identity_k64: 1.2601119875907898 ms (passed)
+diag_b0.3 N=65536 F=512 identity_k128: 1.4555999636650085 ms (passed)
+diag_b0.3 N=65536 F=512 identity_k256: 2.2046560049057007 ms (passed)
+diag_b0.3 N=65536 F=512 hem_k8: 2.4723039865493774 ms (passed)
+diag_b0.3 N=65536 F=512 hem_k16: 1.584608018398285 ms (passed)
+diag_b0.3 N=65536 F=512 hem_k32: 1.289680004119873 ms (passed)
+diag_b0.3 N=65536 F=512 hem_k64: 1.2584960460662842 ms (passed)
+diag_b0.3 N=65536 F=512 hem_k128: 1.2513279914855957 ms (passed)
+diag_b0.3 N=65536 F=512 hem_k256: 1.2451040148735046 ms (passed)
+diag_b0.3 N=65536 F=512 metis_k8: 2.4483840465545654 ms (passed)
+diag_b0.3 N=65536 F=512 metis_k16: 1.57532799243927 ms (passed)
+diag_b0.3 N=65536 F=512 metis_k32: 1.2834559679031372 ms (passed)
+diag_b0.3 N=65536 F=512 metis_k64: 1.2439519762992859 ms (passed)
+diag_b0.3 N=65536 F=512 metis_k128: 1.7355520129203796 ms (passed)
+diag_b0.3 N=65536 F=512 metis_k256: 4.219903945922852 ms (passed)
+diag_b0.3 N=65536 F=512 graclus_k8: 2.5665760040283203 ms (passed)
+diag_b0.3 N=65536 F=512 graclus_k16: 1.6997279524803162 ms (passed)
+diag_b0.3 N=65536 F=512 graclus_k32: 1.3675519824028015 ms (passed)
+diag_b0.3 N=65536 F=512 graclus_k64: 1.2578240036964417 ms (passed)
+diag_b0.3 N=65536 F=512 graclus_k128: 1.255407989025116 ms (passed)
+diag_b0.3 N=65536 F=512 graclus_k256: 1.248192012310028 ms (passed)
+prepare diag_b1.0 N=65536 identity_k8
+prepare diag_b1.0 N=65536 identity_k16
+prepare diag_b1.0 N=65536 identity_k32
+prepare diag_b1.0 N=65536 identity_k64
+prepare diag_b1.0 N=65536 identity_k128
+prepare diag_b1.0 N=65536 identity_k256
+prepare diag_b1.0 N=65536 hem_k8
+prepare diag_b1.0 N=65536 hem_k16
+prepare diag_b1.0 N=65536 hem_k32
+prepare diag_b1.0 N=65536 hem_k64
+prepare diag_b1.0 N=65536 hem_k128
+prepare diag_b1.0 N=65536 hem_k256
+prepare diag_b1.0 N=65536 metis_k8
+prepare diag_b1.0 N=65536 metis_k16
+prepare diag_b1.0 N=65536 metis_k32
+prepare diag_b1.0 N=65536 metis_k64
+prepare diag_b1.0 N=65536 metis_k128
+prepare diag_b1.0 N=65536 metis_k256
+prepare diag_b1.0 N=65536 graclus_k8
+prepare diag_b1.0 N=65536 graclus_k16
+prepare diag_b1.0 N=65536 graclus_k32
+prepare diag_b1.0 N=65536 graclus_k64
+prepare diag_b1.0 N=65536 graclus_k128
+prepare diag_b1.0 N=65536 graclus_k256
+diag_b1.0 N=65536 F=128 cusparse_csr: 0.8361760079860687 ms (passed)
+diag_b1.0 N=65536 F=128 identity_k8: 1.2405760288238525 ms (passed)
+diag_b1.0 N=65536 F=128 identity_k16: 0.8904959857463837 ms (passed)
+diag_b1.0 N=65536 F=128 identity_k32: 0.807968020439148 ms (passed)
+diag_b1.0 N=65536 F=128 identity_k64: 0.8576000034809113 ms (passed)
+diag_b1.0 N=65536 F=128 identity_k128: 1.055023968219757 ms (passed)
+diag_b1.0 N=65536 F=128 identity_k256: None ms (not_supported)
+diag_b1.0 N=65536 F=128 hem_k8: 1.4648320078849792 ms (passed)
+diag_b1.0 N=65536 F=128 hem_k16: 0.9864799976348877 ms (passed)
+diag_b1.0 N=65536 F=128 hem_k32: 0.8626880049705505 ms (passed)
+diag_b1.0 N=65536 F=128 hem_k64: 0.8586239814758301 ms (passed)
+diag_b1.0 N=65536 F=128 hem_k128: 0.8585920035839081 ms (passed)
+diag_b1.0 N=65536 F=128 hem_k256: 0.8584800064563751 ms (passed)
+diag_b1.0 N=65536 F=128 metis_k8: 1.2364799976348877 ms (passed)
+diag_b1.0 N=65536 F=128 metis_k16: 0.8929280042648315 ms (passed)
+diag_b1.0 N=65536 F=128 metis_k32: 0.8110079765319824 ms (passed)
+diag_b1.0 N=65536 F=128 metis_k64: 0.8626559972763062 ms (passed)
+diag_b1.0 N=65536 F=128 metis_k128: 1.0490880012512207 ms (passed)
+diag_b1.0 N=65536 F=128 metis_k256: None ms (not_supported)
+diag_b1.0 N=65536 F=128 graclus_k8: 1.2344160079956055 ms (passed)
+diag_b1.0 N=65536 F=128 graclus_k16: 0.8903200030326843 ms (passed)
+diag_b1.0 N=65536 F=128 graclus_k32: 0.8079200088977814 ms (passed)
+diag_b1.0 N=65536 F=128 graclus_k64: 0.8606719970703125 ms (passed)
+diag_b1.0 N=65536 F=128 graclus_k128: 0.871504008769989 ms (passed)
+diag_b1.0 N=65536 F=128 graclus_k256: 0.8611840009689331 ms (passed)
+diag_b1.0 N=65536 F=512 cusparse_csr: 3.305039882659912 ms (passed)
+diag_b1.0 N=65536 F=512 identity_k8: 4.072399854660034 ms (passed)
+diag_b1.0 N=65536 F=512 identity_k16: 3.320255994796753 ms (passed)
+diag_b1.0 N=65536 F=512 identity_k32: 3.0469120740890503 ms (passed)
+diag_b1.0 N=65536 F=512 identity_k64: 3.193343997001648 ms (passed)
+diag_b1.0 N=65536 F=512 identity_k128: 3.918704032897949 ms (passed)
+diag_b1.0 N=65536 F=512 identity_k256: None ms (not_supported)
+diag_b1.0 N=65536 F=512 hem_k8: 4.650399923324585 ms (passed)
+diag_b1.0 N=65536 F=512 hem_k16: 3.525631904602051 ms (passed)
+diag_b1.0 N=65536 F=512 hem_k32: 3.218943953514099 ms (passed)
+diag_b1.0 N=65536 F=512 hem_k64: 3.1964160203933716 ms (passed)
+diag_b1.0 N=65536 F=512 hem_k128: 3.1861759424209595 ms (passed)
+diag_b1.0 N=65536 F=512 hem_k256: 3.171328067779541 ms (passed)
+diag_b1.0 N=65536 F=512 metis_k8: 4.069360017776489 ms (passed)
+diag_b1.0 N=65536 F=512 metis_k16: 3.2921600341796875 ms (passed)
+diag_b1.0 N=65536 F=512 metis_k32: 3.0310399532318115 ms (passed)
+diag_b1.0 N=65536 F=512 metis_k64: 3.1728639602661133 ms (passed)
+diag_b1.0 N=65536 F=512 metis_k128: 3.9306238889694214 ms (passed)
+diag_b1.0 N=65536 F=512 metis_k256: None ms (not_supported)
+diag_b1.0 N=65536 F=512 graclus_k8: 4.087296009063721 ms (passed)
+diag_b1.0 N=65536 F=512 graclus_k16: 3.316208004951477 ms (passed)
+diag_b1.0 N=65536 F=512 graclus_k32: 3.0479360818862915 ms (passed)
+diag_b1.0 N=65536 F=512 graclus_k64: 3.194800019264221 ms (passed)
+diag_b1.0 N=65536 F=512 graclus_k128: 3.1856319904327393 ms (passed)
+diag_b1.0 N=65536 F=512 graclus_k256: 3.1744000911712646 ms (passed)

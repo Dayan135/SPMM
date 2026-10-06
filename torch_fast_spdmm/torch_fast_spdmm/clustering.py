@@ -20,7 +20,6 @@ greedy on the true objective (total X traffic).
 
 from __future__ import annotations
 
-import warnings
 from typing import Optional, Tuple
 
 import numpy as np
@@ -357,36 +356,57 @@ def _hem_labels(pat: sp.csr_matrix, target: int, max_size: Optional[int],
 # ---------------------------------------------------------------------------
 
 def _graclus_labels(pat: sp.csr_matrix, target: int, hub_degree: int,
-                    topk: Optional[int]) -> np.ndarray:
+                    topk: Optional[int], max_size: Optional[int],
+                    max_nnz: Optional[int], seed: int) -> np.ndarray:
     import torch
-    from torch_cluster import graclus_cluster
+    try:
+        from torch_cluster import graclus_cluster
+    except (ImportError, OSError) as exc:
+        raise ImportError("cluster='graclus' requires torch-cluster built for the installed "
+                          "PyTorch version; no HEM fallback is performed") from exc
 
     n = pat.shape[0]
     labels = np.arange(n, dtype=np.int64)
     level_pat = pat
+    size = np.ones(n, dtype=np.int64)
+    nnz = np.diff(pat.indptr).astype(np.int64)
 
-    # Same convergence rule as `_hem_labels`: graclus halves at best, so a fixed
-    # log2(target) level count undershoots.  Caps are applied afterwards by
-    # `_enforce_caps`, so the stopping rule here is mean group size.
+    # Filter infeasible edges BEFORE matching, preserving useful subgroups
+    # instead of overgrowing then cutting them in original vertex order.
     max_levels = 8 * max(1, int(np.ceil(np.log2(max(target, 1))))) + 16
-    for _ in range(max_levels):
-        if level_pat.shape[0] <= 1 or n / level_pat.shape[0] >= target:
+    for level in range(max_levels):
+        if target <= 1 or level_pat.shape[0] <= 1:
+            break
+        if max_size is None and n / level_pat.shape[0] >= target:
             break
         graph = _similarity_graph(level_pat, hub_degree, topk).tocoo()
+        feasible = np.ones(graph.nnz, dtype=bool)
+        if max_size is not None:
+            feasible &= size[graph.row] + size[graph.col] <= max_size
+        if max_nnz is not None:
+            feasible &= nnz[graph.row] + nnz[graph.col] <= max_nnz
+        graph = sp.coo_matrix((graph.data[feasible],
+                               (graph.row[feasible], graph.col[feasible])), shape=graph.shape)
         if graph.nnz == 0:
             break
-        cluster = graclus_cluster(
-            torch.from_numpy(graph.row.astype(np.int64)),
-            torch.from_numpy(graph.col.astype(np.int64)),
-            torch.from_numpy(graph.data.astype(np.float32)),
-            num_nodes=level_pat.shape[0],
-        ).numpy()
+        # The CPU backend visits vertices in torch.randperm order. Isolate its
+        # RNG so reproducibility does not change the caller's dense inputs.
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(seed + level)
+            cluster = graclus_cluster(
+                torch.from_numpy(graph.row.astype(np.int64)),
+                torch.from_numpy(graph.col.astype(np.int64)),
+                torch.from_numpy(graph.data.astype(np.float32)),
+                num_nodes=level_pat.shape[0],
+            ).numpy()
         new_id = _relabel_consecutive(cluster)
         if int(new_id.max()) + 1 == level_pat.shape[0]:
             break                       # no progress this level
         labels = new_id[labels]
 
         n_new = int(new_id.max()) + 1
+        size = np.bincount(new_id, weights=size, minlength=n_new).astype(np.int64)
+        nnz = np.bincount(new_id, weights=nnz, minlength=n_new).astype(np.int64)
         contraction = sp.csr_matrix(
             (np.ones(new_id.size, dtype=np.int64), (new_id, np.arange(new_id.size))),
             shape=(n_new, new_id.size))
@@ -397,24 +417,34 @@ def _graclus_labels(pat: sp.csr_matrix, target: int, hub_degree: int,
 
 
 def _metis_labels(pat: sp.csr_matrix, target: int, hub_degree: int,
-                  topk: Optional[int]) -> np.ndarray:
-    import torch
-    import torch_sparse  # noqa: F401  -- registers torch.ops.torch_sparse
+                  topk: Optional[int], seed: int) -> np.ndarray:
+    try:
+        import pymetis
+    except ImportError as exc:
+        raise ImportError("cluster='metis' requires pymetis>=2025.2.2; "
+                          "install the metis extra. No HEM fallback is performed") from exc
 
     n = pat.shape[0]
     nparts = max(1, int(np.ceil(n / max(target, 1))))
     if nparts <= 1:
         return np.zeros(n, dtype=np.int64)
+    if nparts >= n:
+        return np.arange(n, dtype=np.int64)
 
     graph = _similarity_graph(pat, hub_degree, topk).tocsr()
-    cluster = torch.ops.torch_sparse.partition(
-        torch.from_numpy(graph.indptr.astype(np.int64)),
-        torch.from_numpy(graph.indices.astype(np.int64)),
-        torch.from_numpy(graph.data.astype(np.int64)),
+    if graph.nnz == 0:
+        # With no similarity signal, any balanced partition is equivalent.
+        return np.arange(n, dtype=np.int64) // max(target, 1)
+    dtype = pymetis.zero_copy_dtype()
+    result = pymetis.part_graph(
         nparts,
-        False,
-    ).numpy()
-    return cluster.astype(np.int64)
+        adjacency=pymetis.CSRAdjacency(graph.indptr.astype(dtype), graph.indices.astype(dtype)),
+        eweights=graph.data.astype(dtype), recursive=False,
+        options=pymetis.Options(seed=seed % (2**31), numbering=0),
+    )
+    # Unit vertex weights balance row counts. The common cap pass also enforces
+    # max_nnz and splits any partition exceeding the strict BOO size limit.
+    return np.asarray(result.vertex_part, dtype=np.int64)
 
 
 # ---------------------------------------------------------------------------
@@ -467,20 +497,9 @@ def cluster_axis(mat: sp.spmatrix, method: str = 'hem', target: int = 32,
         perm = reverse_cuthill_mckee(symmetric, symmetric_mode=True).astype(np.int64)
         labels = _tile_by_permutation(perm, n, target)
     elif method == 'graclus':
-        try:
-            labels = _graclus_labels(pat, target, hub_degree, topk)
-        except ImportError:
-            warnings.warn("torch_cluster unavailable; falling back to 'hem'", RuntimeWarning)
-            labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
-                                 exact_recompute, feasible_first=feasible_first)
+        labels = _graclus_labels(pat, target, hub_degree, topk, max_size, max_nnz, seed)
     elif method == 'metis':
-        try:
-            labels = _metis_labels(pat, target, hub_degree, topk)
-        except (ImportError, RuntimeError, AttributeError):
-            warnings.warn("torch_sparse METIS unavailable; falling back to 'hem'",
-                          RuntimeWarning)
-            labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
-                                 exact_recompute, feasible_first=feasible_first)
+        labels = _metis_labels(pat, target, hub_degree, topk, seed)
     else:  # 'hem'
         labels = _hem_labels(pat, target, max_size, max_nnz, hub_degree, topk,
                              exact_recompute, feasible_first=feasible_first,

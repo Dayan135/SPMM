@@ -273,41 +273,40 @@ Two guards are mandatory, or `diag_b1.0` at N=262144 will OOM (`A·Aᵀ` costs `
 
 | `method` | implementation | role |
 |---|---|---|
-| `graclus` | `torch_cluster.graclus_cluster(row, col, weight)`, iterated to the target group size | primary |
-| `metis` | `torch.ops.torch_sparse.partition(rowptr, col, weight, nparts)`, `nparts = ceil(n/target)`, vertex weight = row nnz | balance guarantee Graclus lacks |
-| `hem` | pure-numpy multilevel heavy-edge matching (§5.3) | dependency-free fallback |
+| `graclus` | seeded CPU `torch_cluster.graclus_cluster`, iterated with feasible-edge filtering and exact support recomputation | alternative greedy coarsener |
+| `metis` | PyMETIS weighted k-way partitioning, `nparts = ceil(n/target)`, unit vertex weights; strict caps enforced afterward | balanced graph partitioning |
+| `hem` | pure-numpy multilevel heavy-edge matching (§5.3) | default |
 | `rcm` | `scipy.sparse.csgraph.reverse_cuthill_mckee(A + A.T)`, square only, then tile | cheap baseline |
 | `degree` | sort by nnz, then tile | controls for balance alone |
 | `identity` | `arange(n) // target` | **today's fixed tiling — the honest "no clustering" control** |
 | `random` | seeded permutation, then tile | pessimistic control; if the offline metric does not degrade here, the metric is broken |
 
-`torch_cluster` and `torch_sparse` are optional imports. `torch_sparse`'s METIS path also
-requires the wheel to be built `WITH_METIS`, which pip wheels often are not. If either
-import fails, `graclus` / `metis` degrade to `hem` with a warning.
+`torch_cluster` and `pymetis>=2025.2.2` are optional imports. Missing or incompatible
+backends fail explicitly; neither method falls back to HEM. METIS balances row
+counts, not nonzero counts; post-partition splitting enforces the requested caps.
+See [CLUSTERING_EXPERIMENT.md](CLUSTERING_EXPERIMENT.md) for installation and the
+8-through-256 square-group comparison.
 
-### 5.3 The `hem` fallback
+### 5.3 The `hem` default
 
-`L = log2(target)` levels. Fully vectorized, no RNG, deterministic.
+Coarsens until no feasible matching remains, with a safety limit on levels.
+Fully vectorized, no RNG, deterministic.
 
-1. **Heaviest neighbour** — `np.lexsort((coo.col, -coo.data, coo.row))`, take the first
-   entry per row. `lexsort` is stable and the `col`-ascending key breaks weight ties by
-   smallest index, so the result is reproducible.
-2. **Mutual-max matching** — keep pairs where `best[best[i]] == i` and `i < j`. A maximal
-   matching with weight ≥ ½ of optimal. This is the choice that makes the whole thing
-   vectorizable in numpy, and it removes all randomness.
-3. **Cap enforcement, before contraction** — reject a pair if `size[i]+size[j] > max_nr` or
-   `nnz[i]+nnz[j] > max_block_nnz`. Rejected pairs stay unmatched this level.
-4. **Residual rounds** — re-run 1–3 twice on the unmatched subgraph. One round matches
-   ~50–60%; three reach ~85–90%.
+1. **Heaviest neighbour** — take the strongest eligible edge per vertex, breaking
+   ties with a deterministic symmetric pair hash.
+2. **Mutual-max matching** — keep pairs where `best[best[i]] == i` and `i < j`.
+   This makes matching vectorizable in numpy without random visitation.
+3. **Cap enforcement** — the BOO default filters infeasible edges before choosing
+   neighbors. Legacy matching can instead reject pairs after neighbor selection.
+4. **Residual rounds** — re-run matching twice on the remaining unmatched vertices.
 5. **Contract**, then **recompute weights exactly** from the binarized supernode supports:
    ```python
    A_l = binarize(P @ A_prev);  G = A_l @ A_l.T
    ```
-   rather than the usual `P·G·Pᵀ` shortcut, which **over-counts** — shared-column counts
-   combine by union, not by sum. Preprocessing is not time-bounded and there are only ~5
-   levels. `P·G·Pᵀ` stays behind a flag; the exact-vs-approx delta is a cheap ablation.
+   Shared-column counts combine by union, not by summing pairwise edge weights.
 
-Complexity: `O(k · rows)` memory, `O(L · k·rows · log(k·rows))` time.
+The retained graph has `O(k * rows)` edges. Constructing similarity products also
+depends on column degrees and may require substantially more temporary work.
 
 ### 5.4 What the graph model does not capture
 

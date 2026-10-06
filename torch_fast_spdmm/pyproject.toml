@@ -20,4 +20,6 @@ dependencies = [
 requires-python = '>=3.12'
 
 [project.optional-dependencies]
+metis = ['pymetis>=2025.2.2']
+graclus = ['torch-cluster>=1.6.3']
 test = ['pytest', 'coverage', 'pytest-cov', 'pytest-benchmark']
