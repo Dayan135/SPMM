@@ -125,14 +125,18 @@ def source_metadata(root):
             return result.stdout.strip() if result.returncode == 0 else 'unknown'
         origin = {'git_commit': git('rev-parse', 'HEAD'), 'git_status': git('status', '--short')}
     binary = Path(core.__file__).resolve()
-    props = torch.cuda.get_device_properties(0)
+    # CPU-only nodes (offline clustering phase) record no GPU fields.
+    gpu = {}
+    if torch.cuda.is_available():
+        props = torch.cuda.get_device_properties(0)
+        gpu = {'gpu': props.name, 'gpu_memory_bytes': props.total_memory,
+               'gpu_capability': list(torch.cuda.get_device_capability(0))}
     return {
         **origin, 'source_sha256': h.hexdigest(),
         'extension_path': str(binary), 'extension_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
         'python_package_path': str(Path(spmm.__file__).resolve()),
         'torch_version': str(torch.__version__), 'cuda_version': torch.version.cuda,
-        'gpu': props.name, 'gpu_memory_bytes': props.total_memory,
-        'gpu_capability': list(torch.cuda.get_device_capability(0)),
+        **gpu,
         'slurm_job_id': os.environ.get('SLURM_JOB_ID'),
         'node': socket.gethostname(),
         'timing': 'CUDA event elapsed ms per complete matmul call; resident inputs',

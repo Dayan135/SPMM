@@ -2,13 +2,19 @@
 
 Run on a GPU node: python -m benchmark.bench_clustering --out results/clustering
 No backend substitutions, external logging, or format changes are performed.
+
+Two-phase mode keeps clustering off the GPU allocation:
+  --phase cluster --labels DIR   CPU node: cluster every config, save labels + cluster_ms
+  --phase matmul --labels DIR    GPU node: load saved labels (never clusters), build, time
 """
 
 import argparse
 from dataclasses import asdict
 from importlib.metadata import version
 import json
+import os
 from pathlib import Path
+import socket
 import time
 
 import numpy as np
@@ -35,6 +41,83 @@ def feature_tile(boo, features, limit):
         p //= 2
 
 
+def load_matrix(size, profile, seed):
+    mat = build_matrix(size, profile, seed=seed).astype(np.float32).tocsr()
+    mat.sum_duplicates()
+    mat.sort_indices()
+    if max(*mat.shape, mat.nnz) > np.iinfo(np.int32).max:
+        raise ValueError('CSR exceeds int32 limits')
+    mat.indices = mat.indices.astype(np.int32)
+    mat.indptr = mat.indptr.astype(np.int32)
+    return mat
+
+
+def label_path(directory, profile, size, name):
+    return directory / f'{profile}_n{size}_{name}.npz'
+
+
+def cpu_model():
+    try:
+        for line in Path('/proc/cpuinfo').read_text().splitlines():
+            if line.startswith('model name'):
+                return line.split(':', 1)[1].strip()
+    except OSError:
+        pass
+    return 'unknown'
+
+
+def cluster_phase(args):
+    """CPU-only: cluster every (size, profile, method, k) and save labels with timing.
+
+    Resumable: an existing label file for the same matrix hash and seed is kept.
+    """
+    if torch.cuda.is_available():
+        raise RuntimeError('cluster phase must run without a GPU (set CUDA_VISIBLE_DEVICES=)')
+    args.labels.mkdir(parents=True, exist_ok=True)
+    host = dict(node=socket.gethostname(), cpu_model=cpu_model(),
+                cpus=len(os.sched_getaffinity(0)), slurm_job_id=os.environ.get('SLURM_JOB_ID'))
+    for size in args.sizes:
+        for profile in args.profiles:
+            mat = load_matrix(size, profile, args.seed)
+            matrix_sha = digest_arrays(mat.indptr, mat.indices, mat.data)
+            for method in args.methods:
+                for k in args.groups:
+                    path = label_path(args.labels, profile, size, f'{method}_k{k}')
+                    if path.exists():
+                        with np.load(path) as old:
+                            if str(old['matrix_sha256']) == matrix_sha and int(old['seed']) == args.seed:
+                                print(f'keep {path.name}', flush=True)
+                                continue
+                    print(f'cluster {profile} N={size} {method}_k{k}', flush=True)
+                    start = time.perf_counter()
+                    rows, cols = cluster_axes(mat, method=method, target_nr=k, target_nc=k,
+                                              max_nr=k, max_nc=k, seed=args.seed,
+                                              feasible_first=True)
+                    cluster_ms = 1000 * (time.perf_counter() - start)
+                    tmp = path.with_suffix('.tmp.npz')
+                    np.savez_compressed(tmp, rows=np.asarray(rows, np.int32),
+                                        cols=np.asarray(cols, np.int32), cluster_ms=cluster_ms,
+                                        matrix_sha256=matrix_sha, seed=args.seed, method=method,
+                                        k=k, host=json.dumps(host))
+                    tmp.rename(path)
+                    print(f'  {cluster_ms / 1000:.1f} s', flush=True)
+            del mat
+
+
+def saved_labels(args, profile, size, method, k, matrix_sha):
+    """Matmul phase: load offline labels and verify they belong to this exact matrix."""
+    path = label_path(args.labels, profile, size, f'{method}_k{k}')
+    with np.load(path) as f:
+        if str(f['matrix_sha256']) != matrix_sha or int(f['seed']) != args.seed:
+            raise ValueError(f'{path} was clustered for a different matrix/seed')
+        if str(f['method']) != method or int(f['k']) != k:
+            raise ValueError(f'{path} holds {f["method"]}_k{f["k"]}')
+        host = json.loads(str(f['host']))
+        return (f['rows'], f['cols'], float(f['cluster_ms']),
+                dict(cluster_node=host['node'], cluster_cpu=host['cpu_model'],
+                     cluster_cpus=host['cpus'], labels_path=str(path)))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--methods', nargs='+', choices=['identity', 'hem', 'metis', 'graclus'],
@@ -47,23 +130,35 @@ def main(argv=None):
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--warmup', type=int, default=5)
     parser.add_argument('--repeats', type=int, default=20)
-    parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--phase', choices=['all', 'cluster', 'matmul'], default='all')
+    parser.add_argument('--labels', type=Path,
+                        help='label directory written by --phase cluster, read by --phase matmul')
+    parser.add_argument('--out', type=Path)
     args = parser.parse_args(argv)
+    if args.phase != 'all' and args.labels is None:
+        parser.error('--phase cluster/matmul requires --labels')
+    if args.phase != 'cluster' and args.out is None:
+        parser.error('--out is required')
     if (min(args.groups + args.sizes + args.features) < 1 or max(args.groups) > 256
             or args.repeats < 1 or args.warmup < 0 or not 0 <= args.seed < 2**32):
         parser.error('Positive sizes required, groups <=256, seed in uint32, repeats >=1, warmup >=0')
     for values in (args.methods, args.groups, args.sizes, args.features, args.profiles):
         if len(set(values)) != len(values):
             parser.error('Sweep lists must not contain duplicates')
+    if args.phase == 'cluster':
+        return cluster_phase(args)
     if not torch.cuda.is_available():
         raise RuntimeError('This benchmark requires a GPU node')
     args.out.mkdir(parents=True, exist_ok=False)
     metadata = source_metadata(Path(__file__).resolve().parents[3])
-    metadata.update(arguments={**vars(args), 'out': str(args.out)}, status='running',
+    metadata.update(arguments={**vars(args), 'out': str(args.out), 'labels': str(args.labels)},
+                    status='running',
                     backend_versions={name: version(name) for method, name in
                                       [('metis', 'pymetis'), ('graclus', 'torch-cluster')]
                                       if method in args.methods},
-                    tile_policy='largest fitting p in 64,32,16,8, bounded by feature count')
+                    tile_policy='largest fitting p in 64,32,16,8, bounded by feature count',
+                    clustering=('offline: labels loaded from --labels, clustered on CPU nodes'
+                                if args.phase == 'matmul' else 'inline on this node'))
     meta_path = args.out / 'metadata.json'
     meta_path.write_text(json.dumps(metadata, indent=2) + '\n')
     summary_columns = None
@@ -72,13 +167,8 @@ def main(argv=None):
         with torch.inference_mode():
             for size in args.sizes:
                 for profile in args.profiles:
-                    mat = build_matrix(size, profile, seed=args.seed).astype(np.float32).tocsr()
-                    mat.sum_duplicates()
-                    mat.sort_indices()
-                    if max(*mat.shape, mat.nnz) > np.iinfo(np.int32).max:
-                        raise ValueError('CSR exceeds int32 limits')
-                    mat.indices = mat.indices.astype(np.int32)
-                    mat.indptr = mat.indptr.astype(np.int32)
+                    mat = load_matrix(size, profile, args.seed)
+                    matrix_sha = digest_arrays(mat.indptr, mat.indices, mat.data)
                     csr = torch.sparse_csr_tensor(torch.from_numpy(mat.indptr),
                                                   torch.from_numpy(mat.indices),
                                                   torch.from_numpy(mat.data), size=mat.shape).cuda()
@@ -87,13 +177,18 @@ def main(argv=None):
                         for k in args.groups:
                             name = f'{method}_k{k}'
                             print(f'prepare {profile} N={size} {name}', flush=True)
-                            start = time.perf_counter()
-                            rows, cols = cluster_axes(mat, method=method, target_nr=k, target_nc=k,
-                                                      max_nr=k, max_nc=k, seed=args.seed,
-                                                      feasible_first=True)
-                            cluster_ms = 1000 * (time.perf_counter() - start)
-                            np.savez_compressed(args.out / f'{profile}_n{size}_{name}.npz',
-                                                rows=rows, cols=cols)
+                            provenance = {}
+                            if args.phase == 'matmul':
+                                rows, cols, cluster_ms, provenance = saved_labels(
+                                    args, profile, size, method, k, matrix_sha)
+                            else:
+                                start = time.perf_counter()
+                                rows, cols = cluster_axes(mat, method=method, target_nr=k,
+                                                          target_nc=k, max_nr=k, max_nc=k,
+                                                          seed=args.seed, feasible_first=True)
+                                cluster_ms = 1000 * (time.perf_counter() - start)
+                                np.savez_compressed(label_path(args.out, profile, size, name),
+                                                    rows=rows, cols=cols)
                             start = time.perf_counter()
                             boo = spmm.csr_to_boo(mat, row_labels=rows, col_labels=cols)
                             build_ms = 1000 * (time.perf_counter() - start)
@@ -112,7 +207,7 @@ def main(argv=None):
                                           row_group_max=int(row_sizes.max()),
                                           col_group_mean=float(col_sizes.mean()),
                                           col_group_max=int(col_sizes.max()),
-                                          labels_sha256=digest_arrays(rows, cols))
+                                          labels_sha256=digest_arrays(rows, cols), **provenance)
                             # Oversized sparse payloads cannot launch even with P=8.
                             if feature_tile(boo, 8, limit)[2]:
                                 start = time.perf_counter()
@@ -137,7 +232,7 @@ def main(argv=None):
                                                           args.repeats, args.seed)
                         common = dict(profile=profile, requested_size=size, features=features,
                                       nnz=mat.nnz, seed=args.seed,
-                                      matrix_sha256=digest_arrays(mat.indptr, mat.indices, mat.data),
+                                      matrix_sha256=matrix_sha,
                                       x_sha256=digest_arrays(x.numpy()))
                         summaries = [dict(common, **s) for s in summaries]
                         samples = [dict(common, **s) for s in samples]

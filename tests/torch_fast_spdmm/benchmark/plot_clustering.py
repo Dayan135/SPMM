@@ -7,6 +7,11 @@ Usage (from tests/torch_fast_spdmm/, local ``fem`` env)::
     conda run -n fem python -m benchmark.plot_clustering \
         --results benchmark/results/clustering_20261006/results \
         --outdir ../../plots/clustering_20261006
+
+    # all four sizes (16k, 64k from the first sweep; 256k, 1M from the offline-clustered sweep)
+    conda run -n fem python -m benchmark.plot_clustering \
+        --results benchmark/results/clustering_20261006/results benchmark/results/clustering_20261006_xl \
+        --outdir ../../plots/clustering_20261006_xl
 """
 
 from __future__ import annotations
@@ -41,22 +46,47 @@ plt.rcParams.update({
 })
 
 
-def load(results: Path) -> pd.DataFrame:
-    frames = []
-    for sub in ('full', 'large'):
-        p = results / sub / 'summary.csv'
-        if p.exists():
-            frames.append(pd.read_csv(p))
-    df = pd.concat(frames, ignore_index=True)
+def sweep_dirs(results: list[Path]) -> list[Path]:
+    """Each --results entry is a sweep dir (has summary.csv) or a parent of sweep dirs; smoke runs skipped."""
+    dirs = []
+    for r in results:
+        if (r / 'summary.csv').exists():
+            dirs.append(r)
+        else:
+            dirs += sorted(p.parent for p in r.glob('*/summary.csv') if p.parent.name != 'smoke')
+    if not dirs:
+        raise SystemExit(f'no summary.csv under {results}')
+    return dirs
+
+
+def load(results: list[Path]) -> pd.DataFrame:
+    df = pd.concat([pd.read_csv(d / 'summary.csv') for d in sweep_dirs(results)], ignore_index=True)
     df['N'] = df['requested_size'].astype(int)
     df['features'] = df['features'].astype(int)
+    if df.duplicated(['N', 'profile', 'features', 'config']).any():
+        raise SystemExit('duplicate (N, profile, F, config) rows across --results dirs')
     return df
 
 
-def load_samples(results: Path) -> pd.DataFrame:
-    frames = [pd.read_csv(results / s / 'samples.csv') for s in ('full', 'large')
-              if (results / s / 'samples.csv').exists()]
-    return pd.concat(frames, ignore_index=True)
+def load_samples(results: list[Path]) -> pd.DataFrame:
+    return pd.concat([pd.read_csv(d / 'samples.csv') for d in sweep_dirs(results)], ignore_index=True)
+
+
+def size_tag(n: int) -> str:
+    return f'{n // 2**20}M' if n % 2**20 == 0 else f'{n // 1024}k'
+
+
+def size_panels(Ns, ylabel):
+    """One panel per N, at most two per row; ylabel on the left column. Returns fig, [(ax, N)]."""
+    ncols = min(2, len(Ns))
+    nrows = -(-len(Ns) // ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 3.8 * nrows), squeeze=False,
+                             sharey=True)
+    for ax in axes.flat[len(Ns):]:
+        ax.set_visible(False)
+    for row in axes:
+        row[0].set_ylabel(ylabel)
+    return fig, list(zip(axes.flat, Ns))
 
 
 def boo(df):
@@ -127,9 +157,8 @@ def best_per_backend(df):
 
 def fig_best_speedup(best, out):
     """A2: best-k speedup vs cuSPARSE, grouped bars per profile x F, one panel per N."""
-    Ns = sorted(best.N.unique())
-    fig, axes = plt.subplots(1, len(Ns), figsize=(6.5 * len(Ns), 3.8), squeeze=False, sharey=True)
-    for ax, N in zip(axes[0], Ns):
+    fig, panels = size_panels(sorted(best.N.unique()), 'speedup vs cuSPARSE at best target (×)')
+    for ax, N in panels:
         b = best[best.N == N]
         cells = [(p, F) for p in PROFILES for F in sorted(b.features.unique())]
         x = np.arange(len(cells))
@@ -143,7 +172,6 @@ def fig_best_speedup(best, out):
         ax.set_xticks(x, [f'{SHORT[p]}\nF={F}' for p, F in cells], fontsize=7.5)
         ax.set_title(f'N={N:,}')
         ax.grid(axis='x', visible=False)
-    axes[0, 0].set_ylabel('speedup vs cuSPARSE at best target (×)')
     fig.legend(handles=legend_handles(include_cusparse=False), loc='upper center', ncol=4,
                bbox_to_anchor=(0.5, 1.04))
     fig.suptitle('Best-config matmul speedup over cuSPARSE (dashed = parity)', y=1.1)
@@ -156,13 +184,12 @@ def fig_heatmap(df, out):
     """A3: time relative to best config in each column (1.0 = best), backend x target rows."""
     d = boo(df)
     d = d[d.supported == True].copy()  # noqa: E712
-    d['col'] = d.profile.map(SHORT) + '\nF=' + d.features.astype(str) + '\nN=' + (d.N // 1024).astype(str) + 'k'
+    d['col'] = d.profile.map(SHORT) + '\nF=' + d.features.astype(str) + '\nN=' + d.N.map(size_tag)
     d['row'] = d.cluster.map(LABEL) + '  k=' + d.k.astype(int).astype(str)
     d['rel'] = d.median_ms / d.groupby('col').median_ms.transform('min')
     rows = [f'{LABEL[b]}  k={t}' for b in BACKENDS for t in TARGETS]
-    order = {v: i for i, v in enumerate(SHORT.values())}
-    cols = sorted(d.col.unique(), key=lambda c: (c.split('\n')[2], order[c.split('\n')[0]],
-                                                 c.split('\n')[1]))
+    key = d.drop_duplicates('col').set_index('col')
+    cols = sorted(key.index, key=lambda c: (key.N[c], PROFILES.index(key.profile[c]), key.features[c]))
     m = d.pivot_table(index='row', columns='col', values='rel').reindex(index=rows, columns=cols)
     fig, ax = plt.subplots(figsize=(1.0 * len(cols) + 2.5, 0.32 * len(rows) + 1.5))
     from matplotlib.colors import LinearSegmentedColormap, LogNorm
@@ -296,7 +323,7 @@ def fig_scaling(best, out):
                 s = best[(best.profile == prof) & (best.cluster == b) & (best.features == F)].sort_values('N')
                 ax.plot(range(len(s)), s.speedup, color=COLOR[b], marker=MARKER[b], ls=ls)
         ax.axhline(1, color=BASE, ls=':', lw=1)
-        ax.set_xticks(range(len(Ns)), [f'{n // 1024}k' for n in Ns])
+        ax.set_xticks(range(len(Ns)), [size_tag(n) for n in Ns])
         ax.set_xlim(-0.3, len(Ns) - 0.7)
         ax.set_title(prof)
         ax.set_xlabel('N')
@@ -351,9 +378,8 @@ def fig_breakeven(best, out):
     b['prep_ms'] = b.cluster_ms.fillna(0) + b.build_ms.fillna(0)
     b['saving_ms'] = b.cusparse_ms - b.median_ms
     b['calls'] = np.where(b.saving_ms > 0, b.prep_ms / b.saving_ms, np.nan)
-    Ns = sorted(b.N.unique())
-    fig, axes = plt.subplots(1, len(Ns), figsize=(6.5 * len(Ns), 3.8), squeeze=False, sharey=True)
-    for ax, N in zip(axes[0], Ns):
+    fig, panels = size_panels(sorted(b.N.unique()), 'matmuls to break even vs cuSPARSE (log)')
+    for ax, N in panels:
         bb = b[b.N == N]
         cells = [(p, F) for p in PROFILES for F in sorted(bb.features.unique())]
         x = np.arange(len(cells))
@@ -371,7 +397,6 @@ def fig_breakeven(best, out):
         ax.set_xticks(x, [f'{SHORT[p]}\nF={F}' for p, F in cells], fontsize=7.5)
         ax.set_title(f'N={N:,}')
         ax.grid(axis='x', visible=False)
-    axes[0, 0].set_ylabel('matmuls to break even vs cuSPARSE (log)')
     fig.legend(handles=legend_handles(include_cusparse=False), loc='upper center', ncol=4,
                bbox_to_anchor=(0.5, 1.04))
     fig.suptitle('Preprocessing amortisation (cluster + build) / (cuSPARSE − BOO per call);'
@@ -395,8 +420,9 @@ def write_tables(df, best, outdir):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--results', type=Path,
-                    default=Path('benchmark/results/clustering_20261006/results'))
+    ap.add_argument('--results', type=Path, nargs='+',
+                    default=[Path('benchmark/results/clustering_20261006/results')],
+                    help='sweep dirs (with summary.csv) or parents of sweep dirs')
     ap.add_argument('--outdir', type=Path, default=Path('../../plots/clustering_20261006'))
     args = ap.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -405,7 +431,7 @@ def main():
     best = best_per_backend(df)
     o = args.outdir
     for N in sorted(df.N.unique()):
-        tag = f'{N // 1024}k'
+        tag = size_tag(N)
         fig_time_vs_target(df, N, o / f'A1_time_vs_target_{tag}.png')
         fig_group_sizes(df, N, o / f'B4_group_sizes_{tag}.png')
         fig_structure(df, N, o / f'B5_structure_vs_time_{tag}.png')
