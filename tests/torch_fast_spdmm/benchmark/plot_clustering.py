@@ -206,6 +206,10 @@ def fig_heatmap(df, out):
     ax.set_yticks(range(len(rows)), rows, fontsize=7)
     for y in range(len(TARGETS), len(rows), len(TARGETS)):
         ax.axhline(y - 0.5, color=SURFACE, lw=2)
+    sizes = [key.N[c] for c in cols]
+    for x in range(1, len(cols)):
+        if sizes[x] != sizes[x - 1]:
+            ax.axvline(x - 0.5, color=SURFACE, lw=4)
     ax.grid(False)
     cb = fig.colorbar(im, ax=ax, shrink=0.6)
     cb.set_label('time / best time in column (log, saturates at 4×)')

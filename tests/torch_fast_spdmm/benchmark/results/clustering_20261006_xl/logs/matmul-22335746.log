@@ -1,0 +1,309 @@
+------------------------------------
+Tue 06 Oct 2026 23:54:01 IDT
+SLURM_JOBID:		22335746
+SLURM_JOB_NODELIST:	cs-3090-01
+SLURM_SCRATCH_DIR:	/scratch/dayanb/22335746
+Allocated Resouces:	cpu - 12 / mem - 98304 MB / gpu - 1
+SLURM_GPU_INDEX:	3
+Running as dayanb from erant account with erant QOS
+------------------------------------
+name, memory.total [MiB]
+NVIDIA GeForce RTX 3090, 24576 MiB
+/home/dayanb/research/clustering-20261006/tests/torch_fast_spdmm/benchmark/bench_clustering.py:172: UserWarning: Sparse CSR tensor support is in beta state. If you miss a functionality in the sparse tensor support, please submit a feature request to https://github.com/pytorch/pytorch/issues. (Triggered internally at /pytorch/aten/src/ATen/SparseCsrTensorImpl.cpp:49.)
+  csr = torch.sparse_csr_tensor(torch.from_numpy(mat.indptr),
+prepare fem2d N=262144 identity_k8
+prepare fem2d N=262144 identity_k16
+prepare fem2d N=262144 identity_k32
+prepare fem2d N=262144 identity_k64
+prepare fem2d N=262144 identity_k128
+prepare fem2d N=262144 identity_k256
+prepare fem2d N=262144 hem_k8
+prepare fem2d N=262144 hem_k16
+prepare fem2d N=262144 hem_k32
+prepare fem2d N=262144 hem_k64
+prepare fem2d N=262144 hem_k128
+prepare fem2d N=262144 hem_k256
+prepare fem2d N=262144 metis_k8
+prepare fem2d N=262144 metis_k16
+prepare fem2d N=262144 metis_k32
+prepare fem2d N=262144 metis_k64
+prepare fem2d N=262144 metis_k128
+prepare fem2d N=262144 metis_k256
+prepare fem2d N=262144 graclus_k8
+prepare fem2d N=262144 graclus_k16
+prepare fem2d N=262144 graclus_k32
+prepare fem2d N=262144 graclus_k64
+prepare fem2d N=262144 graclus_k128
+prepare fem2d N=262144 graclus_k256
+fem2d N=262144 F=128 cusparse_csr: 1.5656960010528564 ms (passed)
+fem2d N=262144 F=128 identity_k8: 3.9301120042800903 ms (passed)
+fem2d N=262144 F=128 identity_k16: 3.1329280138015747 ms (passed)
+fem2d N=262144 F=128 identity_k32: 2.7417598962783813 ms (passed)
+fem2d N=262144 F=128 identity_k64: 2.8282880783081055 ms (passed)
+fem2d N=262144 F=128 identity_k128: 3.735040068626404 ms (passed)
+fem2d N=262144 F=128 identity_k256: 5.810688018798828 ms (passed)
+fem2d N=262144 F=128 hem_k8: 3.7585920095443726 ms (passed)
+fem2d N=262144 F=128 hem_k16: 3.0080000162124634 ms (passed)
+fem2d N=262144 F=128 hem_k32: 2.7064319849014282 ms (passed)
+fem2d N=262144 F=128 hem_k64: 3.237376093864441 ms (passed)
+fem2d N=262144 F=128 hem_k128: 6.771711826324463 ms (passed)
+fem2d N=262144 F=128 hem_k256: 6.6908159255981445 ms (passed)
+fem2d N=262144 F=128 metis_k8: 4.494335889816284 ms (passed)
+fem2d N=262144 F=128 metis_k16: 3.4252800941467285 ms (passed)
+fem2d N=262144 F=128 metis_k32: 2.8825600147247314 ms (passed)
+fem2d N=262144 F=128 metis_k64: 3.3751039505004883 ms (passed)
+fem2d N=262144 F=128 metis_k128: 6.535167932510376 ms (passed)
+fem2d N=262144 F=128 metis_k256: 6.534143924713135 ms (passed)
+fem2d N=262144 F=128 graclus_k8: 3.8543360233306885 ms (passed)
+fem2d N=262144 F=128 graclus_k16: 3.027967929840088 ms (passed)
+fem2d N=262144 F=128 graclus_k32: 2.6849279403686523 ms (passed)
+fem2d N=262144 F=128 graclus_k64: 3.296768069267273 ms (passed)
+fem2d N=262144 F=128 graclus_k128: 6.870016098022461 ms (passed)
+fem2d N=262144 F=128 graclus_k256: 6.839295864105225 ms (passed)
+fem2d N=262144 F=512 cusparse_csr: 6.20799994468689 ms (passed)
+fem2d N=262144 F=512 identity_k8: 12.910079956054688 ms (passed)
+fem2d N=262144 F=512 identity_k16: 11.663311958312988 ms (passed)
+fem2d N=262144 F=512 identity_k32: 11.032575607299805 ms (passed)
+fem2d N=262144 F=512 identity_k64: 11.66540813446045 ms (passed)
+fem2d N=262144 F=512 identity_k128: 15.726079940795898 ms (passed)
+fem2d N=262144 F=512 identity_k256: 24.830464363098145 ms (passed)
+fem2d N=262144 F=512 hem_k8: 11.998720169067383 ms (passed)
+fem2d N=262144 F=512 hem_k16: 10.948095798492432 ms (passed)
+fem2d N=262144 F=512 hem_k32: 10.096127986907959 ms (passed)
+fem2d N=262144 F=512 hem_k64: 12.91212797164917 ms (passed)
+fem2d N=262144 F=512 hem_k128: 28.237311363220215 ms (passed)
+fem2d N=262144 F=512 hem_k256: 28.883967399597168 ms (passed)
+fem2d N=262144 F=512 metis_k8: 14.57151985168457 ms (passed)
+fem2d N=262144 F=512 metis_k16: 12.014592170715332 ms (passed)
+fem2d N=262144 F=512 metis_k32: 10.728447914123535 ms (passed)
+fem2d N=262144 F=512 metis_k64: 12.985343933105469 ms (passed)
+fem2d N=262144 F=512 metis_k128: 27.894783973693848 ms (passed)
+fem2d N=262144 F=512 metis_k256: 28.0447998046875 ms (passed)
+fem2d N=262144 F=512 graclus_k8: 12.264447689056396 ms (passed)
+fem2d N=262144 F=512 graclus_k16: 11.299327850341797 ms (passed)
+fem2d N=262144 F=512 graclus_k32: 10.823168277740479 ms (passed)
+fem2d N=262144 F=512 graclus_k64: 13.685760021209717 ms (passed)
+fem2d N=262144 F=512 graclus_k128: 28.782591819763184 ms (passed)
+fem2d N=262144 F=512 graclus_k256: 28.599295616149902 ms (passed)
+prepare fem2d_permuted N=262144 identity_k8
+prepare fem2d_permuted N=262144 identity_k16
+prepare fem2d_permuted N=262144 identity_k32
+prepare fem2d_permuted N=262144 identity_k64
+prepare fem2d_permuted N=262144 identity_k128
+prepare fem2d_permuted N=262144 identity_k256
+prepare fem2d_permuted N=262144 hem_k8
+prepare fem2d_permuted N=262144 hem_k16
+prepare fem2d_permuted N=262144 hem_k32
+prepare fem2d_permuted N=262144 hem_k64
+prepare fem2d_permuted N=262144 hem_k128
+prepare fem2d_permuted N=262144 hem_k256
+prepare fem2d_permuted N=262144 metis_k8
+prepare fem2d_permuted N=262144 metis_k16
+prepare fem2d_permuted N=262144 metis_k32
+prepare fem2d_permuted N=262144 metis_k64
+prepare fem2d_permuted N=262144 metis_k128
+prepare fem2d_permuted N=262144 metis_k256
+prepare fem2d_permuted N=262144 graclus_k8
+prepare fem2d_permuted N=262144 graclus_k16
+prepare fem2d_permuted N=262144 graclus_k32
+prepare fem2d_permuted N=262144 graclus_k64
+prepare fem2d_permuted N=262144 graclus_k128
+prepare fem2d_permuted N=262144 graclus_k256
+fem2d_permuted N=262144 F=128 cusparse_csr: 3.2337920665740967 ms (passed)
+fem2d_permuted N=262144 F=128 identity_k8: 6.963712215423584 ms (passed)
+fem2d_permuted N=262144 F=128 identity_k16: 9.352191925048828 ms (passed)
+fem2d_permuted N=262144 F=128 identity_k32: 14.09228801727295 ms (passed)
+fem2d_permuted N=262144 F=128 identity_k64: 25.553919792175293 ms (passed)
+fem2d_permuted N=262144 F=128 identity_k128: 96.57907104492188 ms (passed)
+fem2d_permuted N=262144 F=128 identity_k256: 298.60353088378906 ms (passed)
+fem2d_permuted N=262144 F=128 hem_k8: 4.123136043548584 ms (passed)
+fem2d_permuted N=262144 F=128 hem_k16: 3.3623040914535522 ms (passed)
+fem2d_permuted N=262144 F=128 hem_k32: 3.0269439220428467 ms (passed)
+fem2d_permuted N=262144 F=128 hem_k64: 3.592703938484192 ms (passed)
+fem2d_permuted N=262144 F=128 hem_k128: 7.872512102127075 ms (passed)
+fem2d_permuted N=262144 F=128 hem_k256: 7.332351922988892 ms (passed)
+fem2d_permuted N=262144 F=128 metis_k8: 4.622848033905029 ms (passed)
+fem2d_permuted N=262144 F=128 metis_k16: 3.5850239992141724 ms (passed)
+fem2d_permuted N=262144 F=128 metis_k32: 3.0673919916152954 ms (passed)
+fem2d_permuted N=262144 F=128 metis_k64: 3.4703359603881836 ms (passed)
+fem2d_permuted N=262144 F=128 metis_k128: 6.93503999710083 ms (passed)
+fem2d_permuted N=262144 F=128 metis_k256: 6.511103868484497 ms (passed)
+fem2d_permuted N=262144 F=128 graclus_k8: 4.3919358253479 ms (passed)
+fem2d_permuted N=262144 F=128 graclus_k16: 3.299328088760376 ms (passed)
+fem2d_permuted N=262144 F=128 graclus_k32: 3.0894079208374023 ms (passed)
+fem2d_permuted N=262144 F=128 graclus_k64: 3.6193279027938843 ms (passed)
+fem2d_permuted N=262144 F=128 graclus_k128: 7.686144113540649 ms (passed)
+fem2d_permuted N=262144 F=128 graclus_k256: 7.5289599895477295 ms (passed)
+fem2d_permuted N=262144 F=512 cusparse_csr: 13.07750415802002 ms (passed)
+fem2d_permuted N=262144 F=512 identity_k8: 20.460543632507324 ms (passed)
+fem2d_permuted N=262144 F=512 identity_k16: 30.842368125915527 ms (passed)
+fem2d_permuted N=262144 F=512 identity_k32: 50.99724769592285 ms (passed)
+fem2d_permuted N=262144 F=512 identity_k64: 100.34483337402344 ms (passed)
+fem2d_permuted N=262144 F=512 identity_k128: 367.94163513183594 ms (passed)
+fem2d_permuted N=262144 F=512 identity_k256: 1160.54833984375 ms (passed)
+fem2d_permuted N=262144 F=512 hem_k8: 12.523007869720459 ms (passed)
+fem2d_permuted N=262144 F=512 hem_k16: 11.309055805206299 ms (passed)
+fem2d_permuted N=262144 F=512 hem_k32: 10.381311893463135 ms (passed)
+fem2d_permuted N=262144 F=512 hem_k64: 13.356031894683838 ms (passed)
+fem2d_permuted N=262144 F=512 hem_k128: 29.154303550720215 ms (passed)
+fem2d_permuted N=262144 F=512 hem_k256: 29.623295783996582 ms (passed)
+fem2d_permuted N=262144 F=512 metis_k8: 15.022079944610596 ms (passed)
+fem2d_permuted N=262144 F=512 metis_k16: 12.348415851593018 ms (passed)
+fem2d_permuted N=262144 F=512 metis_k32: 11.044864177703857 ms (passed)
+fem2d_permuted N=262144 F=512 metis_k64: 12.860416412353516 ms (passed)
+fem2d_permuted N=262144 F=512 metis_k128: 28.308480262756348 ms (passed)
+fem2d_permuted N=262144 F=512 metis_k256: 27.380736351013184 ms (passed)
+fem2d_permuted N=262144 F=512 graclus_k8: 12.731391906738281 ms (passed)
+fem2d_permuted N=262144 F=512 graclus_k16: 11.622911930084229 ms (passed)
+fem2d_permuted N=262144 F=512 graclus_k32: 11.425280094146729 ms (passed)
+fem2d_permuted N=262144 F=512 graclus_k64: 13.91974401473999 ms (passed)
+fem2d_permuted N=262144 F=512 graclus_k128: 29.614591598510742 ms (passed)
+fem2d_permuted N=262144 F=512 graclus_k256: 29.286911964416504 ms (passed)
+prepare diag_b0.3 N=262144 identity_k8
+prepare diag_b0.3 N=262144 identity_k16
+prepare diag_b0.3 N=262144 identity_k32
+prepare diag_b0.3 N=262144 identity_k64
+prepare diag_b0.3 N=262144 identity_k128
+prepare diag_b0.3 N=262144 identity_k256
+prepare diag_b0.3 N=262144 hem_k8
+prepare diag_b0.3 N=262144 hem_k16
+prepare diag_b0.3 N=262144 hem_k32
+prepare diag_b0.3 N=262144 hem_k64
+prepare diag_b0.3 N=262144 hem_k128
+prepare diag_b0.3 N=262144 hem_k256
+prepare diag_b0.3 N=262144 metis_k8
+prepare diag_b0.3 N=262144 metis_k16
+prepare diag_b0.3 N=262144 metis_k32
+prepare diag_b0.3 N=262144 metis_k64
+prepare diag_b0.3 N=262144 metis_k128
+prepare diag_b0.3 N=262144 metis_k256
+prepare diag_b0.3 N=262144 graclus_k8
+prepare diag_b0.3 N=262144 graclus_k16
+prepare diag_b0.3 N=262144 graclus_k32
+prepare diag_b0.3 N=262144 graclus_k64
+prepare diag_b0.3 N=262144 graclus_k128
+prepare diag_b0.3 N=262144 graclus_k256
+diag_b0.3 N=262144 F=128 cusparse_csr: 1.1402239799499512 ms (passed)
+diag_b0.3 N=262144 F=128 identity_k8: 3.295232057571411 ms (passed)
+diag_b0.3 N=262144 F=128 identity_k16: 1.723904013633728 ms (passed)
+diag_b0.3 N=262144 F=128 identity_k32: 1.2753920555114746 ms (passed)
+diag_b0.3 N=262144 F=128 identity_k64: 1.2206079959869385 ms (passed)
+diag_b0.3 N=262144 F=128 identity_k128: 1.3798400163650513 ms (passed)
+diag_b0.3 N=262144 F=128 identity_k256: 1.8903039693832397 ms (passed)
+diag_b0.3 N=262144 F=128 hem_k8: 3.3024001121520996 ms (passed)
+diag_b0.3 N=262144 F=128 hem_k16: 1.7469439506530762 ms (passed)
+diag_b0.3 N=262144 F=128 hem_k32: 1.2702720165252686 ms (passed)
+diag_b0.3 N=262144 F=128 hem_k64: 1.2200959920883179 ms (passed)
+diag_b0.3 N=262144 F=128 hem_k128: 1.2098560333251953 ms (passed)
+diag_b0.3 N=262144 F=128 hem_k256: 1.2124160528182983 ms (passed)
+diag_b0.3 N=262144 F=128 metis_k8: 3.289088010787964 ms (passed)
+diag_b0.3 N=262144 F=128 metis_k16: 1.7182719707489014 ms (passed)
+diag_b0.3 N=262144 F=128 metis_k32: 1.2687360048294067 ms (passed)
+diag_b0.3 N=262144 F=128 metis_k64: 1.210368037223816 ms (passed)
+diag_b0.3 N=262144 F=128 metis_k128: 1.7802239656448364 ms (passed)
+diag_b0.3 N=262144 F=128 metis_k256: 4.204031944274902 ms (passed)
+diag_b0.3 N=262144 F=128 graclus_k8: 3.4524160623550415 ms (passed)
+diag_b0.3 N=262144 F=128 graclus_k16: 1.931264042854309 ms (passed)
+diag_b0.3 N=262144 F=128 graclus_k32: 1.3982720375061035 ms (passed)
+diag_b0.3 N=262144 F=128 graclus_k64: 1.2200959920883179 ms (passed)
+diag_b0.3 N=262144 F=128 graclus_k128: 1.2262400388717651 ms (passed)
+diag_b0.3 N=262144 F=128 graclus_k256: 1.2093440294265747 ms (passed)
+diag_b0.3 N=262144 F=512 cusparse_csr: 4.597760200500488 ms (passed)
+diag_b0.3 N=262144 F=512 identity_k8: 9.933311939239502 ms (passed)
+diag_b0.3 N=262144 F=512 identity_k16: 6.189055919647217 ms (passed)
+diag_b0.3 N=262144 F=512 identity_k32: 4.967423915863037 ms (passed)
+diag_b0.3 N=262144 F=512 identity_k64: 4.586495876312256 ms (passed)
+diag_b0.3 N=262144 F=512 identity_k128: 5.0135040283203125 ms (passed)
+diag_b0.3 N=262144 F=512 identity_k256: 7.310847997665405 ms (passed)
+diag_b0.3 N=262144 F=512 hem_k8: 9.646080017089844 ms (passed)
+diag_b0.3 N=262144 F=512 hem_k16: 6.319616079330444 ms (passed)
+diag_b0.3 N=262144 F=512 hem_k32: 4.977663993835449 ms (passed)
+diag_b0.3 N=262144 F=512 hem_k64: 4.529151916503906 ms (passed)
+diag_b0.3 N=262144 F=512 hem_k128: 4.721152067184448 ms (passed)
+diag_b0.3 N=262144 F=512 hem_k256: 4.709887981414795 ms (passed)
+diag_b0.3 N=262144 F=512 metis_k8: 9.885695934295654 ms (passed)
+diag_b0.3 N=262144 F=512 metis_k16: 6.314496040344238 ms (passed)
+diag_b0.3 N=262144 F=512 metis_k32: 4.977152109146118 ms (passed)
+diag_b0.3 N=262144 F=512 metis_k64: 4.676095962524414 ms (passed)
+diag_b0.3 N=262144 F=512 metis_k128: 6.609407901763916 ms (passed)
+diag_b0.3 N=262144 F=512 metis_k256: 16.78284740447998 ms (passed)
+diag_b0.3 N=262144 F=512 graclus_k8: 10.36953592300415 ms (passed)
+diag_b0.3 N=262144 F=512 graclus_k16: 6.486015796661377 ms (passed)
+diag_b0.3 N=262144 F=512 graclus_k32: 5.244927883148193 ms (passed)
+diag_b0.3 N=262144 F=512 graclus_k64: 4.52454400062561 ms (passed)
+diag_b0.3 N=262144 F=512 graclus_k128: 4.750336170196533 ms (passed)
+diag_b0.3 N=262144 F=512 graclus_k256: 4.6781439781188965 ms (passed)
+prepare diag_b1.0 N=262144 identity_k8
+prepare diag_b1.0 N=262144 identity_k16
+prepare diag_b1.0 N=262144 identity_k32
+prepare diag_b1.0 N=262144 identity_k64
+prepare diag_b1.0 N=262144 identity_k128
+prepare diag_b1.0 N=262144 identity_k256
+prepare diag_b1.0 N=262144 hem_k8
+prepare diag_b1.0 N=262144 hem_k16
+prepare diag_b1.0 N=262144 hem_k32
+prepare diag_b1.0 N=262144 hem_k64
+prepare diag_b1.0 N=262144 hem_k128
+prepare diag_b1.0 N=262144 hem_k256
+prepare diag_b1.0 N=262144 metis_k8
+prepare diag_b1.0 N=262144 metis_k16
+prepare diag_b1.0 N=262144 metis_k32
+prepare diag_b1.0 N=262144 metis_k64
+prepare diag_b1.0 N=262144 metis_k128
+prepare diag_b1.0 N=262144 metis_k256
+prepare diag_b1.0 N=262144 graclus_k8
+prepare diag_b1.0 N=262144 graclus_k16
+prepare diag_b1.0 N=262144 graclus_k32
+prepare diag_b1.0 N=262144 graclus_k64
+prepare diag_b1.0 N=262144 graclus_k128
+prepare diag_b1.0 N=262144 graclus_k256
+diag_b1.0 N=262144 F=128 cusparse_csr: 3.2737280130386353 ms (passed)
+diag_b1.0 N=262144 F=128 identity_k8: 4.776960134506226 ms (passed)
+diag_b1.0 N=262144 F=128 identity_k16: 3.422208070755005 ms (passed)
+diag_b1.0 N=262144 F=128 identity_k32: 3.0591999292373657 ms (passed)
+diag_b1.0 N=262144 F=128 identity_k64: 3.1682560443878174 ms (passed)
+diag_b1.0 N=262144 F=128 identity_k128: 3.658751964569092 ms (passed)
+diag_b1.0 N=262144 F=128 identity_k256: None ms (not_supported)
+diag_b1.0 N=262144 F=128 hem_k8: 5.7579522132873535 ms (passed)
+diag_b1.0 N=262144 F=128 hem_k16: 3.759104013442993 ms (passed)
+diag_b1.0 N=262144 F=128 hem_k32: 3.234816074371338 ms (passed)
+diag_b1.0 N=262144 F=128 hem_k64: 3.1682560443878174 ms (passed)
+diag_b1.0 N=262144 F=128 hem_k128: 3.147775888442993 ms (passed)
+diag_b1.0 N=262144 F=128 hem_k256: 3.127295970916748 ms (passed)
+diag_b1.0 N=262144 F=128 metis_k8: 4.7815680503845215 ms (passed)
+diag_b1.0 N=262144 F=128 metis_k16: 3.384320020675659 ms (passed)
+diag_b1.0 N=262144 F=128 metis_k32: 3.040768027305603 ms (passed)
+diag_b1.0 N=262144 F=128 metis_k64: 3.1257599592208862 ms (passed)
+diag_b1.0 N=262144 F=128 metis_k128: 3.6592639684677124 ms (passed)
+diag_b1.0 N=262144 F=128 metis_k256: None ms (not_supported)
+diag_b1.0 N=262144 F=128 graclus_k8: 4.81331205368042 ms (passed)
+diag_b1.0 N=262144 F=128 graclus_k16: 3.4314239025115967 ms (passed)
+diag_b1.0 N=262144 F=128 graclus_k32: 3.058687925338745 ms (passed)
+diag_b1.0 N=262144 F=128 graclus_k64: 3.167232036590576 ms (passed)
+diag_b1.0 N=262144 F=128 graclus_k128: 3.1395840644836426 ms (passed)
+diag_b1.0 N=262144 F=128 graclus_k256: 3.1278079748153687 ms (passed)
+diag_b1.0 N=262144 F=512 cusparse_csr: 13.248511791229248 ms (passed)
+diag_b1.0 N=262144 F=512 identity_k8: 16.148479461669922 ms (passed)
+diag_b1.0 N=262144 F=512 identity_k16: 12.951039791107178 ms (passed)
+diag_b1.0 N=262144 F=512 identity_k32: 11.853312015533447 ms (passed)
+diag_b1.0 N=262144 F=512 identity_k64: 11.968511581420898 ms (passed)
+diag_b1.0 N=262144 F=512 identity_k128: 14.254591941833496 ms (passed)
+diag_b1.0 N=262144 F=512 identity_k256: None ms (not_supported)
+diag_b1.0 N=262144 F=512 hem_k8: 18.505215644836426 ms (passed)
+diag_b1.0 N=262144 F=512 hem_k16: 13.877248287200928 ms (passed)
+diag_b1.0 N=262144 F=512 hem_k32: 12.396543979644775 ms (passed)
+diag_b1.0 N=262144 F=512 hem_k64: 12.056064128875732 ms (passed)
+diag_b1.0 N=262144 F=512 hem_k128: 11.907072067260742 ms (passed)
+diag_b1.0 N=262144 F=512 hem_k256: 12.247551918029785 ms (passed)
+diag_b1.0 N=262144 F=512 metis_k8: 16.368639945983887 ms (passed)
+diag_b1.0 N=262144 F=512 metis_k16: 13.23366403579712 ms (passed)
+diag_b1.0 N=262144 F=512 metis_k32: 11.986432075500488 ms (passed)
+diag_b1.0 N=262144 F=512 metis_k64: 12.041215896606445 ms (passed)
+diag_b1.0 N=262144 F=512 metis_k128: 13.92076826095581 ms (passed)
+diag_b1.0 N=262144 F=512 metis_k256: None ms (not_supported)
+diag_b1.0 N=262144 F=512 graclus_k8: 15.902207851409912 ms (passed)
+diag_b1.0 N=262144 F=512 graclus_k16: 13.041152000427246 ms (passed)
+diag_b1.0 N=262144 F=512 graclus_k32: 11.851776123046875 ms (passed)
+diag_b1.0 N=262144 F=512 graclus_k64: 12.13593578338623 ms (passed)
+diag_b1.0 N=262144 F=512 graclus_k128: 12.20966386795044 ms (passed)
+diag_b1.0 N=262144 F=512 graclus_k256: 12.10982370376587 ms (passed)

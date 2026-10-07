@@ -1,0 +1,21 @@
+------------------------------------
+Tue 06 Oct 2026 23:38:48 IDT
+SLURM_JOBID:		22335766
+SLURM_JOB_NODELIST:	ise-cpu-intl-01
+SLURM_SCRATCH_DIR:	/scratch/dayanb/22335766
+Allocated Resouces:	cpu - 4 / mem - 49152 MB / gpu - 
+SLURM_GPU_INDEX:	
+Running as dayanb from erant account with normal QOS
+------------------------------------
+cluster diag_b0.3 N=262144 metis_k8
+  71.0 s
+cluster diag_b0.3 N=262144 metis_k16
+  51.6 s
+cluster diag_b0.3 N=262144 metis_k32
+  31.3 s
+cluster diag_b0.3 N=262144 metis_k64
+  12.8 s
+cluster diag_b0.3 N=262144 metis_k128
+  11.2 s
+cluster diag_b0.3 N=262144 metis_k256
+  10.9 s

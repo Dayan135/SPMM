@@ -1,0 +1,62 @@
+{
+  "git_commit": "unknown",
+  "git_status": "unknown",
+  "source_sha256": "292d11d84d3ea6f3ad17b20ded621cae5fd9680013ed6012c8c11a7c15832194",
+  "extension_path": "/home/dayanb/research/clustering-20261006/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "b5b51763b41246a47d948b559a8d9716b18be52c353d222e245221bafdc682f0",
+  "python_package_path": "/home/dayanb/research/clustering-20261006/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25298141184,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "22335746",
+  "node": "cs-3090-01.auth.ad.bgu.ac.il",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "arguments": {
+    "methods": [
+      "identity",
+      "hem",
+      "metis",
+      "graclus"
+    ],
+    "groups": [
+      8,
+      16,
+      32,
+      64,
+      128,
+      256
+    ],
+    "sizes": [
+      262144
+    ],
+    "features": [
+      128,
+      512
+    ],
+    "profiles": [
+      "fem2d",
+      "fem2d_permuted",
+      "diag_b0.3",
+      "diag_b1.0"
+    ],
+    "seed": 0,
+    "warmup": 5,
+    "repeats": 20,
+    "phase": "matmul",
+    "labels": "/home/dayanb/research/clustering-20261006/xl/labels",
+    "out": "/home/dayanb/research/clustering-20261006/xl/n262144"
+  },
+  "status": "complete",
+  "backend_versions": {
+    "pymetis": "2025.2.2",
+    "torch-cluster": "1.6.3"
+  },
+  "tile_policy": "largest fitting p in 64,32,16,8, bounded by feature count",
+  "clustering": "offline: labels loaded from --labels, clustered on CPU nodes"
+}

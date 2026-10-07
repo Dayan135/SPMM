@@ -203,3 +203,75 @@ Observations from the plots (matmul time; same single-session caveat as above):
   doubles at target 128 while P is still 64 (B6). P drops to 32 only at 256.
 - In B5, X-row loads/N is the clearest predictor of the worst (identity) configs; the other
   structural metrics separate configs weakly when all profiles are pooled.
+
+## Large sizes: N=262144 and N=1048576 (offline clustering)
+
+Same matrices, backends, targets (8–256), F=128/512 and timing protocol as above, with one
+change: **clustering ran offline on CPU-only nodes**, and the GPU allocation only built,
+staged and timed matmuls.
+
+```bash
+# CPU partition needs --qos=normal (erant QoS is not allowed there)
+sbatch --array=0-15 cluster-array.sh 262144      # one task per (profile, method)
+sbatch --array=0-15 cluster-array.sh 1048576
+sbatch --dependency=afterok:<256k array> --time=04:00:00 matmul.sh 262144
+sbatch --dependency=afterok:<1M array>   --time=10:00:00 matmul.sh 1048576
+```
+
+`bench_clustering --phase cluster` refuses to run if a GPU is visible. It saves each config's
+labels with its `cluster_ms`, matrix hash, seed and host. `--phase matmul` never calls
+`cluster_axes`: it loads those files and rejects any whose matrix hash or seed does not match.
+Jobs: clustering arrays `22335744` (256k) / `22335745` (1M), all 32 tasks completed; GPU jobs
+`22335746` (256k, cs-3090-01, 14 min) / `22335747` (1M, ise-pheno-11, 42 min). Each sweep:
+196 validated rows plus the same 4 shared-memory exclusions (identity/METIS target 256 on
+`diag_b1.0`). Results, scripts and logs:
+[clustering_20261006_xl](tests/torch_fast_spdmm/benchmark/results/clustering_20261006_xl).
+The 192 label files (82 MB) stay on the cluster under
+`/home/dayanb/research/clustering-20261006/xl/labels`. Plots for all four sizes:
+`plots/clustering_20261006_xl/` (see the Plots section; same figure set, per-N figures for 16k–1M).
+
+`cluster_ms` here comes from different CPU node types (recorded per row as `cluster_node` /
+`cluster_cpu`). It is not directly comparable with the 16k/64k numbers, which were measured
+on GPU nodes. Worst-case clustering time per config at 1M: HEM 523 s (`diag_b0.3`), METIS 81 s,
+Graclus 50 s.
+
+Best-target speedup over cuSPARSE (matmul time; single session per size):
+
+| N | profile | F | identity | HEM | METIS | Graclus | cuSPARSE ms |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 256k | fem2d | 128 | 0.57 | 0.58 | 0.54 | 0.58 | 1.57 |
+| 256k | fem2d | 512 | 0.56 | 0.62 | 0.58 | 0.57 | 6.21 |
+| 256k | fem2d_permuted | 128 | 0.46 | 1.07 | 1.05 | 1.05 | 3.23 |
+| 256k | fem2d_permuted | 512 | 0.64 | **1.26** | 1.18 | 1.15 | 13.08 |
+| 256k | diag_b0.3 | 128 | 0.93 | 0.94 | 0.94 | 0.94 | 1.14 |
+| 256k | diag_b0.3 | 512 | 1.00 | 1.02 | 0.98 | 1.02 | 4.60 |
+| 256k | diag_b1.0 | 128 | 1.07 | 1.05 | 1.08 | 1.07 | 3.27 |
+| 256k | diag_b1.0 | 512 | 1.12 | 1.11 | 1.11 | 1.12 | 13.25 |
+| 1M | fem2d | 128 | 0.54 | 0.58 | 0.54 | 0.55 | 6.35 |
+| 1M | fem2d | 512 | 0.59 | 0.62 | 0.63 | 0.62 | 27.81 |
+| 1M | fem2d_permuted | 128 | 0.45 | 1.13 | 1.09 | 1.04 | 13.08 |
+| 1M | fem2d_permuted | 512 | 0.61 | 1.16 | **1.19** | 1.12 | 53.93 |
+| 1M | diag_b0.3 | 128 | 0.97 | 0.99 | 0.95 | 0.99 | 4.56 |
+| 1M | diag_b0.3 | 512 | 0.99 | 1.00 | 0.99 | 0.98 | 18.72 |
+| 1M | diag_b1.0 | 128 | 1.09 | 1.06 | 1.07 | 1.09 | 13.25 |
+| 1M | diag_b1.0 | 512 | 1.16 | **1.19** | 1.18 | 1.17 | 56.47 |
+
+Observations:
+
+- **The gap to cuSPARSE keeps closing with N, and BOO now beats it on two profiles.** On
+  `diag_b1.0` BOO is 1.05–1.19× faster at both sizes (it was 0.89–1.00× at 16k). `diag_b0.3` is
+  at parity (0.95–1.02×).
+- **The `fem2d_permuted` win is mostly cuSPARSE losing locality, not BOO beating a good ordering.**
+  cuSPARSE runs about 2× slower on the permuted matrix than on natural-order `fem2d` (256k F=128:
+  3.23 vs 1.57 ms; 1M F=512: 53.9 vs 27.8 ms). Clustered BOO takes about the same time on both
+  (256k F=512, HEM: 10.4 vs 10.1 ms; 1M F=512, METIS: 45.4 vs 43.9 ms). So clustering recovers the
+  locality the permutation destroyed. But cuSPARSE on the natural order is still faster than any
+  BOO config, which stays at 0.54–0.63× on `fem2d`. The fair next baseline is cuSPARSE after a
+  reordering (RCM or the same clustering labels used as a permutation), cf. `bench_reorder_vs_boo.py`.
+- **There is still no clear backend winner.** Among the three clustering backends, HEM is best
+  or tied in 8 of 16 large-N cells, Graclus in 6 and METIS in 3. Most margins are ≤5%; the widest
+  is 10% (`fem2d_permuted` 256k F=512: HEM 1.26× vs Graclus 1.15×). These are single-session
+  measurements.
+- **The best target depends on the profile.** FEM still prefers 32. On the diag profiles the best
+  config shifts to 64–128 at large N, but HEM/Graclus labels saturate at 64-row components there
+  (as at 64k), so those targets are the same grouping.
