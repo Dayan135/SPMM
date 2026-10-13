@@ -1,0 +1,51 @@
+{
+  "git_commit": "unknown",
+  "git_status": "unknown",
+  "source_sha256": "22bb272f79cae3e1aee995bab942505053f30da9ac5211ef00344f78b318f5f5",
+  "extension_path": "/home/dayanb/research/boo-profile-20261008-a/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "ac624dcb66755a71f261dc6f54585ada4afd170ab1cd6c7955f8f4352fb1beb6",
+  "python_package_path": "/home/dayanb/research/boo-profile-20261008-a/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25296044032,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "22397192",
+  "node": "ise-pheno-03.auth.ad.bgu.ac.il",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "arguments": {
+    "phase": "profile",
+    "labels": "/home/dayanb/research/boo-profile-20261008-a/labels",
+    "out": "/home/dayanb/research/boo-profile-20261008-a/results/pattern_row_skewed_torch_nsys_meta",
+    "sizes": [
+      262144
+    ],
+    "profiles": [
+      "pattern_row_skewed"
+    ],
+    "features": [
+      512
+    ],
+    "methods": [
+      "hem"
+    ],
+    "groups": [
+      32
+    ],
+    "seed": 0,
+    "warmup": 5,
+    "repeats": 20,
+    "profile_method": "torch",
+    "direct_algorithm": "DEFAULT",
+    "baseline_summary": "/home/dayanb/research/boo-profile-20261008-a/results/panel/summary.csv"
+  },
+  "status": "complete",
+  "diagnostic_variants": false,
+  "comparison": "paired full-call and preallocated C++ scopes; no cross-scope ratios",
+  "cpp_boo_launch": "existing preallocated legacy fork/join; API uses auto",
+  "tile_policy": "largest fitting P in 64,32,16,8; record P per configuration"
+}

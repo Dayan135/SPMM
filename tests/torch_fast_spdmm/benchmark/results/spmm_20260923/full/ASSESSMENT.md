@@ -8,7 +8,9 @@ cluster size; the measurements do not establish a universal replacement.
 [W&B run](https://wandb.ai/private-dayan/torch-fast-spdmm/runs/4nk9coe9)
 contains the raw samples, summaries, and result artifacts. See
 [comparison.md](comparison.md) for every workload and [summary.csv](summary.csv)
-for every configuration. [samples.csv](samples.csv) retains all individual times.
+for every configuration. Individual times are in the separate
+[result archive](../../../../../../RESULTS_ARCHIVE.md) at
+`tests/torch_fast_spdmm/benchmark/results/spmm_20260923/full/samples.csv`.
 
 ## Measurement scope
 

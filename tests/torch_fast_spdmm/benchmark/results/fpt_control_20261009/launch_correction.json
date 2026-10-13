@@ -1,0 +1,6 @@
+{
+  "job": 22417146,
+  "correction": "Load torch before importing the extension; explicit RTX 3090 allocation.",
+  "actual_script_sha256": "c1b260f205184842ff9938f29f098b9f19ee0ebc07f77a3e49ba8e24d6ff50dc",
+  "note": "benchmark_source.json preserves the initial overlay hash; this record identifies the corrected executed launch script. Benchmark and kernel sources unchanged."
+}

@@ -230,8 +230,11 @@ def matmul(config, obj, x):
     plan = None
     if config.get('execution_plan', False):
         obj, plan = obj
+    fpt_args = ({'features_per_thread': config['features_per_thread']}
+                if 'features_per_thread' in config else {})
     return spmm.boo_matmul(obj, x, threads=config['threads'], p=config['p'], row_seg=True, csr_mode=0,
-                           launch_mode=config.get('launch_mode', 'legacy'), execution_plan=plan)
+                           launch_mode=config.get('launch_mode', 'legacy'), execution_plan=plan,
+                           **fpt_args)
 
 
 def round_orders(count, repeats, seed):
@@ -241,13 +244,32 @@ def round_orders(count, repeats, seed):
     return [order[r % count:] + order[:r % count] for r in range(repeats)]
 
 
-def _symmetric_variants(variants, x):
+class _BOOFPTTimed:
+    """Apply FPT before every C++ entry, including interleaved timing rounds.
+
+    BOOTimedSpMM does not own FPT; the experimental launch selector is global.
+    Setting it only at plan creation would silently time the wrong variant.
+    """
+    def __init__(self, plan, fpt):
+        self.plan, self.fpt = plan, fpt
+
+    def run(self):
+        core.set_boo_rowseg_fpt(self.fpt)
+        return self.plan.run()
+
+    def timed_run(self):
+        core.set_boo_rowseg_fpt(self.fpt)
+        return self.plan.timed_run()
+
+
+def _symmetric_variants(variants, x, diagnostics=True):
     """For every PBR/BOO config already in the sweep, build a C++-only timed
     entry (PBRTimedSpMM/BOOTimedSpMM, same scope as DirectSpMM.timed_run())
     and a diagnostic upper-bound entry (Y memset removed, Step-C atomicAdd ->
     plain store) wrapping the SAME already-staged GPU object -- no extra
     format construction. Skips execution-plan (bucketed) BOO configs: the
-    timed harness only supports the plain three-way fork/join."""
+    timed harness only supports the plain three-way fork/join. Set diagnostics
+    False for panels that should only execute correctness-checkable variants."""
     extra = []
     for config, obj in variants:
         if config['algorithm'] == 'pbr':
@@ -259,9 +281,10 @@ def _symmetric_variants(variants, x):
             timed = core.PBRTimedSpMM(*args, False)
             extra.append((dict(config, config=config['config'] + '_cpp',
                                timing_scope='cpp_only'), timed))
-            diag = core.PBRTimedSpMM(*args, True)
-            extra.append((dict(config, algorithm='pbr_diagnostic', config=config['config'] + '_diag',
-                               timing_scope='diagnostic_upper_bound', execution_path='diagnostic'), diag))
+            if diagnostics:
+                diag = core.PBRTimedSpMM(*args, True)
+                extra.append((dict(config, algorithm='pbr_diagnostic', config=config['config'] + '_diag',
+                                   timing_scope='diagnostic_upper_bound', execution_path='diagnostic'), diag))
         elif config['algorithm'] == 'boo':
             if config.get('execution_plan', False):
                 continue
@@ -273,15 +296,20 @@ def _symmetric_variants(variants, x):
                     meta.tail_row, meta.tail_col, meta.tail_val, x,
                     config['threads'], config['p'], config.get('csr_mode', 0), True)
             timed = core.BOOTimedSpMM(*args, False)
+            if 'features_per_thread' in config:
+                timed = _BOOFPTTimed(timed, config['features_per_thread'])
             extra.append((dict(config, config=config['config'] + '_cpp',
                                timing_scope='cpp_only'), timed))
-            diag = core.BOOTimedSpMM(*args, True)
-            extra.append((dict(config, algorithm='boo_diagnostic', config=config['config'] + '_diag',
-                               timing_scope='diagnostic_upper_bound', execution_path='diagnostic'), diag))
+            if diagnostics:
+                diag = core.BOOTimedSpMM(*args, True)
+                extra.append((dict(config, algorithm='boo_diagnostic', features_per_thread=1,
+                                   config=config['config'] + '_diag',
+                                   timing_scope='diagnostic_upper_bound', execution_path='diagnostic'), diag))
     return extra
 
 
-def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=(), symmetric=False):
+def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=(), symmetric=False,
+                 diagnostics=True):
     x = x_cpu.to('cuda')
     variants = [(dict(config), obj) for config, obj in variants]
     for config, obj in variants:
@@ -293,7 +321,7 @@ def measure_cell(variants, mat, x_cpu, warmup, repeats, seed, direct_algorithms=
         else:
             config['execution_path'] = 'torch.sparse.mm'
     if symmetric:
-        variants.extend(_symmetric_variants(variants, x))
+        variants.extend(_symmetric_variants(variants, x, diagnostics=diagnostics))
     if direct_algorithms:
         csr = next(obj for config, obj in variants if config['algorithm'] == 'cusparse_csr')
         for algorithm in direct_algorithms:

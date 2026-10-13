@@ -1,0 +1,3 @@
+--configs 64:2:512 64:4:128 64:4:256 64:4:512 64:4:1024 --cpp --features 512 --cases pwtk diag_b1.0 --repeats 30 --order rotation --order-seed 3 --out /home/dayanb/research/boo-tiles-20261012/results/order_control/rotation
+--configs 64:2:512 64:4:128 64:4:256 64:4:512 64:4:1024 --cpp --features 512 --cases pwtk diag_b1.0 --repeats 30 --order shuffle --order-seed 3 --out /home/dayanb/research/boo-tiles-20261012/results/order_control/shuffle
+--configs 64:2:512 64:4:128 64:4:256 64:4:512 64:4:1024 --cpp --features 512 --cases pwtk diag_b1.0 --repeats 30 --order rotation --order-seed 7 --out /home/dayanb/research/boo-tiles-20261012/results/order_control/rotation_seed7

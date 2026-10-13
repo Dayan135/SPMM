@@ -1,0 +1,50 @@
+{
+  "method": "direct",
+  "profile": "fem2d",
+  "requested_size": 262144,
+  "features": 512,
+  "matrix_sha256": "c19ae8d92a4bc7d32cab77e0bc7dd1bd8af1217bc11696fbd44269826b4e3267",
+  "x_sha256": "443367de1acbc31a421a0d319b127ad399d75cded61a9fccb5194aeb3113b3e6",
+  "csr": {
+    "shape": [
+      262144,
+      262144
+    ],
+    "nnz": 9388096,
+    "row_degree": {
+      "count": 262144,
+      "mean": 35.812744140625,
+      "p50": 36.0,
+      "p90": 36.0,
+      "p99": 36.0,
+      "maximum": 36.0
+    },
+    "column_degree": {
+      "count": 262144,
+      "mean": 35.812744140625,
+      "p50": 36.0,
+      "p90": 36.0,
+      "p99": 36.0,
+      "maximum": 36.0
+    },
+    "empty_rows": 0,
+    "empty_columns": 0,
+    "csr_bytes": 76153348,
+    "hub_column_nnz_fraction": 0.0
+  },
+  "direct_algorithm": "CSR_ALG2",
+  "direct_info": {
+    "cusparse_version": 12508,
+    "cusparse_header_version": 12510,
+    "workspace_bytes": 3129368,
+    "preprocess_status": "CUSPARSE_STATUS_SUCCESS",
+    "supported": true,
+    "unsupported_reason": ""
+  },
+  "correctness": "passed",
+  "max_abs_error": 6.4455155737164205e-06,
+  "warmup": 5,
+  "profiled_calls": 1,
+  "timing_scope": "full_call",
+  "direct_output_reused": true
+}

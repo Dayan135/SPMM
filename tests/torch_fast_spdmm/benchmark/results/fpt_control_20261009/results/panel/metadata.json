@@ -1,0 +1,76 @@
+{
+  "git_commit": "8116a2bd3181fbdf81e41fcda51ad23451c3ce64",
+  "git_status": "validated FPT snapshot copied to isolated synthetic control; profiling harness overlaid",
+  "parent_source_sha256": "b84cc73b2440e2b0e6315fae09c68b9dbce19854d4915ff87a33da392133a334",
+  "validated_extension_sha256": "bc688ff876317ddee01a888d5de6d9ac08b7ea87a331090e03021daaa0ff607c",
+  "validated_kernel_sha256": {
+    "torch_fast_spdmm/bindings/bindings_boo.cu": "76f75ba179d0f207521aa0327f5a620f0a838e93e7f509d6c321da263f049149",
+    "torch_fast_spdmm/kernels/boo_kernel.cu": "e49be8a6e08d62551f27b6985fd301671dc409d1916dd68254cdb5687e28b5e4",
+    "torch_fast_spdmm/kernels/boo_kernels.hpp": "62f3d87446cf4d942535f912d0afccb992df60c5fc326ee73b70006c1fb85687",
+    "torch_fast_spdmm/torch_fast_spdmm/boo.py": "6f1938fe001e39941518ece475dd441ff2e43bfe50810dbb58a2aa4af0b3dc23"
+  },
+  "overlay_sha256": {
+    "tests/torch_fast_spdmm/benchmark/bench_spmm.py": "1e7a52d1c749ede6a83a1abdea8516c9e6e97047ab29f4ea90828d97689681f3",
+    "tests/torch_fast_spdmm/benchmark/research_panel.py": "3a18df58c0f6d40ce874a3feb2306710802590226d8ac0bbc962c539e6217f69",
+    "tests/torch_fast_spdmm/benchmark/panel_structure.py": "e67e3a71a0c2dce8080abbce73c574a63fc382aebf60c8e539b27b3f79d5e4fe",
+    "tests/torch_fast_spdmm/benchmark/test_research_panel.py": "3f811ba70cef7ecafbda695c4bb350f02e29462f065c65d41796580779da72b4",
+    "scripts/research_panel/fpt_control.sh": "e8df0a0ffbc9f27fce0e9a6822ee86002291a80a370bfd78b2e3fa4c6bc7bdd4",
+    "scripts/research_panel/report.py": "0798846baee656726c121fb15f2ba0f5b55e4323ff43540dc35f17d0c06afb46"
+  },
+  "source_sha256": "74b5498172384056f17e7b6f0fc773edc8bccb0e80200836748ab8088f31952f",
+  "extension_path": "/home/dayanb/research/boo-fpt-control-20261009/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "bc688ff876317ddee01a888d5de6d9ac08b7ea87a331090e03021daaa0ff607c",
+  "python_package_path": "/home/dayanb/research/boo-fpt-control-20261009/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "torch_version": "2.10.0+cu128",
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_memory_bytes": 25298141184,
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "slurm_job_id": "22417146",
+  "node": "cs-3090-06.auth.ad.bgu.ac.il",
+  "timing": "CUDA event elapsed ms per complete matmul call; resident inputs",
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "arguments": {
+    "phase": "benchmark",
+    "labels": "/home/dayanb/research/boo-profile-20261008-a/labels",
+    "out": "/home/dayanb/research/boo-fpt-control-20261009/results/panel",
+    "sizes": [
+      262144
+    ],
+    "profiles": [
+      "fem2d",
+      "fem2d_permuted",
+      "diag_b1.0",
+      "pattern_row_skewed"
+    ],
+    "features": [
+      128,
+      512
+    ],
+    "methods": [
+      "hem"
+    ],
+    "groups": [
+      32
+    ],
+    "boo_fpt": [
+      1,
+      2,
+      4
+    ],
+    "seed": 0,
+    "warmup": 5,
+    "repeats": 20,
+    "profile_method": "boo",
+    "direct_algorithm": "DEFAULT",
+    "baseline_summary": null
+  },
+  "status": "complete",
+  "diagnostic_variants": false,
+  "comparison": "paired full-call and preallocated C++ scopes; no cross-scope ratios",
+  "cpp_boo_launch": "existing preallocated legacy fork/join; API uses auto",
+  "tile_policy": "largest fitting P in 64,32,16,8; record P per configuration"
+}

@@ -1,0 +1,14 @@
+{
+  "remote_root": "/home/dayanb/research/boo-full-fpt-20261009",
+  "preflight": 22418047,
+  "cluster_array": 22418048,
+  "matmul_array": 22418049,
+  "aggregate": 22418066,
+  "status": "complete",
+  "requested_generated_sizes": [
+    262144,
+    1048576
+  ],
+  "finished_israel": "2026-10-09 22:01",
+  "retrieved": "2026-10-12"
+}

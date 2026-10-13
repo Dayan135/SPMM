@@ -1,0 +1,9 @@
+diag_b1.0 512 boo 64 1 512 -
+diag_b1.0 512 boo 64 2 512 -
+diag_b1.0 512 boo 64 4 512 -
+diag_b1.0 512 boo 128 4 512 -
+diag_b1.0 512 direct - - - CSR_ALG2
+roadnet 512 boo 64 1 512 -
+roadnet 512 boo 64 2 512 -
+roadnet 512 boo 64 4 512 -
+roadnet 512 boo 32 4 512 -

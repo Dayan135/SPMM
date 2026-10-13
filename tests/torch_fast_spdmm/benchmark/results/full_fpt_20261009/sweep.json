@@ -1,0 +1,622 @@
+{
+  "tasks": [
+    {
+      "kind": "real",
+      "matrix": "Boeing/pwtk",
+      "method": "identity"
+    },
+    {
+      "kind": "real",
+      "matrix": "Boeing/pwtk",
+      "method": "hem"
+    },
+    {
+      "kind": "real",
+      "matrix": "Boeing/pwtk",
+      "method": "graclus"
+    },
+    {
+      "kind": "real",
+      "matrix": "Boeing/pwtk",
+      "method": "metis"
+    },
+    {
+      "kind": "real",
+      "matrix": "Schmid/thermal2",
+      "method": "identity"
+    },
+    {
+      "kind": "real",
+      "matrix": "Schmid/thermal2",
+      "method": "hem"
+    },
+    {
+      "kind": "real",
+      "matrix": "Schmid/thermal2",
+      "method": "graclus"
+    },
+    {
+      "kind": "real",
+      "matrix": "Schmid/thermal2",
+      "method": "metis"
+    },
+    {
+      "kind": "real",
+      "matrix": "AMD/G2_circuit",
+      "method": "identity"
+    },
+    {
+      "kind": "real",
+      "matrix": "AMD/G2_circuit",
+      "method": "hem"
+    },
+    {
+      "kind": "real",
+      "matrix": "AMD/G2_circuit",
+      "method": "graclus"
+    },
+    {
+      "kind": "real",
+      "matrix": "AMD/G2_circuit",
+      "method": "metis"
+    },
+    {
+      "kind": "real",
+      "matrix": "Williams/webbase-1M",
+      "method": "identity"
+    },
+    {
+      "kind": "real",
+      "matrix": "Williams/webbase-1M",
+      "method": "hem"
+    },
+    {
+      "kind": "real",
+      "matrix": "Williams/webbase-1M",
+      "method": "graclus"
+    },
+    {
+      "kind": "real",
+      "matrix": "Williams/webbase-1M",
+      "method": "metis"
+    },
+    {
+      "kind": "real",
+      "matrix": "SNAP/roadNet-CA",
+      "method": "identity"
+    },
+    {
+      "kind": "real",
+      "matrix": "SNAP/roadNet-CA",
+      "method": "hem"
+    },
+    {
+      "kind": "real",
+      "matrix": "SNAP/roadNet-CA",
+      "method": "graclus"
+    },
+    {
+      "kind": "real",
+      "matrix": "SNAP/roadNet-CA",
+      "method": "metis"
+    },
+    {
+      "kind": "real",
+      "matrix": "LPnetlib/lp_cre_b",
+      "method": "identity"
+    },
+    {
+      "kind": "real",
+      "matrix": "LPnetlib/lp_cre_b",
+      "method": "hem"
+    },
+    {
+      "kind": "real",
+      "matrix": "LPnetlib/lp_cre_b",
+      "method": "graclus"
+    },
+    {
+      "kind": "real",
+      "matrix": "LPnetlib/lp_cre_b",
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 262144,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 262144,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 262144,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 262144,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "fem2d_permuted",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.017",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.033",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_dd0.05",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.1",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b0.3",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_b1.0",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "diag_skewed",
+      "size": 1048576,
+      "method": "metis"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 1048576,
+      "method": "identity"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 1048576,
+      "method": "hem"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 1048576,
+      "method": "graclus"
+    },
+    {
+      "kind": "generated",
+      "profile": "pattern_diag_stripe",
+      "size": 1048576,
+      "method": "metis"
+    }
+  ],
+  "features": [
+    32,
+    128,
+    512
+  ],
+  "groups": [
+    32,
+    64
+  ],
+  "fpt": [
+    1,
+    2,
+    4
+  ],
+  "seed": 0,
+  "warmup": 5,
+  "repeats": 20,
+  "expected_boo_full_call_combinations": 1872
+}

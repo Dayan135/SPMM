@@ -1,0 +1,99 @@
+{
+  "arguments": {
+    "boo_fpt": [
+      1,
+      2,
+      4
+    ],
+    "cache": "/home/dayanb/research/real-matrices-20261008/matrix_cache",
+    "direct_algorithms": [
+      "DEFAULT",
+      "CSR_ALG2",
+      "CSR_ALG1",
+      "CSR_ALG3"
+    ],
+    "explicit_zeros": "keep",
+    "features": [
+      35
+    ],
+    "groups": [
+      32,
+      64
+    ],
+    "labels": "/home/dayanb/research/boo-full-fpt-20261009/smoke/labels",
+    "matrices": [
+      "generated/fem2d_n1024"
+    ],
+    "methods": [
+      "identity"
+    ],
+    "out": "/home/dayanb/research/boo-full-fpt-20261009/smoke/results/task_000",
+    "repeats": 2,
+    "seed": 0,
+    "threads": 256,
+    "threshold": 4,
+    "warmup": 1
+  },
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "boo_mapping": "BOO consumes original-coordinate X/Y; row_ids/col_ids apply the label permutation inside the kernel",
+  "completed_cells": 2,
+  "cuda_version": "12.8",
+  "extension_path": "/home/dayanb/research/boo-full-fpt-20261009/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "bc688ff876317ddee01a888d5de6d9ac08b7ea87a331090e03021daaa0ff607c",
+  "full_sweep_manifest_sha256": "2248c29f8a0c42bd5527e165b297f8a3ae88081b152b98122eeded6098223a36",
+  "full_sweep_overlay_sha256": {
+    "scripts/research_panel/full_sweep.py": "76e4e7e257e810d5deb99fc247fc0009e1e11c5ced03126bbf0016534bca6869",
+    "scripts/research_panel/full_sweep.sh": "dee4c817507e5f1095a113a5abd6c2b73514e8834d2433c0a0e89e32023c19db",
+    "scripts/research_panel/full_sweep_report.py": "9f62ff09b706bbc5cee840315affe141e99dd10a655f2a41348c2f70c2b00ddb"
+  },
+  "git_commit": "8116a2bd3181fbdf81e41fcda51ad23451c3ce64",
+  "git_status": "Uncommitted full FPT sweep adapter on validated FPT binary; inherited control overlay provenance preserved.",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "gpu_memory_bytes": 25298141184,
+  "isolated_dependencies": {
+    "pymetis": "2025.2.2",
+    "typing-extensions": "4.16.0"
+  },
+  "matrices": {
+    "generated/fem2d_n1024": {
+      "explicit_zeros_policy": "keep",
+      "load_ms": 3.9214929565787315,
+      "matrix": "generated/fem2d_n1024",
+      "matrix_sha256": "2924e7ca4fc9e70f6a989ef73a59a715f8ec1429be896f7742f3441793506450",
+      "numerical_nnz": 33856,
+      "profile": "fem2d",
+      "requested_size": 1024,
+      "seed": 0,
+      "source_kind": "generated"
+    }
+  },
+  "node": "cs-3090-06.auth.ad.bgu.ac.il",
+  "overlay_sha256": {
+    "scripts/research_panel/fpt_control.sh": "e8df0a0ffbc9f27fce0e9a6822ee86002291a80a370bfd78b2e3fa4c6bc7bdd4",
+    "scripts/research_panel/report.py": "0798846baee656726c121fb15f2ba0f5b55e4323ff43540dc35f17d0c06afb46",
+    "tests/torch_fast_spdmm/benchmark/bench_spmm.py": "1e7a52d1c749ede6a83a1abdea8516c9e6e97047ab29f4ea90828d97689681f3",
+    "tests/torch_fast_spdmm/benchmark/panel_structure.py": "e67e3a71a0c2dce8080abbce73c574a63fc382aebf60c8e539b27b3f79d5e4fe",
+    "tests/torch_fast_spdmm/benchmark/research_panel.py": "3a18df58c0f6d40ce874a3feb2306710802590226d8ac0bbc962c539e6217f69",
+    "tests/torch_fast_spdmm/benchmark/test_research_panel.py": "3f811ba70cef7ecafbda695c4bb350f02e29462f065c65d41796580779da72b4"
+  },
+  "parent_source_sha256": "b84cc73b2440e2b0e6315fae09c68b9dbce19854d4915ff87a33da392133a334",
+  "python_package_path": "/home/dayanb/research/boo-full-fpt-20261009/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "slurm_job_id": "22418047",
+  "source_sha256": "74b5498172384056f17e7b6f0fc773edc8bccb0e80200836748ab8088f31952f",
+  "status": "complete",
+  "timing": "interleaved seeded-rotation order across all variants of one (matrix, F, labeling) cell; scope column names the interval",
+  "torch_version": "2.10.0+cu128",
+  "validated_extension_sha256": "bc688ff876317ddee01a888d5de6d9ac08b7ea87a331090e03021daaa0ff607c",
+  "validated_kernel_sha256": {
+    "torch_fast_spdmm/bindings/bindings_boo.cu": "76f75ba179d0f207521aa0327f5a620f0a838e93e7f509d6c321da263f049149",
+    "torch_fast_spdmm/kernels/boo_kernel.cu": "e49be8a6e08d62551f27b6985fd301671dc409d1916dd68254cdb5687e28b5e4",
+    "torch_fast_spdmm/kernels/boo_kernels.hpp": "62f3d87446cf4d942535f912d0afccb992df60c5fc326ee73b70006c1fb85687",
+    "torch_fast_spdmm/torch_fast_spdmm/boo.py": "6f1938fe001e39941518ece475dd441ff2e43bfe50810dbb58a2aa4af0b3dc23"
+  },
+  "validation": "float64 scipy reference on CPU; per-row bound (2(k_i+1)+2)u*(|A||X|)_i; reordered outputs compared to reference rows pr",
+  "x_perm_buffer": "torch_perm_steady and direct_perm_*_steady read the resident X' that *_gather variants rewrite in place with identical content"
+}

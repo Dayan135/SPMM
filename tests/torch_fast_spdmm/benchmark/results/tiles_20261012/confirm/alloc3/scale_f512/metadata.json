@@ -1,0 +1,203 @@
+{
+  "arguments": {
+    "allocation": "22713807",
+    "anchor": true,
+    "cache": "/home/dayanb/research/real-matrices-20261008/matrix_cache",
+    "cases": [
+      "diag_b1.0_1m",
+      "fem2d_1m",
+      "fem2d_permuted_1m"
+    ],
+    "configs": [
+      "64:1:512",
+      "64:2:512",
+      "64:4:512",
+      "64:4:1024",
+      "128:4:512"
+    ],
+    "cpp": true,
+    "direct_algorithms": [
+      "DEFAULT",
+      "CSR_ALG2",
+      "CSR_ALG1",
+      "CSR_ALG3"
+    ],
+    "features": [
+      512
+    ],
+    "fpt": [
+      1,
+      2,
+      4
+    ],
+    "labels": "/home/dayanb/research/boo-full-fpt-20261009/labels",
+    "no_torch": false,
+    "order": "shuffle",
+    "order_seed": 303,
+    "out": "/home/dayanb/research/boo-tiles-20261012/results/confirm/alloc3/scale_f512",
+    "p": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "repeats": 20,
+    "seed": 0,
+    "slab": [
+      512
+    ],
+    "threads": 256,
+    "threshold": 4,
+    "warmup": 5
+  },
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "build_hashes": {
+    "cuda": "12.8",
+    "extension": "/home/dayanb/research/boo-tiles-20261012/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "b980dbc28216ed2169adee4cbe0db83b6735e78489cab76db21a6ea6c61c229c",
+    "source_sha256": {
+      "torch_fast_spdmm/bindings/bindings.cpp": "154139b291eff8ea3de6e35ab069054f053083cd515ae2777ca996129af9edaf",
+      "torch_fast_spdmm/bindings/bindings_boo.cu": "e7ed11c6b67790ce81ed253cc2e923200e73e784e860194dbd0e1e35cbae1605",
+      "torch_fast_spdmm/bindings/bindings_boo_timed.cu": "a23b106c6e780f63ce562f256a2b4f9fd0c8f3240c47de96acd43fcea782b78b",
+      "torch_fast_spdmm/bindings/bindings_cusparse.cu": "c47c152cb3abf4b3d6a2962b06e3ffc84be89ce11e09499836a7f28d4fdd85d9",
+      "torch_fast_spdmm/bindings/bindings_kernels.cu": "b34dd41dddc16ce53224d4b2de01098db5bdcfde95ebd1c085d6d558e36d02e0",
+      "torch_fast_spdmm/bindings/bindings_pbr_timed.cu": "62ec84433fb73fb76fbe184c8f32c6c5a2717bb11d1ac3f25aaae3fa1b0c7785",
+      "torch_fast_spdmm/kernels/boo_kernel.cu": "d27e105e2c3eadd7871d8c19753a09d62b75e0e8d9f99340b512ccdcba9c4b39",
+      "torch_fast_spdmm/kernels/boo_kernels.hpp": "2e169c6ab8533012a6772b9a458f888be093c6fecc4c0e830e1b48ada475944b",
+      "torch_fast_spdmm/kernels/csr_kernels.cu": "163b4390da6462524046e006ee12967acdfa8acda2f10cf4ea5fcc26c8da044e",
+      "torch_fast_spdmm/kernels/csr_kernels.hpp": "0ab768168eb30b899abc9b9209644389302236b40d59058a0735db0f8714a840",
+      "torch_fast_spdmm/kernels/kernels.hpp": "5cd8f2e8fd13f210afc8c4fadb427beb9080a3444dee88738067e888f1d77112",
+      "torch_fast_spdmm/kernels/pbr_kernel.cu": "36d016b057533ae73f06911c534371cf169c63d34a4bc8fd97fbe497c72b3e7e",
+      "torch_fast_spdmm/kernels/pbr_kernels.hpp": "a1848e63a077c625043736a04170d209ee6fabf62425ed3416b9a09c3fe88025",
+      "torch_fast_spdmm/setup.py": "7cd9ce234ddb9ae405f3da0a9d984dc564ee809e494f02848cb336e7746c6399",
+      "torch_fast_spdmm/torch_fast_spdmm/__init__.py": "5813e18f9674123b2ec2b8f1b9314d7990bac829b2e988a4b4f1208cb25b0859",
+      "torch_fast_spdmm/torch_fast_spdmm/boo.py": "6f1938fe001e39941518ece475dd441ff2e43bfe50810dbb58a2aa4af0b3dc23",
+      "torch_fast_spdmm/torch_fast_spdmm/boo_plan.py": "ba11c87f9273048695f9cac8ee492d027900b211e9053ff97809cbcfa1a7bfbf",
+      "torch_fast_spdmm/torch_fast_spdmm/clustering.py": "62c8ce041c4c12fda1416e58858911f5211e419c40a2433e9fd0696cf124bb76"
+    },
+    "torch": "2.10.0+cu128"
+  },
+  "cases": {
+    "diag_b1.0_1m": {
+      "case": "diag_b1.0_1m",
+      "cluster": "identity",
+      "cols": 1048576,
+      "compressed_nnz": 67108864,
+      "explicit_zeros": "keep",
+      "k": 32,
+      "label_sha256": "bc9d72cec66db2dbf0732b724152e5267a3947c113f98ac74787ede4ceac9e94",
+      "labeling": "identity_k32",
+      "labels_path": "/home/dayanb/research/boo-full-fpt-20261009/labels/generated__diag_b1.0_n1048576__keep__identity_k32.npz",
+      "load_build_s": 17.536196835000737,
+      "matrix": "generated/diag_b1.0_n1048576",
+      "matrix_sha256": "d352f4fc61d17037f9f534a99b40bf10b37a4766fc07e92ad3443ee4e7870422",
+      "max_nc": 32,
+      "max_nnz_blk": 1024,
+      "max_nr": 32,
+      "num_blocks": 65536,
+      "numerical_nnz": 67108864,
+      "remainder_nnz": 0,
+      "role": "scale",
+      "rows": 1048576,
+      "seed": 0,
+      "stored_entries": 67108864,
+      "threshold": 4
+    },
+    "fem2d_1m": {
+      "case": "fem2d_1m",
+      "cluster": "hem",
+      "cols": 1048576,
+      "compressed_nnz": 37650496,
+      "explicit_zeros": "keep",
+      "k": 32,
+      "label_sha256": "c3a5b54bb726b9b49ea0653459085c365efef4f1979ee3e144a853c5af920ab1",
+      "labeling": "hem_k32",
+      "labels_path": "/home/dayanb/research/boo-full-fpt-20261009/labels/generated__fem2d_n1048576__keep__hem_k32.npz",
+      "load_build_s": 6.520503322997683,
+      "matrix": "generated/fem2d_n1048576",
+      "matrix_sha256": "5405443e08cced101aeae961b4a80e5fc61c10b1defb3727401be7345ece40d9",
+      "max_nc": 32,
+      "max_nnz_blk": 672,
+      "max_nr": 32,
+      "num_blocks": 272714,
+      "numerical_nnz": 37650496,
+      "remainder_nnz": 0,
+      "role": "scale",
+      "rows": 1048576,
+      "seed": 0,
+      "stored_entries": 37650496,
+      "threshold": 4
+    },
+    "fem2d_permuted_1m": {
+      "case": "fem2d_permuted_1m",
+      "cluster": "hem",
+      "cols": 1048576,
+      "compressed_nnz": 37650496,
+      "explicit_zeros": "keep",
+      "k": 32,
+      "label_sha256": "2bd6cafb30ca31eead1b4d710423caed0c3d77a12903cbadd19d2c3b69f9b71c",
+      "labeling": "hem_k32",
+      "labels_path": "/home/dayanb/research/boo-full-fpt-20261009/labels/generated__fem2d_permuted_n1048576__keep__hem_k32.npz",
+      "load_build_s": 8.221822624000197,
+      "matrix": "generated/fem2d_permuted_n1048576",
+      "matrix_sha256": "f688e922d7065be316f5db2cb12d64d0d1e62dfd2d05ea23a4c0465fa4a30e22",
+      "max_nc": 32,
+      "max_nnz_blk": 672,
+      "max_nr": 32,
+      "num_blocks": 272629,
+      "numerical_nnz": 37650496,
+      "remainder_nnz": 0,
+      "role": "scale",
+      "rows": 1048576,
+      "seed": 0,
+      "stored_entries": 37650496,
+      "threshold": 4
+    }
+  },
+  "configs": [
+    [
+      64,
+      1,
+      512
+    ],
+    [
+      64,
+      2,
+      512
+    ],
+    [
+      64,
+      4,
+      512
+    ],
+    [
+      64,
+      4,
+      1024
+    ],
+    [
+      128,
+      4,
+      512
+    ]
+  ],
+  "cuda_version": "12.8",
+  "extension_path": "/home/dayanb/research/boo-tiles-20261012/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "b980dbc28216ed2169adee4cbe0db83b6735e78489cab76db21a6ea6c61c229c",
+  "git_commit": "unknown",
+  "git_status": "unknown",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "gpu_memory_bytes": 25298141184,
+  "gpu_uuid": "0",
+  "node": "cs-3090-03.auth.ad.bgu.ac.il",
+  "python_package_path": "/home/dayanb/research/boo-tiles-20261012/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "slurm_job_id": "22713807",
+  "source_sha256": "badbb15d87b58b7ee528794f6ffa876336473333fb9b8606165ac46e192d7c3a",
+  "status": "complete",
+  "timing": "seeded-rotation interleaving of all variants of one (case, F) cell",
+  "torch_version": "2.10.0+cu128"
+}

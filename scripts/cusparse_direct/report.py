@@ -5,7 +5,9 @@ import csv
 import gzip
 import json
 import math
+import os
 from pathlib import Path
+import re
 import sqlite3
 import statistics as st
 
@@ -107,8 +109,10 @@ def profile_rows(root, expected):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('results', type=Path)
-    p.add_argument('--out', type=Path, default=Path('.'))
+    p.add_argument('--out', type=Path, default=Path('tests/torch_fast_spdmm/benchmark/results/cusparse_direct_20260929/derived'))
+    p.add_argument('--report', type=Path, default=Path('experiments/2026-09-29_direct_cusparse/CUSPARSE_DIRECT.md'))
     a = p.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
     metas, raw, samples = [], [], []
     grouped = defaultdict(list)
     for job in range(1, 4):
@@ -187,6 +191,7 @@ def main():
     profiler_version = (a.results / 'nsys_version.txt').read_text().strip()
     validation = (a.results.parent / 'correctness.log').read_text().splitlines()[-1]
     lines = ['# Direct cuSPARSE comparison', '',
+             'The supporting CSV/JSON tables are in the [dated result directory](../../tests/torch_fast_spdmm/benchmark/results/cusparse_direct_20260929/derived/README.md). Individual CUDA-event samples are in the [result archive](../../RESULTS_ARCHIVE.md).', '',
              f"Measured source commit: `{metas[0]['git_commit']}`. Source SHA256: `{metas[0]['source_sha256']}`. Extension SHA256: `{metas[0]['extension_sha256']}`.", '',
              f"GPU: {metas[0]['gpu']}; PyTorch {metas[0]['torch_version']}; PyTorch CUDA {metas[0]['cuda_version']}. Runtime cuSPARSE version(s): " + ', '.join(sorted({r['cusparse_version'] for r in raw if r.get('cusparse_version')})) + '.', '',
              'cuSPARSE build-header version(s): ' + ', '.join(sorted({r['cusparse_header_version'] for r in raw if r.get('cusparse_header_version')})) + '. Runtime and header versions are recorded separately; the extension was built with the cluster conda CUDA 12.9 toolkit.', '',
@@ -221,12 +226,16 @@ def main():
         lines.append(f"| {r['profile']} | {r['requested_size']} | {r['features']} | {r['kernel_count']} | {r['profiled_event_ms']:.5f} | {r['spmm_kernel_ms']:.5f} | {r['other_kernel_ms']:.5f} | {r['memory_activity_ms']:.5f} | {r['event_minus_gpu_activity_ms']:.5f} | {r['outside_spmm_fraction']:.1%} |")
     lines += ['', '## Artifacts and reproduction', '',
               '- [All configurations, all three jobs](CUSPARSE_DIRECT_all_configs.csv), including compressed_fraction for every PBR/BOO result and direct preprocess status.',
-              '- [All individual CUDA-event samples, gzip CSV](CUSPARSE_DIRECT_samples.csv.gz).',
+              '- All individual CUDA-event samples are in the [result archive](../../RESULTS_ARCHIVE.md).',
               '- [Job metadata](CUSPARSE_DIRECT_metadata.json) and [geometric means](CUSPARSE_DIRECT_geomeans.csv).',
               '- [Per-workload profiler metadata](CUSPARSE_DIRECT_profiles_metadata.json), including source, matrix and X hashes.',
               '- Submission recipe: `sbatch scripts/cusparse_direct/job.sh validate`, then separate `sbatch scripts/cusparse_direct/job.sh 1`, `2`, `3` submissions. Set the snapshot path in the script for another checkout. Profiling runs after replicate 1.',
               '- Offline report: `python scripts/cusparse_direct/report.py <results-root>`. Raw Nsight SQLite/report files remain in `/home/dayanb/research/cusparse-direct-20260929/results/profiles`.', '']
-    (a.out / 'CUSPARSE_DIRECT.md').write_text('\n'.join(lines))
+    report = '\n'.join(lines)
+    relative_out = os.path.relpath(a.out.resolve(), a.report.parent.resolve())
+    report = re.sub(r'\]\((CUSPARSE_DIRECT_[^)]+\.(?:csv|json))\)',
+                    lambda match: f']({relative_out}/{match.group(1)})', report)
+    a.report.write_text(report)
     print(f'Wrote {len(raw)} configs, {len(samples)} samples, {len(kernels)} kernel events; all integrity checks passed.')
 
 

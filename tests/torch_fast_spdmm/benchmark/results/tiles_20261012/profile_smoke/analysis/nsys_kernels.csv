@@ -1,0 +1,7 @@
+stem,kind,role,stream,start_us,dur_us,name
+pwtk_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,501.207,Memset
+pwtk_F512_boo_p64_fpt2_s512,kernel,boo_main,85,502.167,7270.782,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+pwtk_F512_boo_p64_fpt2_s512,kernel,csr_remainder,89,7653.56,157.245,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+pwtk_F512_direct_DEFAULT,kernel,cusparse,7,0.0,501.239,"void cusparse::matrix_scalar_multiply_kernel<cusparse::MatrixWiseMulPolicy, (bool)1, long, float, float>(T3, T3, T3, long, cusparse::KernelCoeff<T4>, T5 *)"
+pwtk_F512_direct_DEFAULT,kernel,cusparse,7,502.071,21.407,"void cusparse::<unnamed>::csr_partition_kernel<int, int>(const T1 *, T2, T1, T1, T2, T2 *, T2)"
+pwtk_F512_direct_DEFAULT,kernel,cusparse,7,524.31,7927.695,"void cusparse::csrmm_alg2_kernel<(bool)0, (bool)0, (bool)0, int, int, int, int, float, float, float, float>(T4, T4, T5, T4, int, int, cusparse::KernelCoeffs<T11"

@@ -1,0 +1,65 @@
+stem,kind,role,stream,start_us,dur_us,name
+diag_b1.0_F512_boo_p128_fpt4_s512,memset,memset,7,0.0,603.522,Memset
+diag_b1.0_F512_boo_p128_fpt4_s512,kernel,boo_main,7,604.514,4423.568,"void boo_spmm_rowseg_kernel<float, (int)256, (int)7, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+diag_b1.0_F512_boo_p64_fpt1_s512,memset,memset,7,0.0,602.624,Memset
+diag_b1.0_F512_boo_p64_fpt1_s512,kernel,boo_main,7,603.392,12588.491,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)1, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+diag_b1.0_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,602.562,Memset
+diag_b1.0_F512_boo_p64_fpt2_s512,kernel,boo_main,7,603.33,6685.687,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+diag_b1.0_F512_boo_p64_fpt4_s512,memset,memset,7,0.0,602.851,Memset
+diag_b1.0_F512_boo_p64_fpt4_s512,kernel,boo_main,7,603.619,4601.112,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+diag_b1.0_F512_direct_CSR_ALG2,kernel,cusparse,7,0.0,603.587,"void cusparse::matrix_scalar_multiply_kernel<cusparse::MatrixWiseMulPolicy, (bool)1, long, float, float>(T3, T3, T3, long, cusparse::KernelCoeff<T4>, T5 *)"
+diag_b1.0_F512_direct_CSR_ALG2,kernel,cusparse,7,604.451,29.344,"void cusparse::<unnamed>::csr_partition_kernel<int, int>(const T1 *, T2, T1, T1, T2, T2 *, T2)"
+diag_b1.0_F512_direct_CSR_ALG2,kernel,cusparse,7,634.627,13242.303,"void cusparse::csrmm_alg2_kernel<(bool)0, (bool)0, (bool)0, int, int, int, int, float, float, float, float>(T4, T4, T5, T4, int, int, cusparse::KernelCoeffs<T11"
+fem2d_F512_boo_p64_fpt1_s512,memset,memset,7,0.0,602.756,Memset
+fem2d_F512_boo_p64_fpt1_s512,kernel,boo_main,7,603.492,10635.59,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)1, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+fem2d_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,602.595,Memset
+fem2d_F512_boo_p64_fpt2_s512,kernel,boo_main,7,603.395,7538.473,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+fem2d_F512_boo_p64_fpt4_s512,memset,memset,7,0.0,602.595,Memset
+fem2d_F512_boo_p64_fpt4_s512,kernel,boo_main,7,603.587,6734.948,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+fem2d_F512_direct_CSR_ALG2,kernel,cusparse,7,0.0,602.532,"void cusparse::matrix_scalar_multiply_kernel<cusparse::MatrixWiseMulPolicy, (bool)1, long, float, float>(T3, T3, T3, long, cusparse::KernelCoeff<T4>, T5 *)"
+fem2d_F512_direct_CSR_ALG2,kernel,cusparse,7,603.332,19.2,"void cusparse::<unnamed>::csr_partition_kernel<int, int>(const T1 *, T2, T1, T1, T2, T2 *, T2)"
+fem2d_F512_direct_CSR_ALG2,kernel,cusparse,7,623.3,5496.575,"void cusparse::csrmm_alg2_kernel<(bool)0, (bool)0, (bool)0, int, int, int, int, float, float, float, float>(T4, T4, T5, T4, int, int, cusparse::KernelCoeffs<T11"
+fem2d_permuted_F512_boo_p64_fpt1_s512,memset,memset,7,0.0,602.724,Memset
+fem2d_permuted_F512_boo_p64_fpt1_s512,kernel,boo_main,7,603.524,10880.164,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)1, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+fem2d_permuted_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,602.467,Memset
+fem2d_permuted_F512_boo_p64_fpt2_s512,kernel,boo_main,7,603.203,8003.377,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+fem2d_permuted_F512_boo_p64_fpt4_s512,memset,memset,7,0.0,602.34,Memset
+fem2d_permuted_F512_boo_p64_fpt4_s512,kernel,boo_main,7,603.14,7436.879,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+fem2d_permuted_F512_direct_CSR_ALG2,kernel,cusparse,7,0.0,602.532,"void cusparse::matrix_scalar_multiply_kernel<cusparse::MatrixWiseMulPolicy, (bool)1, long, float, float>(T3, T3, T3, long, cusparse::KernelCoeff<T4>, T5 *)"
+fem2d_permuted_F512_direct_CSR_ALG2,kernel,cusparse,7,603.3,19.104,"void cusparse::<unnamed>::csr_partition_kernel<int, int>(const T1 *, T2, T1, T1, T2, T2 *, T2)"
+fem2d_permuted_F512_direct_CSR_ALG2,kernel,cusparse,7,623.172,11865.742,"void cusparse::csrmm_alg2_kernel<(bool)0, (bool)0, (bool)0, int, int, int, int, float, float, float, float>(T4, T4, T5, T4, int, int, cusparse::KernelCoeffs<T11"
+pwtk_F512_boo_p64_fpt1_s512,memset,memset,7,0.0,501.064,Memset
+pwtk_F512_boo_p64_fpt1_s512,kernel,csr_remainder,89,501.96,129.122,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+pwtk_F512_boo_p64_fpt1_s512,kernel,boo_main,85,629.034,11409.276,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)1, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+pwtk_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,501.224,Memset
+pwtk_F512_boo_p64_fpt2_s512,kernel,boo_main,85,505.896,7274.543,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+pwtk_F512_boo_p64_fpt2_s512,kernel,csr_remainder,89,7664.885,157.187,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+pwtk_F512_boo_p64_fpt4_s512,memset,memset,7,0.0,501.025,Memset
+pwtk_F512_boo_p64_fpt4_s512,kernel,boo_main,85,501.825,6550.545,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+pwtk_F512_boo_p64_fpt4_s512,kernel,csr_remainder,89,6938.129,153.025,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+pwtk_F512_direct_CSR_ALG2,kernel,cusparse,7,0.0,501.762,"void cusparse::matrix_scalar_multiply_kernel<cusparse::MatrixWiseMulPolicy, (bool)1, long, float, float>(T3, T3, T3, long, cusparse::KernelCoeff<T4>, T5 *)"
+pwtk_F512_direct_CSR_ALG2,kernel,cusparse,7,502.498,21.6,"void cusparse::<unnamed>::csr_partition_kernel<int, int>(const T1 *, T2, T1, T1, T2, T2 *, T2)"
+pwtk_F512_direct_CSR_ALG2,kernel,cusparse,7,524.962,7832.387,"void cusparse::csrmm_alg2_kernel<(bool)0, (bool)0, (bool)0, int, int, int, int, float, float, float, float>(T4, T4, T5, T4, int, int, cusparse::KernelCoeffs<T11"
+roadnet_F512_boo_p32_fpt4_s512,memset,memset,7,0.0,4526.388,Memset
+roadnet_F512_boo_p32_fpt4_s512,kernel,csr_remainder,89,4527.22,1346.119,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+roadnet_F512_boo_p32_fpt4_s512,kernel,boo_main,85,5868.763,21577.731,"void boo_spmm_rowseg_kernel<float, (int)256, (int)5, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+roadnet_F512_boo_p64_fpt1_s512,memset,memset,7,0.0,4526.103,Memset
+roadnet_F512_boo_p64_fpt1_s512,kernel,csr_remainder,89,4526.967,1345.094,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+roadnet_F512_boo_p64_fpt1_s512,kernel,boo_main,85,5868.029,21932.143,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)1, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+roadnet_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,4537.589,Memset
+roadnet_F512_boo_p64_fpt2_s512,kernel,csr_remainder,89,4538.549,1359.942,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+roadnet_F512_boo_p64_fpt2_s512,kernel,boo_main,85,5893.819,21685.443,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+roadnet_F512_boo_p64_fpt4_s512,memset,memset,7,0.0,4525.654,Memset
+roadnet_F512_boo_p64_fpt4_s512,kernel,boo_main,85,4526.454,20544.098,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+roadnet_F512_boo_p64_fpt4_s512,kernel,csr_remainder,89,24927.192,1375.718,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+roadnet_F512_direct_CSR_ALG3,kernel,cusparse,7,0.0,18037.573,"void cusparse::csrmm_v3_kernel<cusparse::kernel_traits<int, int, float, float, float, float, (int)4, (int)1, (int)1, (int)8, (int)16, (int)16, (int)0, (int)0>>("
+webbase_F512_boo_p64_fpt1_s512,memset,memset,7,0.0,2296.434,Memset
+webbase_F512_boo_p64_fpt1_s512,kernel,boo_main,85,2297.842,13719.114,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)1, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+webbase_F512_boo_p64_fpt1_s512,kernel,csr_remainder,89,15877.883,1135.113,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+webbase_F512_boo_p64_fpt2_s512,memset,memset,7,0.0,2296.087,Memset
+webbase_F512_boo_p64_fpt2_s512,kernel,boo_main,85,2297.047,13117.099,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)2, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+webbase_F512_boo_p64_fpt2_s512,kernel,csr_remainder,89,15287.106,1150.076,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+webbase_F512_boo_p64_fpt4_s512,memset,memset,7,0.0,2296.024,Memset
+webbase_F512_boo_p64_fpt4_s512,kernel,boo_main,85,2298.456,15459.176,"void boo_spmm_rowseg_kernel<float, (int)256, (int)6, (bool)0, (int)4, (int)512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned i"
+webbase_F512_boo_p64_fpt4_s512,kernel,csr_remainder,89,17594.304,1137.212,"void csr_spmm_kernel_fast<int, float, (int)512>(unsigned int, unsigned int, unsigned int, const T1 *, const T1 *, const T2 *, const T2 *, T2 *)"
+webbase_F512_direct_CSR_ALG3,kernel,cusparse,7,0.0,8519.088,"void cusparse::csrmm_v3_kernel<cusparse::kernel_traits<int, int, float, float, float, float, (int)8, (int)1, (int)1, (int)8, (int)16, (int)16, (int)0, (int)1>>("

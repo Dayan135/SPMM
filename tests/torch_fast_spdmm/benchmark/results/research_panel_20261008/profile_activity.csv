@@ -1,0 +1,10 @@
+gpu_activity_union_ms,gpu_first_to_last_ms,kernel_count,kernel_sum_ms,memcpy_count,memcpy_sum_ms,memset_count,memset_sum_ms,trace
+13.898658,13.899362,1,13.296127,0,0.0,1,0.602531,diag_b1.0_boo_nsys
+13.873851,13.875259,3,13.873851,0,0.0,0,0.0,diag_b1.0_direct_nsys
+14.472147,14.474291,4,14.472147,0,0.0,0,0.0,diag_b1.0_torch_nsys
+11.245734,11.246438,1,10.642723,0,0.0,1,0.603011,fem2d_boo_nsys
+6.119286,6.120854,3,6.119286,0,0.0,0,0.0,fem2d_direct_nsys
+6.719286,6.721462,4,6.719286,0,0.0,0,0.0,fem2d_torch_nsys
+1.631432,1.63236,2,1.030757,0,0.0,1,0.602819,pattern_row_skewed_boo_nsys
+1.733,1.733,1,1.733,0,0.0,0,0.0,pattern_row_skewed_direct_nsys
+2.332457,2.334665,4,2.332457,0,0.0,0,0.0,pattern_row_skewed_torch_nsys

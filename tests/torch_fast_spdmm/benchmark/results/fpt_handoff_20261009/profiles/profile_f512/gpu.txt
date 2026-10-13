@@ -1,0 +1,2 @@
+name, driver_version, clocks.max.sm [MHz], clocks.max.memory [MHz]
+NVIDIA GeForce RTX 3090, 595.58.03, 2100 MHz, 9751 MHz

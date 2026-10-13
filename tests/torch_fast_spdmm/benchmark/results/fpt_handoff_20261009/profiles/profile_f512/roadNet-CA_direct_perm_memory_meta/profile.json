@@ -1,0 +1,26 @@
+{
+  "bound_violations": 0,
+  "correctness": "passed",
+  "direct_algorithm": "DEFAULT",
+  "direct_info": {
+    "cusparse_header_version": 12510,
+    "cusparse_version": 12508,
+    "preprocess_status": "CUSPARSE_STATUS_SUCCESS",
+    "supported": true,
+    "unsupported_reason": "",
+    "workspace_bytes": 1844408
+  },
+  "features": 512,
+  "label_sha256": "a7d19086fba5b6cc53e2e8f153b8ccd4e0a5cc62e3557d7eb05ee34e1a48db48",
+  "labeling": "hem_k32",
+  "matrix": "SNAP/roadNet-CA",
+  "matrix_sha256": "808619f88b4c822e6ac7c0bb37d36da44d7693bf9a9b8ef4d52516ec1648f529",
+  "max_abs_error": 1.9073486328125e-06,
+  "max_scaled_error": 2.2886455829769626e-07,
+  "method": "direct_perm",
+  "profiled_calls": 1,
+  "seed": 0,
+  "threshold": 4,
+  "warmup": 5,
+  "x_sha256": "ffeee8353b7a230393d24aab9d506763e543a67c45d4a18458ce201be8b1e4ce"
+}

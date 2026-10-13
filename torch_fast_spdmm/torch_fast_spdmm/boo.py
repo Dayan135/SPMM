@@ -229,7 +229,8 @@ def _build_boo_cuda_dispatch():
 
 def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
                csr_mode: int = 0, row_seg: Optional[bool] = None,
-               launch_mode: str = 'legacy', execution_plan=None) -> torch.Tensor:
+               launch_mode: str = 'legacy', execution_plan=None,
+               features_per_thread: int = 1) -> torch.Tensor:
     """Y = A @ X.  Dispatches on x.device.
 
     `threads` in {128, 256, 512} and `p` in {8, 16, 32, 64, 128} are the two shared-memory
@@ -244,6 +245,11 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
     mixed inputs retain the legacy fork/join. 'legacy' is the paired baseline.
     An explicit `execution_plan=prepare_boo_cuda(...)` requires auto launch and
     row_seg=True, and never performs preparation inside this call.
+
+    `features_per_thread` in {1, 2, 4} (4 is float32-only) gives each row-segmented
+    thread that many adjacent features, reusing every sparse value/index load
+    across them. 1 is the original kernel. It is applied process-wide at each
+    call (the CUDA launcher reads it), so interleaved callers need no reset.
     """
     if launch_mode not in ('legacy', 'auto'):
         raise ValueError("launch_mode must be 'legacy' or 'auto'")
@@ -275,6 +281,10 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
         raise ValueError('p must be one of 8, 16, 32, 64, 128')
     if csr_mode not in (0, 1, 2):
         raise ValueError('csr_mode must be one of 0, 1, 2')
+    if features_per_thread not in (1, 2, 4):
+        raise ValueError('features_per_thread must be one of 1, 2, 4')
+    if features_per_thread == 4 and x.dtype != torch.float32:
+        raise ValueError('features_per_thread=4 requires float32')
 
     global _BOO_CUDA_DISPATCH
     if _BOO_CUDA_DISPATCH is None:
@@ -288,6 +298,10 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
         row_seg = int(boo_mat.nz_order) == _ORDER_CODE['rowmajor']
     elif row_seg and int(boo_mat.nz_order) != _ORDER_CODE['rowmajor']:
         raise ValueError('row_seg=True requires a matrix built with nz_order="rowmajor"')
+
+    if features_per_thread != 1 and not row_seg:
+        raise ValueError('features_per_thread > 1 requires the row-segmented kernel')
+    core.set_boo_rowseg_fpt(features_per_thread)
 
     dispatch = _BOO_CUDA_DISPATCH[x.dtype]
     if launch_mode == 'auto':

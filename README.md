@@ -1,8 +1,8 @@
 # torch_fast_spdmm
 
-CUDA library for sparse-dense matrix multiplication (SpMM), built around the PBR (Packed Block Representation) format and exposed as a PyTorch extension via pybind11. A naive CSR SpMM kernel is also included as a benchmark baseline.
+CUDA library for sparse-dense matrix multiplication (SpMM), exposed as a PyTorch extension via pybind11. It includes BOO (Blocked COO), PBR (Packed Block Representation), and a naive CSR benchmark baseline.
 
-The main focus is **PBR (Packed Block Representation)**: a block-compressed sparse format that exploits repeated sparsity patterns across rows to enable coalesced memory access and vectorized loads on GPU. Benchmark results on graph matrices (e.g. enwiki-2018 PPR) show ~1.75× throughput vs. cuSPARSE at typical block configurations.
+Current research focuses on BOO grouping, row-segmented CUDA kernels, and comparisons with direct cuSPARSE. BOO performance depends strongly on matrix structure and preprocessing cost; see [the confirmed tile experiment](experiments/2026-10-12_tile_optimization/TILE_REVIEW.md) and [the full FPT sweep](experiments/2026-10-09_full_fpt/FULL_FPT_BENCHMARK.md). PBR remains implemented and tested as a separate format.
 
 ## Requirements
 
@@ -31,24 +31,26 @@ After any change to `.cu` or `.cpp` sources, re-run the install command.
 
 ```python
 import scipy.sparse as sp
-from torch_fast_spdmm import csr_to_pbr, pbr_matmul
+from torch_fast_spdmm import csr_to_boo, boo_matmul
 import torch
 
-# Convert a scipy CSR matrix to PBR
-A_pbr = csr_to_pbr(A_csr, block_rows=8, block_cols=8, min_nnz=4)
-A_pbr = A_pbr.to("cuda")
+# A_csr is a float32 scipy CSR matrix. Identity grouping avoids an offline
+# clustering step; HEM, Graclus, and METIS are also available.
+A_boo = csr_to_boo(A_csr, cluster="identity", target_nr=32, target_nc=32)
+A_boo = A_boo.to("cuda")
 
 # Dense feature matrix
-X = torch.randn(A_csr.shape[1], 128, device="cuda")
+X = torch.randn(A_csr.shape[1], 128, device="cuda", dtype=torch.float32)
 
 # SpMM
-out = pbr_matmul(A_pbr, X)
+out = boo_matmul(A_boo, X)
 ```
 
 ## Formats
 
 | Format | Description |
 |--------|-------------|
+| **BOO** | Groups rows and columns, stores nonzeros by block, and routes small blocks to a CSR remainder by default |
 | **PBR** | Block-compressed: encodes sparsity patterns as 64-bit bitsets; CSR remainder for low-density blocks |
 | **CSR** | Standard compressed sparse row — naive kernel kept as a benchmark baseline |
 
@@ -69,11 +71,29 @@ pytest tests/torch_fast_spdmm/test_benchmark.py -v
 ```
 torch_fast_spdmm/          # C++/CUDA extension + Python package
   bindings/                # pybind11 entry points
-  kernels/                 # CUDA kernels (PBR + naive CSR baseline)
+  kernels/                 # BOO, PBR, and naive CSR CUDA kernels
+  boo_matrix/              # BOO format data structures and CPU ops
   pbr_matrix/              # PBR format data structures and CPU ops
-  torch_fast_spdmm/        # Python API (__init__.py)
+  torch_fast_spdmm/        # Python API, clustering, and execution plans
   setup.py / pyproject.toml
 tests/
   torch_fast_spdmm/        # pytest suite
-    benchmark/             # matrix generators and kernel sweeps
+    benchmark/             # matrix generators, sweeps, and selected results
+scripts/                   # experiment drivers and report generators
+experiments/               # dated reports, explanations, and selected figures
+docs/reference/            # shared format and testing notes
 ```
+
+## Research record and result archive
+
+- [Research index](RESEARCH_INDEX.md)
+- [Dated experiments and figures](experiments/README.md)
+- [BOO format and kernel design](docs/reference/BOO_FORMAT.md)
+- [PBR / BOO / CSR benchmark](experiments/2026-09-23_spmm_baseline/SPMM_BENCHMARK.md)
+- [Full FPT sweep](experiments/2026-10-09_full_fpt/FULL_FPT_BENCHMARK.md) and [plots](experiments/2026-10-09_full_fpt/plots/README.md)
+- [Confirmed tile experiment](experiments/2026-10-12_tile_optimization/TILE_REVIEW.md) and [detailed report](experiments/2026-10-12_tile_optimization/TILE_EXPERIMENTS.md)
+- [Result archive policy and restore instructions](RESULTS_ARCHIVE.md)
+
+The repository keeps reports, selected figures, summary tables, and metadata.
+Per-call samples, saved matrix/label arrays, and profiler captures are in the
+separate result archive described in `RESULTS_ARCHIVE.md`.

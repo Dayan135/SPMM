@@ -1,0 +1,41 @@
+{
+  "method": "torch",
+  "profile": "pattern_row_skewed",
+  "requested_size": 262144,
+  "features": 512,
+  "matrix_sha256": "1829df7d203c6d8b37fac4151ceece872aa3ed868d5278c90e7ded9712a2014c",
+  "x_sha256": "443367de1acbc31a421a0d319b127ad399d75cded61a9fccb5194aeb3113b3e6",
+  "csr": {
+    "shape": [
+      262144,
+      262144
+    ],
+    "nnz": 314565,
+    "row_degree": {
+      "count": 262144,
+      "mean": 1.1999702453613281,
+      "p50": 0.0,
+      "p90": 2.0,
+      "p99": 16.0,
+      "maximum": 48.0
+    },
+    "column_degree": {
+      "count": 262144,
+      "mean": 1.1999702453613281,
+      "p50": 0.0,
+      "p90": 4.0,
+      "p99": 6.0,
+      "maximum": 12.0
+    },
+    "empty_rows": 138368,
+    "empty_columns": 138728,
+    "csr_bytes": 3565100,
+    "hub_column_nnz_fraction": 0.0
+  },
+  "correctness": "passed",
+  "max_abs_error": 4.521438597748784e-06,
+  "warmup": 5,
+  "profiled_calls": 1,
+  "timing_scope": "full_call",
+  "direct_output_reused": false
+}

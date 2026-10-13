@@ -6,12 +6,12 @@ Usage (from tests/torch_fast_spdmm/, local ``fem`` env)::
 
     conda run -n fem python -m benchmark.plot_clustering \
         --results benchmark/results/clustering_20261006/results \
-        --outdir ../../plots/clustering_20261006
+        --outdir ../../experiments/2026-10-06_clustering/plots/initial
 
     # all four sizes (16k, 64k from the first sweep; 256k, 1M from the offline-clustered sweep)
     conda run -n fem python -m benchmark.plot_clustering \
         --results benchmark/results/clustering_20261006/results benchmark/results/clustering_20261006_xl \
-        --outdir ../../plots/clustering_20261006_xl
+        --outdir ../../experiments/2026-10-06_clustering/plots/xl
 """
 
 from __future__ import annotations
@@ -427,7 +427,7 @@ def main():
     ap.add_argument('--results', type=Path, nargs='+',
                     default=[Path('benchmark/results/clustering_20261006/results')],
                     help='sweep dirs (with summary.csv) or parents of sweep dirs')
-    ap.add_argument('--outdir', type=Path, default=Path('../../plots/clustering_20261006'))
+    ap.add_argument('--outdir', type=Path, default=Path('../../experiments/2026-10-06_clustering/plots/initial'))
     args = ap.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
     df = load(args.results)

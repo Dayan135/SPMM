@@ -1,0 +1,2 @@
+name, uuid, driver_version, clocks.max.sm [MHz], clocks.max.memory [MHz]
+NVIDIA GeForce RTX 3090, GPU-d8fcce95-64be-d21b-84f0-643650a3170a, 580.126.20, 2100 MHz, 9751 MHz

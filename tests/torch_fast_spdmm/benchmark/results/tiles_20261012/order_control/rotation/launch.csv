@@ -1,0 +1,11 @@
+case,features,p,features_per_thread_requested,feat_block_requested,supported,unsupported_reason,requested_p,effective_p,threads,features_per_thread,feat_block,grid_z,arena_bytes,registers_per_thread,local_bytes_per_thread,static_shared_bytes,max_threads_per_block,max_dynamic_shared_bytes,max_active_blocks_per_sm,shared_limit_bytes,num_blocks
+pwtk,512,64,2,512,True,,64,64,256,2,512,1,13552,40,0,0,256,49152,6,101376,52710
+pwtk,512,64,4,128,True,,64,64,256,4,128,4,13552,39,0,0,256,49152,6,101376,52710
+pwtk,512,64,4,256,True,,64,64,256,4,256,2,13552,39,0,0,256,49152,6,101376,52710
+pwtk,512,64,4,512,True,,64,64,256,4,512,1,13552,39,0,0,256,49152,6,101376,52710
+pwtk,512,64,4,1024,True,,64,64,256,4,1024,1,13552,39,0,0,256,49152,6,101376,52710
+diag_b1.0,512,64,2,512,True,,64,64,256,2,512,1,14740,40,0,0,256,49152,6,101376,16384
+diag_b1.0,512,64,4,128,True,,64,64,256,4,128,4,14740,39,0,0,256,49152,6,101376,16384
+diag_b1.0,512,64,4,256,True,,64,64,256,4,256,2,14740,39,0,0,256,49152,6,101376,16384
+diag_b1.0,512,64,4,512,True,,64,64,256,4,512,1,14740,39,0,0,256,49152,6,101376,16384
+diag_b1.0,512,64,4,1024,True,,64,64,256,4,1024,1,14740,39,0,0,256,49152,6,101376,16384

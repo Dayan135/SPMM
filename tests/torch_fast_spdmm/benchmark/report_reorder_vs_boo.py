@@ -1,6 +1,6 @@
-"""Join three independent jobs, export adjacent CSVs, and extend E1's report.
+"""Join three independent jobs, export dated result tables, and extend E1's report.
 
-python report_reorder_vs_boo.py RUN_DIRECTORY --report REORDER_VS_BOO.md
+python report_reorder_vs_boo.py RUN_DIRECTORY --report experiments/2026-09-28_reorder_vs_boo/REORDER_VS_BOO.md
 Uses only the standard library; no GPU imports.
 """
 import argparse
@@ -8,6 +8,7 @@ import csv
 from collections import defaultdict
 import hashlib
 import json
+import os
 from pathlib import Path
 import statistics
 import zipfile
@@ -46,7 +47,8 @@ def config_text(r):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
-    parser.add_argument('--report', type=Path, default=Path('REORDER_VS_BOO.md'))
+    parser.add_argument('--report', type=Path, default=Path('experiments/2026-09-28_reorder_vs_boo/REORDER_VS_BOO.md'))
+    parser.add_argument('--tables', type=Path, help='Output directory for CSV tables (default: RUN_DIRECTORY/derived)')
     args = parser.parse_args()
     jobs = [args.directory / 'results' / f'job{i}' for i in (1, 2, 3)]
     metadata = [json.loads((job / 'metadata.json').read_text()) for job in jobs]
@@ -61,7 +63,12 @@ def main():
         expected = archive_arrays(path)
         for job in jobs[1:]:
             assert archive_arrays(job / path.name) == expected, path.name
-    root = args.report.parent
+    root = args.tables or args.directory / 'derived'
+    root.mkdir(parents=True, exist_ok=True)
+    relative_root = Path(os.path.relpath(root.resolve(), args.report.parent.resolve()))
+
+    def table_link(name):
+        return f'[{name}]({(relative_root / name).as_posix()})'
     rows = []
     for name, destination in [('summary', 'REORDER_VS_BOO_REPLICATES.csv'),
                                ('samples', 'REORDER_VS_BOO_SAMPLES.csv'),
@@ -129,7 +136,7 @@ def main():
         prefix = prefix.replace('BOO x_loads and occupancy will be reconstructed separately from saved labels;',
                                 'BOO x_loads and occupancy were subsequently reconstructed from the exact saved labels (matrix hashes and block counts checked);')
         if 'E1 structural reconstruction is in' not in prefix:
-            prefix += ('E1 structural reconstruction is in [REORDER_VS_BOO_E1_STRUCTURE.csv](REORDER_VS_BOO_E1_STRUCTURE.csv). '
+            prefix += (f'E1 structural reconstruction is in {table_link("REORDER_VS_BOO_E1_STRUCTURE.csv")}. '
                        'It adds deterministic counters, not new E1 timing measurements. Historical X/Y permutation timings remain NR.\n\n')
     prefix = prefix.replace('Expanded replicated arms follow below when measured.',
                             'The three-job replication follows below.')
@@ -278,12 +285,12 @@ def main():
              'outputs passed the restored-coordinate reference check; **24,960** raw matmul samples are retained. '
              'Saved hierarchy/permutation arrays match byte-for-byte at the array level across jobs. '
              'The report also checks source/extension hashes and per-configuration matrix/input hashes. '
-             '[Run metadata, logs, job scripts, hierarchy arrays and alignment diagnostics](tests/torch_fast_spdmm/benchmark/results/reorder_vs_boo_20260928) retain the supporting evidence.', '',
+             '[Run metadata, logs, job scripts, hierarchy arrays and alignment diagnostics](../../tests/torch_fast_spdmm/benchmark/results/reorder_vs_boo_20260928) retain the supporting evidence.', '',
              '### Data and reproduction', '',
-             '- [All per-job configurations](REORDER_VS_BOO_REPLICATES.csv), [all raw matmul samples](REORDER_VS_BOO_SAMPLES.csv), and [raw dense-permutation samples](REORDER_VS_BOO_PERMUTATION_SAMPLES.csv).',
-             '- [Selected configurations and three job times](REORDER_VS_BOO_BEST.csv), [paired ratios](REORDER_VS_BOO_RATIOS.csv), and [independently selected per-job winners](REORDER_VS_BOO_JOB_WINNERS.csv).',
+             f'- All per-job configurations: {table_link("REORDER_VS_BOO_REPLICATES.csv")}. Raw matmul and dense-permutation samples are in the [result archive](../../RESULTS_ARCHIVE.md).',
+             f'- Selected configurations and three job times: {table_link("REORDER_VS_BOO_BEST.csv")}; paired ratios: {table_link("REORDER_VS_BOO_RATIOS.csv")}; independently selected per-job winners: {table_link("REORDER_VS_BOO_JOB_WINNERS.csv")}.',
              '- Run each replicate in a separate Slurm allocation: `python -m benchmark.bench_reorder_vs_boo --replicate 1 --out results/job1` (then replicate 2 and 3 in new jobs).',
-             '- Regenerate this report: `python tests/torch_fast_spdmm/benchmark/report_reorder_vs_boo.py tests/torch_fast_spdmm/benchmark/results/reorder_vs_boo_20260928 --report REORDER_VS_BOO.md`.', '',
+             '- Regenerate this report: `python tests/torch_fast_spdmm/benchmark/report_reorder_vs_boo.py tests/torch_fast_spdmm/benchmark/results/reorder_vs_boo_20260928 --report experiments/2026-09-28_reorder_vs_boo/REORDER_VS_BOO.md`.', '',
              'This experiment changes ordering and format selection while using existing CUDA kernels. It does not '
              'provide a fully independent representation-versus-kernel decomposition. No sub-1.3× difference from E1’s '
              'single session is treated as established. Cross-job ranges are descriptive, not confidence intervals.', '']

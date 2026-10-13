@@ -1,0 +1,2 @@
+pwtk 512 boo 64 2 512 -
+pwtk 512 direct - - - DEFAULT

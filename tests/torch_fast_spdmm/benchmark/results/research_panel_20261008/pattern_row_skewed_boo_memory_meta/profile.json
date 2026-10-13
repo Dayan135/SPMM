@@ -1,0 +1,103 @@
+{
+  "method": "boo",
+  "profile": "pattern_row_skewed",
+  "requested_size": 262144,
+  "features": 512,
+  "matrix_sha256": "1829df7d203c6d8b37fac4151ceece872aa3ed868d5278c90e7ded9712a2014c",
+  "x_sha256": "443367de1acbc31a421a0d319b127ad399d75cded61a9fccb5194aeb3113b3e6",
+  "csr": {
+    "shape": [
+      262144,
+      262144
+    ],
+    "nnz": 314565,
+    "row_degree": {
+      "count": 262144,
+      "mean": 1.1999702453613281,
+      "p50": 0.0,
+      "p90": 2.0,
+      "p99": 16.0,
+      "maximum": 48.0
+    },
+    "column_degree": {
+      "count": 262144,
+      "mean": 1.1999702453613281,
+      "p50": 0.0,
+      "p90": 4.0,
+      "p99": 6.0,
+      "maximum": 12.0
+    },
+    "empty_rows": 138368,
+    "empty_columns": 138728,
+    "csr_bytes": 3565100,
+    "hub_column_nnz_fraction": 0.0
+  },
+  "config": {
+    "algorithm": "boo",
+    "config": "boo_hem_k32",
+    "cluster": "hem",
+    "k": 32,
+    "threads": 256,
+    "launch_mode": "auto",
+    "hem_feasible_first": true,
+    "small_block_policy": "remainder",
+    "small_block_threshold": 4,
+    "nz_order": "rowmajor",
+    "cluster_ms": 4081.8735650973395,
+    "build_ms": 21.75448089838028,
+    "labels_sha256": "e089c679e5cff25d944519ba2907cea4ae8242cbc54a23838e798de5f58fa298",
+    "compressed_fraction": 0.9940679986648229,
+    "remainder_nnz": 1866,
+    "num_blocks": 11749,
+    "cluster_node": "ise-cpu-intl-07.auth.ad.bgu.ac.il",
+    "cluster_cpu": "Intel(R) Xeon(R) Gold 6140 CPU @ 2.30GHz",
+    "cluster_cpus": 8,
+    "labels_path": "/home/dayanb/research/boo-profile-20261008-a/labels/pattern_row_skewed_n262144_hem_k32.npz"
+  },
+  "p": 64,
+  "arena_bytes": 9370,
+  "boo_info": {
+    "shape": [
+      262144,
+      262144
+    ],
+    "total_nnz": 314565,
+    "compressed_nnz": 312699,
+    "remainder_nnz": 1866,
+    "tail_nnz": 0,
+    "compressed_fraction": 0.9940679986648229,
+    "boo_fraction": 0.9940679986648229,
+    "num_blocks": 11749,
+    "num_row_groups": 149583,
+    "num_col_groups": 149136,
+    "n_r_mean": 12.135756234573154,
+    "n_r_max": 32,
+    "n_c_mean": 13.630266405651545,
+    "n_c_max": 32,
+    "nnz_per_block_mean": 26.61494595284705,
+    "nnz_per_block_max": 129,
+    "nnz_per_block_hist": {
+      "4-7": 932,
+      "8-15": 6259,
+      "16-31": 2159,
+      "32-63": 1490,
+      "64-127": 907,
+      "128-255": 2
+    },
+    "x_loads": 160142,
+    "y_writes": 142583,
+    "arithmetic_intensity": 1.9526357857401555,
+    "scalar_bytes": 4,
+    "p": 64,
+    "threads": 256,
+    "arena_bytes": 9354,
+    "ctas_per_sm": 6,
+    "occupancy_pct": 100.0
+  },
+  "correctness": "passed",
+  "max_abs_error": 5.0506444200237866e-06,
+  "warmup": 5,
+  "profiled_calls": 1,
+  "timing_scope": "full_call",
+  "direct_output_reused": false
+}

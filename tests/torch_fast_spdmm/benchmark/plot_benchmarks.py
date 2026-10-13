@@ -10,7 +10,7 @@ into a tidy DataFrame, and renders:
 
 CLI:
     python -m benchmark.plot_benchmarks --project private-dayan/torch-fast-spdmm \
-        --outdir plots/smem_colsort [--runs <run_name> ...]
+        --outdir experiments/2026-06-23_smem_colsort/plots [--runs <run_name> ...]
 """
 
 from __future__ import annotations

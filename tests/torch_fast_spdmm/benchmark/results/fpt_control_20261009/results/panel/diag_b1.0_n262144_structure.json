@@ -1,0 +1,110 @@
+{
+  "csr": {
+    "shape": [
+      262144,
+      262144
+    ],
+    "nnz": 16777216,
+    "row_degree": {
+      "count": 262144,
+      "mean": 64.0,
+      "p50": 64.0,
+      "p90": 64.0,
+      "p99": 64.0,
+      "maximum": 64.0
+    },
+    "column_degree": {
+      "count": 262144,
+      "mean": 64.0,
+      "p50": 64.0,
+      "p90": 64.0,
+      "p99": 64.0,
+      "maximum": 64.0
+    },
+    "empty_rows": 0,
+    "empty_columns": 0,
+    "csr_bytes": 135266308,
+    "hub_column_nnz_fraction": 0.0
+  },
+  "boo": {
+    "boo_hem_k32": {
+      "num_blocks": 35784,
+      "block_nnz": {
+        "count": 35784,
+        "mean": 468.846858931366,
+        "p50": 441.0,
+        "p90": 676.0,
+        "p99": 1024.0,
+        "maximum": 1024.0
+      },
+      "row_group_size": {
+        "count": 12072,
+        "mean": 21.71504307488403,
+        "p50": 22.0,
+        "p90": 29.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "col_group_size": {
+        "count": 12072,
+        "mean": 21.71504307488403,
+        "p50": 22.0,
+        "p90": 29.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "block_density": {
+        "count": 35784,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p99": 1.0,
+        "maximum": 1.0
+      },
+      "active_rows": {
+        "count": 35784,
+        "mean": 21.590878604963113,
+        "p50": 21.0,
+        "p90": 29.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "active_columns": {
+        "count": 35784,
+        "mean": 21.590878604963113,
+        "p50": 21.0,
+        "p90": 29.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "within_block_row_cv": {
+        "count": 35784,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p99": 0.0,
+        "maximum": 0.0
+      },
+      "output_block_fanout": {
+        "count": 262144,
+        "mean": 2.947265625,
+        "p50": 3.0,
+        "p90": 3.0,
+        "p99": 3.0,
+        "maximum": 3.0
+      },
+      "logical_x_rows": 772608,
+      "active_x_rows": 772608,
+      "potential_y_rows": 772608,
+      "active_y_rows": 772608,
+      "unused_x_fraction": 0.0,
+      "format_bytes": 104370808,
+      "coordinate_bytes": 33554432,
+      "uint8_csr_structure_bytes": 18537140,
+      "uint8_csr_model_eligible": true,
+      "uint8_csr_model_note": "uint8 columns + uint16 row offsets + int32 table pointers; no alignment",
+      "retained_nnz": 16777216,
+      "remainder_nnz": 0
+    }
+  }
+}

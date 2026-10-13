@@ -1,0 +1,177 @@
+{
+  "arguments": {
+    "allocation": "22712897",
+    "anchor": true,
+    "cache": "/home/dayanb/research/real-matrices-20261008/matrix_cache",
+    "cases": [
+      "pwtk",
+      "diag_b1.0"
+    ],
+    "configs": [
+      "64:2:512",
+      "64:4:128",
+      "64:4:256",
+      "64:4:512",
+      "64:4:1024"
+    ],
+    "cpp": true,
+    "direct_algorithms": [
+      "DEFAULT",
+      "CSR_ALG2",
+      "CSR_ALG1",
+      "CSR_ALG3"
+    ],
+    "features": [
+      512
+    ],
+    "fpt": [
+      1,
+      2,
+      4
+    ],
+    "labels": "/home/dayanb/research/boo-full-fpt-20261009/labels",
+    "no_torch": false,
+    "order": "rotation",
+    "order_seed": 3,
+    "out": "/home/dayanb/research/boo-tiles-20261012/results/order_control/rotation",
+    "p": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "repeats": 30,
+    "seed": 0,
+    "slab": [
+      512
+    ],
+    "threads": 256,
+    "threshold": 4,
+    "warmup": 5
+  },
+  "baseline": "torch.sparse.mm with CUDA CSR, float32 values, int32 indices",
+  "build_hashes": {
+    "cuda": "12.8",
+    "extension": "/home/dayanb/research/boo-tiles-20261012/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+    "extension_sha256": "b980dbc28216ed2169adee4cbe0db83b6735e78489cab76db21a6ea6c61c229c",
+    "source_sha256": {
+      "torch_fast_spdmm/bindings/bindings.cpp": "154139b291eff8ea3de6e35ab069054f053083cd515ae2777ca996129af9edaf",
+      "torch_fast_spdmm/bindings/bindings_boo.cu": "e7ed11c6b67790ce81ed253cc2e923200e73e784e860194dbd0e1e35cbae1605",
+      "torch_fast_spdmm/bindings/bindings_boo_timed.cu": "a23b106c6e780f63ce562f256a2b4f9fd0c8f3240c47de96acd43fcea782b78b",
+      "torch_fast_spdmm/bindings/bindings_cusparse.cu": "c47c152cb3abf4b3d6a2962b06e3ffc84be89ce11e09499836a7f28d4fdd85d9",
+      "torch_fast_spdmm/bindings/bindings_kernels.cu": "b34dd41dddc16ce53224d4b2de01098db5bdcfde95ebd1c085d6d558e36d02e0",
+      "torch_fast_spdmm/bindings/bindings_pbr_timed.cu": "62ec84433fb73fb76fbe184c8f32c6c5a2717bb11d1ac3f25aaae3fa1b0c7785",
+      "torch_fast_spdmm/kernels/boo_kernel.cu": "d27e105e2c3eadd7871d8c19753a09d62b75e0e8d9f99340b512ccdcba9c4b39",
+      "torch_fast_spdmm/kernels/boo_kernels.hpp": "2e169c6ab8533012a6772b9a458f888be093c6fecc4c0e830e1b48ada475944b",
+      "torch_fast_spdmm/kernels/csr_kernels.cu": "163b4390da6462524046e006ee12967acdfa8acda2f10cf4ea5fcc26c8da044e",
+      "torch_fast_spdmm/kernels/csr_kernels.hpp": "0ab768168eb30b899abc9b9209644389302236b40d59058a0735db0f8714a840",
+      "torch_fast_spdmm/kernels/kernels.hpp": "5cd8f2e8fd13f210afc8c4fadb427beb9080a3444dee88738067e888f1d77112",
+      "torch_fast_spdmm/kernels/pbr_kernel.cu": "36d016b057533ae73f06911c534371cf169c63d34a4bc8fd97fbe497c72b3e7e",
+      "torch_fast_spdmm/kernels/pbr_kernels.hpp": "a1848e63a077c625043736a04170d209ee6fabf62425ed3416b9a09c3fe88025",
+      "torch_fast_spdmm/setup.py": "7cd9ce234ddb9ae405f3da0a9d984dc564ee809e494f02848cb336e7746c6399",
+      "torch_fast_spdmm/torch_fast_spdmm/__init__.py": "5813e18f9674123b2ec2b8f1b9314d7990bac829b2e988a4b4f1208cb25b0859",
+      "torch_fast_spdmm/torch_fast_spdmm/boo.py": "6f1938fe001e39941518ece475dd441ff2e43bfe50810dbb58a2aa4af0b3dc23",
+      "torch_fast_spdmm/torch_fast_spdmm/boo_plan.py": "ba11c87f9273048695f9cac8ee492d027900b211e9053ff97809cbcfa1a7bfbf",
+      "torch_fast_spdmm/torch_fast_spdmm/clustering.py": "62c8ce041c4c12fda1416e58858911f5211e419c40a2433e9fd0696cf124bb76"
+    },
+    "torch": "2.10.0+cu128"
+  },
+  "cases": {
+    "diag_b1.0": {
+      "case": "diag_b1.0",
+      "cluster": "identity",
+      "cols": 262144,
+      "compressed_nnz": 16777216,
+      "explicit_zeros": "keep",
+      "k": 32,
+      "label_sha256": "7ae249891b10b4e37a2d05db605eb7f65ad7c6b6721c47103c6f5597da058c78",
+      "labeling": "identity_k32",
+      "labels_path": "/home/dayanb/research/boo-full-fpt-20261009/labels/generated__diag_b1.0_n262144__keep__identity_k32.npz",
+      "load_build_s": 2.056849652000892,
+      "matrix": "generated/diag_b1.0_n262144",
+      "matrix_sha256": "fe2330ea428935250963c348de9f553bbe688a53ca765aebecb135b346b22556",
+      "max_nc": 32,
+      "max_nnz_blk": 1024,
+      "max_nr": 32,
+      "num_blocks": 16384,
+      "numerical_nnz": 16777216,
+      "remainder_nnz": 0,
+      "role": "tuning",
+      "rows": 262144,
+      "seed": 0,
+      "stored_entries": 16777216,
+      "threshold": 4
+    },
+    "pwtk": {
+      "case": "pwtk",
+      "cluster": "identity",
+      "cols": 217918,
+      "compressed_nnz": 11613666,
+      "explicit_zeros": "keep",
+      "k": 32,
+      "label_sha256": "34e8890ef024261fb2789fcd0c64f432e89c77026ca857c24a2a0852b9a24f50",
+      "labeling": "identity_k32",
+      "labels_path": "/home/dayanb/research/boo-full-fpt-20261009/labels/Boeing__pwtk__keep__identity_k32.npz",
+      "load_build_s": 0.43278504500085546,
+      "matrix": "Boeing/pwtk",
+      "matrix_sha256": "52031f452e278cc795b15cceafa8d9c80f0756111bfb49d1ef220437723971b0",
+      "max_nc": 32,
+      "max_nnz_blk": 826,
+      "max_nr": 32,
+      "num_blocks": 52710,
+      "numerical_nnz": 11524432,
+      "remainder_nnz": 20758,
+      "role": "tuning",
+      "rows": 217918,
+      "seed": 0,
+      "stored_entries": 11634424,
+      "threshold": 4
+    }
+  },
+  "configs": [
+    [
+      64,
+      2,
+      512
+    ],
+    [
+      64,
+      4,
+      128
+    ],
+    [
+      64,
+      4,
+      256
+    ],
+    [
+      64,
+      4,
+      512
+    ],
+    [
+      64,
+      4,
+      1024
+    ]
+  ],
+  "cuda_version": "12.8",
+  "extension_path": "/home/dayanb/research/boo-tiles-20261012/torch_fast_spdmm/torch_fast_spdmm_core.cpython-312-x86_64-linux-gnu.so",
+  "extension_sha256": "b980dbc28216ed2169adee4cbe0db83b6735e78489cab76db21a6ea6c61c229c",
+  "git_commit": "unknown",
+  "git_status": "unknown",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_capability": [
+    8,
+    6
+  ],
+  "gpu_memory_bytes": 25298141184,
+  "gpu_uuid": "0",
+  "node": "cs-3090-05.auth.ad.bgu.ac.il",
+  "python_package_path": "/home/dayanb/research/boo-tiles-20261012/torch_fast_spdmm/torch_fast_spdmm/__init__.py",
+  "slurm_job_id": "22712897",
+  "source_sha256": "badbb15d87b58b7ee528794f6ffa876336473333fb9b8606165ac46e192d7c3a",
+  "status": "complete",
+  "timing": "seeded-rotation interleaving of all variants of one (case, F) cell",
+  "torch_version": "2.10.0+cu128"
+}

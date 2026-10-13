@@ -10,6 +10,29 @@ dist/
 *.egg
 wandb/
 .vscode
+.DS_Store
+local-archives/
+/ncu_out/
+/optimizer_ledger*.sqlite3
+/occupancy_sweep_results.json
+/REORDER_VS_BOO_*SAMPLES.csv
+/CUSPARSE_DIRECT_samples.csv.gz
+
+# Benchmark captures are archived separately; keep reports and summaries visible.
+/tests/torch_fast_spdmm/benchmark/results/**/*.npz
+/tests/torch_fast_spdmm/benchmark/results/**/samples.csv
+/tests/torch_fast_spdmm/benchmark/results/**/permutation_samples.csv
+/tests/torch_fast_spdmm/benchmark/results/**/ncu_long.csv
+/tests/torch_fast_spdmm/benchmark/results/**/*.sqlite
+/tests/torch_fast_spdmm/benchmark/results/**/*.ncu-rep
+/tests/torch_fast_spdmm/benchmark/results/**/*.nsys-rep
+/tests/torch_fast_spdmm/benchmark/results/**/*.qdrep
+/tests/torch_fast_spdmm/benchmark/results/**/*.done
+/tests/torch_fast_spdmm/benchmark/results/**/*.log
+/tests/torch_fast_spdmm/benchmark/results/**/*.out
+/tests/torch_fast_spdmm/benchmark/results/full_fpt_*/results/task_*/
+/tests/torch_fast_spdmm/benchmark/results/reorder_vs_boo_20260928/derived/*SAMPLES.csv
+/tests/torch_fast_spdmm/benchmark/results/cusparse_direct_20260929/derived/CUSPARSE_DIRECT_samples.csv.gz
 
 # Slurm
 jobs/logs/

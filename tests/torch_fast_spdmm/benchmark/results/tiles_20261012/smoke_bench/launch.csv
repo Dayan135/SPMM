@@ -1,0 +1,9 @@
+case,features,p,features_per_thread_requested,feat_block_requested,supported,unsupported_reason,requested_p,effective_p,threads,features_per_thread,feat_block,grid_z,arena_bytes,registers_per_thread,local_bytes_per_thread,static_shared_bytes,max_threads_per_block,max_dynamic_shared_bytes,max_active_blocks_per_sm,shared_limit_bytes,num_blocks
+fem2d,130,64,1,512,True,,64,64,256,1,512,1,12628,39,0,0,256,49152,6,101376,67922
+fem2d,130,32,4,256,True,,32,32,256,4,256,1,8532,39,0,0,256,49152,6,101376,67922
+fem2d,130,128,2,1024,True,,128,128,256,2,1024,1,20820,40,0,0,256,49152,4,101376,67922
+fem2d,130,64,2,512,True,,64,64,256,2,512,1,12628,40,0,0,256,49152,6,101376,67922
+pwtk,130,64,1,512,True,,64,64,256,1,512,1,13552,39,0,0,256,49152,6,101376,52710
+pwtk,130,32,4,256,True,,32,32,256,4,256,1,9456,39,0,0,256,49152,6,101376,52710
+pwtk,130,128,2,1024,True,,128,128,256,2,1024,1,21744,40,0,0,256,49152,4,101376,52710
+pwtk,130,64,2,512,True,,64,64,256,2,512,1,13552,40,0,0,256,49152,6,101376,52710

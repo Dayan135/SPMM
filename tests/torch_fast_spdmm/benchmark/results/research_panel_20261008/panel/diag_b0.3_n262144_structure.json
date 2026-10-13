@@ -1,0 +1,347 @@
+{
+  "csr": {
+    "shape": [
+      262144,
+      262144
+    ],
+    "nnz": 5033165,
+    "row_degree": {
+      "count": 262144,
+      "mean": 19.200000762939453,
+      "p50": 19.0,
+      "p90": 24.0,
+      "p99": 28.0,
+      "maximum": 38.0
+    },
+    "column_degree": {
+      "count": 262144,
+      "mean": 19.200000762939453,
+      "p50": 19.0,
+      "p90": 24.0,
+      "p99": 28.0,
+      "maximum": 37.0
+    },
+    "empty_rows": 0,
+    "empty_columns": 0,
+    "csr_bytes": 41313900,
+    "hub_column_nnz_fraction": 0.0
+  },
+  "boo": {
+    "boo_identity_k32": {
+      "num_blocks": 16384,
+      "block_nnz": {
+        "count": 16384,
+        "mean": 307.20001220703125,
+        "p50": 307.0,
+        "p90": 326.0,
+        "p99": 342.0,
+        "maximum": 369.0
+      },
+      "row_group_size": {
+        "count": 8192,
+        "mean": 32.0,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "col_group_size": {
+        "count": 8192,
+        "mean": 32.0,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "block_density": {
+        "count": 16384,
+        "mean": 0.30000001192092896,
+        "p50": 0.2998046875,
+        "p90": 0.318359375,
+        "p99": 0.333984375,
+        "maximum": 0.3603515625
+      },
+      "active_rows": {
+        "count": 16384,
+        "mean": 31.99969482421875,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "active_columns": {
+        "count": 16384,
+        "mean": 31.999755859375,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "within_block_row_cv": {
+        "count": 16384,
+        "mean": 0.26414358073789845,
+        "p50": 0.26315048817659553,
+        "p90": 0.30876058423199193,
+        "p99": 0.3462940765533755,
+        "maximum": 0.40478015582111115
+      },
+      "output_block_fanout": {
+        "count": 262144,
+        "mean": 1.9999809265136719,
+        "p50": 2.0,
+        "p90": 2.0,
+        "p99": 2.0,
+        "maximum": 2.0
+      },
+      "logical_x_rows": 524288,
+      "active_x_rows": 524284,
+      "potential_y_rows": 524288,
+      "active_y_rows": 524283,
+      "unused_x_fraction": 7.62939453125e-06,
+      "format_bytes": 33623262,
+      "coordinate_bytes": 10066330,
+      "uint8_csr_structure_bytes": 6180049,
+      "uint8_csr_model_eligible": true,
+      "uint8_csr_model_note": "uint8 columns + uint16 row offsets + int32 table pointers; no alignment",
+      "retained_nnz": 5033165,
+      "remainder_nnz": 0
+    },
+    "boo_identity_k64": {
+      "num_blocks": 4096,
+      "block_nnz": {
+        "count": 4096,
+        "mean": 1228.800048828125,
+        "p50": 1229.0,
+        "p90": 1266.0,
+        "p99": 1296.0,
+        "maximum": 1351.0
+      },
+      "row_group_size": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "col_group_size": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "block_density": {
+        "count": 4096,
+        "mean": 0.30000001192092896,
+        "p50": 0.300048828125,
+        "p90": 0.30908203125,
+        "p99": 0.31640625,
+        "maximum": 0.329833984375
+      },
+      "active_rows": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "active_columns": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "within_block_row_cv": {
+        "count": 4096,
+        "mean": 0.1886489647125294,
+        "p50": 0.18861202679367967,
+        "p90": 0.2103624803767865,
+        "p99": 0.22807769970755448,
+        "maximum": 0.2502557388164607
+      },
+      "output_block_fanout": {
+        "count": 262144,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p99": 1.0,
+        "maximum": 1.0
+      },
+      "logical_x_rows": 262144,
+      "active_x_rows": 262144,
+      "potential_y_rows": 262144,
+      "active_y_rows": 262144,
+      "unused_x_fraction": 0.0,
+      "format_bytes": 33430750,
+      "coordinate_bytes": 10066330,
+      "uint8_csr_structure_bytes": 5582033,
+      "uint8_csr_model_eligible": true,
+      "uint8_csr_model_note": "uint8 columns + uint16 row offsets + int32 table pointers; no alignment",
+      "retained_nnz": 5033165,
+      "remainder_nnz": 0
+    },
+    "boo_hem_k32": {
+      "num_blocks": 16386,
+      "block_nnz": {
+        "count": 16386,
+        "mean": 307.1625167826193,
+        "p50": 299.0,
+        "p90": 393.0,
+        "p99": 414.0,
+        "maximum": 447.0
+      },
+      "row_group_size": {
+        "count": 8192,
+        "mean": 32.0,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "col_group_size": {
+        "count": 8193,
+        "mean": 31.996094226778958,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "block_density": {
+        "count": 16386,
+        "mean": 0.29999222723016555,
+        "p50": 0.2919921875,
+        "p90": 0.3837890625,
+        "p99": 0.404296875,
+        "maximum": 0.4365234375
+      },
+      "active_rows": {
+        "count": 16386,
+        "mean": 31.997558891736848,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "active_columns": {
+        "count": 16386,
+        "mean": 31.995178811180274,
+        "p50": 32.0,
+        "p90": 32.0,
+        "p99": 32.0,
+        "maximum": 32.0
+      },
+      "within_block_row_cv": {
+        "count": 16386,
+        "mean": 0.25084863464282975,
+        "p50": 0.24859896704699125,
+        "p90": 0.31082108348564774,
+        "p99": 0.36285974064015764,
+        "maximum": 1.0540925533894598
+      },
+      "output_block_fanout": {
+        "count": 262144,
+        "mean": 2.000091552734375,
+        "p50": 2.0,
+        "p90": 2.0,
+        "p99": 2.0,
+        "maximum": 3.0
+      },
+      "logical_x_rows": 524288,
+      "active_x_rows": 524273,
+      "potential_y_rows": 524352,
+      "active_y_rows": 524312,
+      "unused_x_fraction": 2.86102294921875e-05,
+      "format_bytes": 33623292,
+      "coordinate_bytes": 10066330,
+      "uint8_csr_structure_bytes": 6180189,
+      "uint8_csr_model_eligible": true,
+      "uint8_csr_model_note": "uint8 columns + uint16 row offsets + int32 table pointers; no alignment",
+      "retained_nnz": 5033165,
+      "remainder_nnz": 0
+    },
+    "boo_hem_k64": {
+      "num_blocks": 4096,
+      "block_nnz": {
+        "count": 4096,
+        "mean": 1228.800048828125,
+        "p50": 1229.0,
+        "p90": 1266.0,
+        "p99": 1296.0,
+        "maximum": 1351.0
+      },
+      "row_group_size": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "col_group_size": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "block_density": {
+        "count": 4096,
+        "mean": 0.30000001192092896,
+        "p50": 0.300048828125,
+        "p90": 0.30908203125,
+        "p99": 0.31640625,
+        "maximum": 0.329833984375
+      },
+      "active_rows": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "active_columns": {
+        "count": 4096,
+        "mean": 64.0,
+        "p50": 64.0,
+        "p90": 64.0,
+        "p99": 64.0,
+        "maximum": 64.0
+      },
+      "within_block_row_cv": {
+        "count": 4096,
+        "mean": 0.1886489647125294,
+        "p50": 0.18861202679367967,
+        "p90": 0.2103624803767865,
+        "p99": 0.22807769970755448,
+        "maximum": 0.2502557388164607
+      },
+      "output_block_fanout": {
+        "count": 262144,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p99": 1.0,
+        "maximum": 1.0
+      },
+      "logical_x_rows": 262144,
+      "active_x_rows": 262144,
+      "potential_y_rows": 262144,
+      "active_y_rows": 262144,
+      "unused_x_fraction": 0.0,
+      "format_bytes": 33430750,
+      "coordinate_bytes": 10066330,
+      "uint8_csr_structure_bytes": 5582033,
+      "uint8_csr_model_eligible": true,
+      "uint8_csr_model_note": "uint8 columns + uint16 row offsets + int32 table pointers; no alignment",
+      "retained_nnz": 5033165,
+      "remainder_nnz": 0
+    }
+  }
+}

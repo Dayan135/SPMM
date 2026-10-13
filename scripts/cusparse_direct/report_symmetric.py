@@ -22,7 +22,9 @@ from collections import defaultdict
 import csv
 import json
 import math
+import os
 from pathlib import Path
+import re
 import statistics as st
 import sys
 
@@ -93,8 +95,10 @@ def profile_rows_for_method(root, expected, method):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('results', type=Path)
-    p.add_argument('--out', type=Path, default=Path('.'))
+    p.add_argument('--out', type=Path, default=Path('tests/torch_fast_spdmm/benchmark/results/cusparse_direct_symmetric_20260929/derived'))
+    p.add_argument('--report', type=Path, default=Path('experiments/2026-09-29_direct_cusparse_symmetric/CUSPARSE_DIRECT_SYMMETRIC.md'))
     a = p.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
 
     metas, raw, samples = [], [], []
     grouped = defaultdict(list)
@@ -251,7 +255,8 @@ def main():
     (a.out / 'CUSPARSE_DIRECT_SYMMETRIC_metadata.json').write_text(json.dumps(metas, indent=2)+'\n')
 
     lines = ['# Symmetric direct-cuSPARSE comparison', '',
-             'Follow-up to [CUSPARSE_DIRECT.md](CUSPARSE_DIRECT.md), which compared direct '
+             'The supporting CSV/JSON tables are in the [dated result directory](../../tests/torch_fast_spdmm/benchmark/results/cusparse_direct_symmetric_20260929/derived/README.md).', '',
+             'Follow-up to [CUSPARSE_DIRECT.md](../2026-09-29_direct_cusparse/CUSPARSE_DIRECT.md), which compared direct '
              'cuSPARSE\'s C++-only cusparseSpMM timing against PBR/BOO/torch.sparse.mm\'s '
              'Python-side full-call timing -- two different measurement scopes, not an '
              'apples-to-apples comparison. This run gives every method both scopes.', '',
@@ -301,7 +306,11 @@ def main():
              '[pbr](CUSPARSE_DIRECT_SYMMETRIC_profiles_pbr.csv), '
              '[boo](CUSPARSE_DIRECT_SYMMETRIC_profiles_boo.csv).',
              '- [Job metadata](CUSPARSE_DIRECT_SYMMETRIC_metadata.json).', '']
-    (a.out / 'CUSPARSE_DIRECT_SYMMETRIC.md').write_text('\n'.join(lines))
+    report = '\n'.join(lines)
+    relative_out = os.path.relpath(a.out.resolve(), a.report.parent.resolve())
+    report = re.sub(r'\]\((CUSPARSE_DIRECT_SYMMETRIC_[^)]+\.(?:csv|json))\)',
+                    lambda match: f']({relative_out}/{match.group(1)})', report)
+    a.report.write_text(report)
     print(f'Wrote {len(raw)} configs; {len(api_rows)} api-level, {len(cpp_rows)} cpp-level, '
          f'{len(diag_rows)} diagnostic workload rows; all integrity checks passed.')
 

@@ -4,6 +4,31 @@
 #include <cuda_runtime.h>
 #include <ATen/core/Tensor.h>
 
+// Features per thread for the row-segmented kernel (1, 2 or 4; 4 is float32-only).
+// Process-wide; read by launch_boo_spmm at every launch. See boo_kernel.cu.
+void set_boo_rowseg_fpt(int fpt);
+int get_boo_rowseg_fpt();
+
+// Feature-slab width (grid.z = ceil(F / width)) for the row-segmented kernel:
+// 128, 256, 512 (default) or 1024. Experiment parameterization only: non-512
+// widths are instantiated for float32, threads=256 alone. Process-wide like FPT;
+// callers that change it must set it before every launch. See boo_kernel.cu.
+void set_boo_feat_block(int width);
+int get_boo_feat_block();
+
+// Exactly what launch_boo_spmm<float>(row_seg=true) would launch for these
+// global maxima under the current FPT/slab settings: effective P (after the
+// P > F reduction), dynamic arena bytes, grid.z, plus the selected kernel's
+// cudaFuncAttributes and its occupancy at that arena. Throws on an unsupported
+// combination with the same message the launcher would raise.
+struct BOORowsegLaunchInfo {
+    int requested_p, effective_p, threads, fpt, feat_block, grid_z, arena_bytes;
+    int num_regs, local_size_bytes, static_shared_bytes, max_threads_per_block;
+    int max_dynamic_shared_bytes, max_active_blocks_per_sm;
+};
+BOORowsegLaunchInfo boo_rowseg_launch_info(int max_nr, int max_nc, int max_nnz_blk,
+                                           int features, int threads, int p);
+
 // Launch the BOO SpMM kernel.  See BOO_FORMAT.md sec. 6.
 //
 // `threads` in {128, 256, 512} and `p` in {8, 16, 32} are swept, not fixed:

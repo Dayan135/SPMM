@@ -6,7 +6,7 @@ when an idea is evaluated.
 
 ## 1. Precompute per-block row boundaries in the CPU builder
 
-Status: implemented and measured negative -- see BOO_OPTIMIZATION.md's
+Status: implemented and measured negative -- see `experiments/2026-09-23_boo_optimization/BOO_OPTIMIZATION.md`'s
 "Stages 3 and 4 implementation" section. Isolated from bucketing (one-bucket
 plan with precomputed rows vs without), it's a ~2% slowdown across all 36
 tested cells, no exceptions: the extra global-memory traffic for the stored

@@ -1,0 +1,26 @@
+{
+  "bound_violations": 0,
+  "correctness": "passed",
+  "direct_algorithm": "DEFAULT",
+  "direct_info": {
+    "cusparse_header_version": 12510,
+    "cusparse_version": 12508,
+    "preprocess_status": "CUSPARSE_STATUS_SUCCESS",
+    "supported": true,
+    "unsupported_reason": "",
+    "workspace_bytes": 3878144
+  },
+  "features": 512,
+  "label_sha256": "34e8890ef024261fb2789fcd0c64f432e89c77026ca857c24a2a0852b9a24f50",
+  "labeling": "identity_k32",
+  "matrix": "Boeing/pwtk",
+  "matrix_sha256": "52031f452e278cc795b15cceafa8d9c80f0756111bfb49d1ef220437723971b0",
+  "max_abs_error": 40.0,
+  "max_scaled_error": 5.020883864345358e-07,
+  "method": "direct",
+  "profiled_calls": 1,
+  "seed": 0,
+  "threshold": 4,
+  "warmup": 5,
+  "x_sha256": "5d43abcb8433f6a8725947e5558e2bd63d7db7da703e69108556d64da827d871"
+}

@@ -1,0 +1,1018 @@
+[
+  {
+    "task_index": 0,
+    "kind": "real",
+    "matrix": "Boeing/pwtk",
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 1,
+    "kind": "real",
+    "matrix": "Boeing/pwtk",
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 2,
+    "kind": "real",
+    "matrix": "Boeing/pwtk",
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 3,
+    "kind": "real",
+    "matrix": "Boeing/pwtk",
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 4,
+    "kind": "real",
+    "matrix": "Schmid/thermal2",
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 5,
+    "kind": "real",
+    "matrix": "Schmid/thermal2",
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 6,
+    "kind": "real",
+    "matrix": "Schmid/thermal2",
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 7,
+    "kind": "real",
+    "matrix": "Schmid/thermal2",
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 8,
+    "kind": "real",
+    "matrix": "AMD/G2_circuit",
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 9,
+    "kind": "real",
+    "matrix": "AMD/G2_circuit",
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 10,
+    "kind": "real",
+    "matrix": "AMD/G2_circuit",
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 11,
+    "kind": "real",
+    "matrix": "AMD/G2_circuit",
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 12,
+    "kind": "real",
+    "matrix": "Williams/webbase-1M",
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 13,
+    "kind": "real",
+    "matrix": "Williams/webbase-1M",
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 14,
+    "kind": "real",
+    "matrix": "Williams/webbase-1M",
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 15,
+    "kind": "real",
+    "matrix": "Williams/webbase-1M",
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 16,
+    "kind": "real",
+    "matrix": "SNAP/roadNet-CA",
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 17,
+    "kind": "real",
+    "matrix": "SNAP/roadNet-CA",
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 18,
+    "kind": "real",
+    "matrix": "SNAP/roadNet-CA",
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 19,
+    "kind": "real",
+    "matrix": "SNAP/roadNet-CA",
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 20,
+    "kind": "real",
+    "matrix": "LPnetlib/lp_cre_b",
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 21,
+    "kind": "real",
+    "matrix": "LPnetlib/lp_cre_b",
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 22,
+    "kind": "real",
+    "matrix": "LPnetlib/lp_cre_b",
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 23,
+    "kind": "real",
+    "matrix": "LPnetlib/lp_cre_b",
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 24,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 25,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 26,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 27,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 28,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 29,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 30,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 31,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 32,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 33,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 34,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 35,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 36,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 37,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 38,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 39,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 40,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 41,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 42,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 43,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 44,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 45,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 46,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 47,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 48,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 49,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 50,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 51,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 52,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 53,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 54,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 55,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 56,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 57,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 58,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 59,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 60,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 262144,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 61,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 262144,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 3,
+    "error": null
+  },
+  {
+    "task_index": 62,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 262144,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 3,
+    "error": null
+  },
+  {
+    "task_index": 63,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 262144,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 64,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 65,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 66,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 67,
+    "kind": "generated",
+    "profile": "fem2d",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 68,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 69,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 70,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 71,
+    "kind": "generated",
+    "profile": "fem2d_permuted",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 72,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 73,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 74,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 75,
+    "kind": "generated",
+    "profile": "diag_dd0.017",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 76,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 77,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 78,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 79,
+    "kind": "generated",
+    "profile": "diag_dd0.033",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 80,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 81,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 82,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 83,
+    "kind": "generated",
+    "profile": "diag_dd0.05",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 84,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 85,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 86,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 87,
+    "kind": "generated",
+    "profile": "diag_b0.1",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 88,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 89,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 90,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 91,
+    "kind": "generated",
+    "profile": "diag_b0.3",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 92,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 93,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 94,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 95,
+    "kind": "generated",
+    "profile": "diag_b1.0",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 96,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 97,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 98,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 99,
+    "kind": "generated",
+    "profile": "diag_skewed",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 100,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 1048576,
+    "method": "identity",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  },
+  {
+    "task_index": 101,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 1048576,
+    "method": "hem",
+    "status": "complete",
+    "completed_cells": 3,
+    "error": null
+  },
+  {
+    "task_index": 102,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 1048576,
+    "method": "graclus",
+    "status": "complete",
+    "completed_cells": 3,
+    "error": null
+  },
+  {
+    "task_index": 103,
+    "kind": "generated",
+    "profile": "pattern_diag_stripe",
+    "size": 1048576,
+    "method": "metis",
+    "status": "complete",
+    "completed_cells": 6,
+    "error": null
+  }
+]

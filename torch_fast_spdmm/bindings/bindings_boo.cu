@@ -413,4 +413,29 @@ void bind_boo_functions(pybind11::module_& m) {
     m.def("boo_spmm_cuda_plan_f32", &boo_spmm_cuda_planned<float>);
     m.def("boo_spmm_cuda_plan_f64", &boo_spmm_cuda_planned<double>);
     m.def("boo_arena_bytes_cuda", &boo_arena_bytes);
+    m.def("set_boo_rowseg_fpt", &set_boo_rowseg_fpt);
+    m.def("get_boo_rowseg_fpt", &get_boo_rowseg_fpt);
+    m.def("set_boo_feat_block", &set_boo_feat_block);
+    m.def("get_boo_feat_block", &get_boo_feat_block);
+    m.def("boo_arena_bytes_rowseg_cuda", &boo_arena_bytes_rowseg);
+    m.def("boo_rowseg_launch_info",
+          [](int max_nr, int max_nc, int max_nnz_blk, int features, int threads, int p) {
+              const auto i = boo_rowseg_launch_info(max_nr, max_nc, max_nnz_blk, features, threads, p);
+              pybind11::dict d;
+              d["requested_p"] = i.requested_p;
+              d["effective_p"] = i.effective_p;
+              d["threads"] = i.threads;
+              d["features_per_thread"] = i.fpt;
+              d["feat_block"] = i.feat_block;
+              d["grid_z"] = i.grid_z;
+              d["arena_bytes"] = i.arena_bytes;
+              d["registers_per_thread"] = i.num_regs;
+              d["local_bytes_per_thread"] = i.local_size_bytes;
+              d["static_shared_bytes"] = i.static_shared_bytes;
+              d["max_threads_per_block"] = i.max_threads_per_block;
+              d["max_dynamic_shared_bytes"] = i.max_dynamic_shared_bytes;
+              d["max_active_blocks_per_sm"] = i.max_active_blocks_per_sm;
+              return d;
+          },
+          "Float32 row-segmented launch the current FPT/slab settings would select.");
 }

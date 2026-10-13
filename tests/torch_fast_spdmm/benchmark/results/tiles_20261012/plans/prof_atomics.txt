@@ -1,0 +1,12 @@
+pwtk 512 boo 64 1 512 -
+pwtk 512 boo 64 2 512 -
+pwtk 512 boo 64 4 512 -
+webbase 512 boo 64 1 512 -
+webbase 512 boo 64 2 512 -
+webbase 512 boo 64 4 512 -
+diag_b1.0 512 boo 64 4 512 -
+diag_b1.0 512 boo 128 4 512 -
+fem2d 512 boo 64 2 512 -
+fem2d 512 boo 64 4 512 -
+fem2d 512 direct - - - CSR_ALG2
+pwtk 512 direct - - - CSR_ALG2
