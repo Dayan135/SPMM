@@ -1,0 +1,5 @@
+alloc,gpus,tasks,cells,measured,unsupported,kineto_verified,nsys_only,unverified
+kp:alloc1,2,8,16,4100,36,2571,1529,0
+kp:alloc2,1,8,16,4100,36,2767,1333,0
+screen:alloc1,4,8,16,3074,36,2398,676,0
+screen:alloc2,1,8,16,3074,36,2673,401,0

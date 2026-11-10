@@ -1,0 +1,102 @@
+
+== confirm audit
+                gpus  measured  unverified  not_measured
+alloc                                                   
+confirm:alloc1     1       747           4            94
+confirm:alloc2     3       747           4            94
+confirm:alloc3     1       747           0            94
+status       reason                                                                      
+unsupported  resource exclusion: GPU memory budget (needs one call of transient headroom)    282
+
+== controls, arm / base time
+        count     min     50%     max
+suffix                               
+dup     207.0  0.9475  0.9997  1.0354
+pad0    102.0  0.9640  0.9948  1.0446
+groups dropped by the control band:
+         alloc              group                             gpu_uuid                tag  ratio
+confirm:alloc3 confirm_fem2d_F512 10c291aa-b773-5c9e-c712-946d44a32c32 rs_p64_t512_f4_dup  0.947
+
+== confirmation (all); speedup of the BOO winner, minimum over allocations
+            input  features             role          pair                winner  allocs  gpus  shape_min shape_verdict  direct_min direct_verdict  perm_steady_min perm_steady_verdict  perm_gather_min perm_gather_verdict  torch_csr_min torch_csr_verdict
+        diag_b1.0       128 screened_feature F128-selected 64x32:rs_p128_t256_f4       3     3      1.074           win       2.431            win              NaN                                  NaN                              2.586               win
+        diag_b1.0       256  heldout_feature F512-selected 64x32:rs_p128_t256_f4       3     3      1.058           win       2.459            win              NaN                                  NaN                              2.624               win
+        diag_b1.0       512 screened_feature F512-selected 64x32:rs_p128_t256_f4       3     3      1.030        parity       2.744            win              NaN                                  NaN                              2.855               win
+     diag_b1.0_1m       128    heldout_scale F128-selected 64x32:rs_p128_t256_f4       3     3      1.079           win       2.756            win              NaN                                  NaN                              2.883               win
+     diag_b1.0_1m       512    heldout_scale F512-selected 64x32:rs_p128_t256_f4       3     3      1.053           win       2.892            win              NaN                                  NaN                              3.005               win
+      diag_dd0.05       128 screened_feature F128-selected  64x64:rs_p64_t256_f2       3     3      1.078           win       0.885           loss              NaN                                  NaN                              1.194               win
+      diag_dd0.05       256  heldout_feature F512-selected 128x64:rs_p64_t256_f2       3     3      1.089           win       0.978         parity              NaN                                  NaN                              1.285               win
+      diag_dd0.05       512 screened_feature F512-selected 128x64:rs_p64_t256_f2       3     3      1.088           win       0.943           loss              NaN                                  NaN                              1.299               win
+   diag_dd0.05_1m       128    heldout_scale F128-selected  64x64:rs_p64_t256_f2       3     3      1.091           win       0.934           loss              NaN                                  NaN                              1.212               win
+   diag_dd0.05_1m       512    heldout_scale F512-selected 128x64:rs_p64_t256_f2       3     3      1.085           win       1.029         parity              NaN                                  NaN                              1.237               win
+            fem2d       128 screened_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.039        parity       0.845           loss            0.863                loss            1.266                 win          0.962            parity
+            fem2d       256  heldout_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.134           win       0.928           loss            0.938                loss            1.352                 win          1.041            parity
+            fem2d       512 screened_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.097           win       0.896           loss            0.939                loss            1.357                 win          0.986            parity
+         fem2d_1m       128    heldout_scale F128-selected 128x32:rs_p32_t256_f4       3     3      1.077           win       0.874           loss            0.897                loss            1.299                 win          0.998            parity
+         fem2d_1m       512    heldout_scale F512-selected 256x64:rs_p64_t512_f4       3     3      1.157           win       0.976         parity            1.021              parity            1.419                 win          1.082               win
+   fem2d_permuted       128 screened_feature F128-selected 256x32:rs_p32_t256_f4       3     3      1.222           win       1.192            win            0.909                loss            1.301                 win          1.867               win
+   fem2d_permuted       256  heldout_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.255           win       1.289            win            0.998              parity            1.410                 win          2.028               win
+   fem2d_permuted       512 screened_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.275           win       1.987            win            1.001              parity            1.417                 win          2.090               win
+fem2d_permuted_1m       128    heldout_scale F128-selected 256x32:rs_p32_t256_f4       3     3      1.208           win       1.300            win            0.970              parity            1.365                 win          1.929               win
+fem2d_permuted_1m       512    heldout_scale F512-selected 256x64:rs_p64_t512_f4       3     3      1.267           win       2.023            win            1.072                 win            1.461                 win          2.122               win
+             pwtk       128 screened_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.038        parity       1.067            win              NaN                                  NaN                              1.153               win
+             pwtk       256  heldout_feature F512-selected  64x32:rs_p64_t256_f4       3     3      1.088           win       1.228            win              NaN                                  NaN                              1.320               win
+             pwtk       512 screened_feature F512-selected  64x32:rs_p64_t256_f4       3     3      1.028        parity       1.161            win              NaN                                  NaN                              1.303               win
+          roadnet       128 screened_feature F128-selected 128x64:rs_p32_t256_f4       3     3      1.173           win       0.675           loss            0.664                loss            1.410                 win          1.010            parity
+          roadnet       256  heldout_feature F512-selected 128x64:rs_p64_t512_f4       3     3      1.194           win       0.860           loss            0.846                loss            1.605                 win          1.039            parity
+          roadnet       512 screened_feature F512-selected 128x64:rs_p64_t512_f4       3     3      1.180           win         NaN                             NaN                                  NaN                              1.034            parity
+          webbase       128 screened_feature F128-selected  64x16:rs_p32_t128_f2       3     3      1.000        parity       0.506           loss              NaN                                  NaN                              0.677              loss
+          webbase       256  heldout_feature F512-selected 64x16:rs_p128_t256_f2       3     3      1.007        parity       0.515           loss              NaN                                  NaN                              0.694              loss
+          webbase       512 screened_feature F512-selected 64x16:rs_p128_t256_f2       3     3      1.054           win       0.529           loss              NaN                                  NaN                              0.720              loss
+
+secondary F256 pairs (F128-selected):
+         input  features            role          pair                winner  allocs  gpus  shape_min shape_verdict  direct_min direct_verdict  perm_steady_min perm_steady_verdict  perm_gather_min perm_gather_verdict  torch_csr_min torch_csr_verdict
+     diag_b1.0       256 heldout_feature F128-selected 64x32:rs_p128_t256_f4       3     3      1.058           win       2.459            win              NaN                                  NaN                              2.624               win
+   diag_dd0.05       256 heldout_feature F128-selected  64x64:rs_p64_t256_f2       3     3      1.128           win       0.963         parity              NaN                                  NaN                              1.266               win
+         fem2d       256 heldout_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.100           win       0.899           loss            0.908                loss            1.310                 win          1.012            parity
+fem2d_permuted       256 heldout_feature F128-selected 256x32:rs_p32_t256_f4       3     3      1.315           win       1.265            win            0.964              parity            1.363                 win          1.992               win
+          pwtk       256 heldout_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.041        parity       1.193            win              NaN                                  NaN                              1.283               win
+       roadnet       256 heldout_feature F128-selected 128x64:rs_p32_t256_f4       3     3      1.155           win       0.828           loss            0.812                loss            1.540                 win          1.001            parity
+       webbase       256 heldout_feature F128-selected  64x16:rs_p32_t128_f2       3     3      0.977        parity       0.502           loss              NaN                                  NaN                              0.673              loss
+
+== confirmation (filtered); speedup of the BOO winner, minimum over allocations
+            input  features             role          pair                winner  allocs  gpus  shape_min shape_verdict  direct_min direct_verdict  perm_steady_min perm_steady_verdict  perm_gather_min perm_gather_verdict  torch_csr_min torch_csr_verdict
+        diag_b1.0       128 screened_feature F128-selected 64x32:rs_p128_t256_f4       3     3      1.074           win       2.431            win              NaN                                  NaN                              2.586               win
+        diag_b1.0       256  heldout_feature F512-selected 64x32:rs_p128_t256_f4       3     3      1.058           win       2.459            win              NaN                                  NaN                              2.624               win
+        diag_b1.0       512 screened_feature F512-selected 64x32:rs_p128_t256_f4       3     3      1.030        parity       2.744            win              NaN                                  NaN                              2.855               win
+     diag_b1.0_1m       128    heldout_scale F128-selected 64x32:rs_p128_t256_f4       3     3      1.079           win       2.756            win              NaN                                  NaN                              2.883               win
+     diag_b1.0_1m       512    heldout_scale F512-selected 64x32:rs_p128_t256_f4       3     3      1.053           win       2.892            win              NaN                                  NaN                              3.005               win
+      diag_dd0.05       128 screened_feature F128-selected  64x64:rs_p64_t256_f2       3     3      1.078           win       0.885           loss              NaN                                  NaN                              1.194               win
+      diag_dd0.05       256  heldout_feature F512-selected 128x64:rs_p64_t256_f2       3     3      1.089           win       0.978         parity              NaN                                  NaN                              1.285               win
+      diag_dd0.05       512 screened_feature F512-selected 128x64:rs_p64_t256_f2       3     3      1.088           win       0.943           loss              NaN                                  NaN                              1.299               win
+   diag_dd0.05_1m       128    heldout_scale F128-selected  64x64:rs_p64_t256_f2       3     3      1.091           win       0.934           loss              NaN                                  NaN                              1.212               win
+   diag_dd0.05_1m       512    heldout_scale F512-selected 128x64:rs_p64_t256_f2       3     3      1.085           win       1.029         parity              NaN                                  NaN                              1.237               win
+            fem2d       128 screened_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.039        parity       0.845           loss            0.863                loss            1.266                 win          0.962            parity
+            fem2d       256  heldout_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.134           win       0.928           loss            0.938                loss            1.352                 win          1.041            parity
+            fem2d       512 screened_feature F512-selected 256x64:rs_p64_t512_f4       2     2      1.145          win*       0.931          loss*            0.939               loss*            1.360                win*          1.017           parity*
+         fem2d_1m       128    heldout_scale F128-selected 128x32:rs_p32_t256_f4       3     3      1.077           win       0.874           loss            0.897                loss            1.299                 win          0.998            parity
+         fem2d_1m       512    heldout_scale F512-selected 256x64:rs_p64_t512_f4       3     3      1.157           win       0.976         parity            1.021              parity            1.419                 win          1.082               win
+   fem2d_permuted       128 screened_feature F128-selected 256x32:rs_p32_t256_f4       3     3      1.222           win       1.192            win            0.909                loss            1.301                 win          1.867               win
+   fem2d_permuted       256  heldout_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.255           win       1.289            win            0.998              parity            1.410                 win          2.028               win
+   fem2d_permuted       512 screened_feature F512-selected 256x64:rs_p64_t512_f4       3     3      1.275           win       1.987            win            1.001              parity            1.417                 win          2.090               win
+fem2d_permuted_1m       128    heldout_scale F128-selected 256x32:rs_p32_t256_f4       3     3      1.208           win       1.300            win            0.970              parity            1.365                 win          1.929               win
+fem2d_permuted_1m       512    heldout_scale F512-selected 256x64:rs_p64_t512_f4       3     3      1.267           win       2.023            win            1.072                 win            1.461                 win          2.122               win
+             pwtk       128 screened_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.038        parity       1.067            win              NaN                                  NaN                              1.153               win
+             pwtk       256  heldout_feature F512-selected  64x32:rs_p64_t256_f4       3     3      1.088           win       1.228            win              NaN                                  NaN                              1.320               win
+             pwtk       512 screened_feature F512-selected  64x32:rs_p64_t256_f4       3     3      1.028        parity       1.161            win              NaN                                  NaN                              1.303               win
+          roadnet       128 screened_feature F128-selected 128x64:rs_p32_t256_f4       3     3      1.173           win       0.675           loss            0.664                loss            1.410                 win          1.010            parity
+          roadnet       256  heldout_feature F512-selected 128x64:rs_p64_t512_f4       3     3      1.194           win       0.860           loss            0.846                loss            1.605                 win          1.039            parity
+          roadnet       512 screened_feature F512-selected 128x64:rs_p64_t512_f4       3     3      1.180           win         NaN                             NaN                                  NaN                              1.034            parity
+          webbase       128 screened_feature F128-selected  64x16:rs_p32_t128_f2       3     3      1.000        parity       0.506           loss              NaN                                  NaN                              0.677              loss
+          webbase       256  heldout_feature F512-selected 64x16:rs_p128_t256_f2       3     3      1.007        parity       0.515           loss              NaN                                  NaN                              0.694              loss
+          webbase       512 screened_feature F512-selected 64x16:rs_p128_t256_f2       3     3      1.054           win       0.529           loss              NaN                                  NaN                              0.720              loss
+
+secondary F256 pairs (F128-selected):
+         input  features            role          pair                winner  allocs  gpus  shape_min shape_verdict  direct_min direct_verdict  perm_steady_min perm_steady_verdict  perm_gather_min perm_gather_verdict  torch_csr_min torch_csr_verdict
+     diag_b1.0       256 heldout_feature F128-selected 64x32:rs_p128_t256_f4       3     3      1.058           win       2.459            win              NaN                                  NaN                              2.624               win
+   diag_dd0.05       256 heldout_feature F128-selected  64x64:rs_p64_t256_f2       3     3      1.128           win       0.963         parity              NaN                                  NaN                              1.266               win
+         fem2d       256 heldout_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.100           win       0.899           loss            0.908                loss            1.310                 win          1.012            parity
+fem2d_permuted       256 heldout_feature F128-selected 256x32:rs_p32_t256_f4       3     3      1.315           win       1.265            win            0.964              parity            1.363                 win          1.992               win
+          pwtk       256 heldout_feature F128-selected 128x32:rs_p32_t256_f4       3     3      1.041        parity       1.193            win              NaN                                  NaN                              1.283               win
+       roadnet       256 heldout_feature F128-selected 128x64:rs_p32_t256_f4       3     3      1.155           win       0.828           loss            0.812                loss            1.540                 win          1.001            parity
+       webbase       256 heldout_feature F128-selected  64x16:rs_p32_t128_f2       3     3      0.977        parity       0.502           loss              NaN                                  NaN                              0.673              loss

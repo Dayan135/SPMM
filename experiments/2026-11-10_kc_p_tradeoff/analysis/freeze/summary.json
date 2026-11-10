@@ -1,0 +1,16 @@
+{
+  "cells": 10,
+  "tasks": 10,
+  "native_arms_per_allocation": 980,
+  "total_arms_per_allocation": 2172,
+  "allocations": 2,
+  "profiles": 28,
+  "estimated_gpu_hours": {
+    "timing": 2.0,
+    "stage0": 0.5,
+    "audit": 1.0,
+    "profiles": 2.0,
+    "total": 5.5
+  },
+  "estimate_basis": "Budget estimate, not measured runtime: 10 tasks/allocation, ~6 min/task incl rebuild/checks, ~5 min/profile, audit 6 min/cell; timings themselves much shorter. Queue time excluded."
+}

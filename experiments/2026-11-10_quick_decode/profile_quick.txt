@@ -1,0 +1,4 @@
+fp_128x64_p32 qd_fem2d_permuted_F512 fem2d_permuted@k128x64:rs_p32_t256_f4
+fp_128x64_p8 qd_fem2d_permuted_F512 fem2d_permuted@k128x64:rs_p8_t256_f4
+fp_256x64_p64 qd_fem2d_permuted_F512 fem2d_permuted@k256x64:rs_p64_t512_f4
+rn_128x64_p32 qd_roadnet_F512 roadnet@k128x64:rs_p32_t256_f4

@@ -1,0 +1,16 @@
+property,definition
+read_fraction,x_read / x_staged: fraction of staged column slots used by at least one stored entry
+reuse_staged,compressed_nnz / x_staged: stored-entry MAC opportunities per staged X scalar
+reuse_used,compressed_nnz / x_read: stored-entry MAC opportunities per used X scalar
+reuse_gain,"reuse_staged(shape) / reuse_staged(32x32), same matrix and method"
+x_staged_rel,"x_staged(shape) / x_staged(32x32), same matrix and method"
+y_commits_rel,active block-row count(shape) / active block-row count(32x32)
+output_fanout,"y_commits / rows: active block-row incidences per global row, including empty global rows in denominator"
+imbalance,balance_gain_t256_p64_f2 = sum busiest row-residue workload / sum ceil(block_nnz/8); >=1 is worse
+busiest_f2_rel,sum busiest row-residue workload(shape) / same at 32x32; T256/P64/FPT2 fixed
+capacity_p64,"best_threads_sm_p64 / 1536; theoretical best over T128/256/512, not achieved occupancy"
+cta_p64_t256,threads_sm_p64_t256 / 256: estimated CTAs/SM at fixed T256
+arena_p64_rel,arena_p64(shape) / arena_p64(32x32)
+max_p99,max_nnz_blk / nz_p99; outlier pressure from the largest block
+remainder_fraction,remainder_nnz / total_nnz
+remainder_delta,remainder_fraction(shape) - remainder_fraction(32x32)

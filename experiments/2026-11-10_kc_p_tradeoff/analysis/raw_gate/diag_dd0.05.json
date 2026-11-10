@@ -1,0 +1,10 @@
+{
+  "matrix_sha256": "f668d1bfe8054e3b038aff787ec7e5ee5a74050ad27a08f0c5781d2ecd39169d",
+  "host": {
+    "node": "ise-cpu128-05.auth.ad.bgu.ac.il",
+    "cpu_model": "AMD EPYC 7702P 64-Core Processor",
+    "cpus": 4,
+    "slurm_job_id": "24057299"
+  },
+  "seconds": 3.528088092803955
+}

@@ -1,0 +1,153 @@
+
+== kcp audit
+            gpus  tasks  cells  measured  kineto_verified  nsys_only  unverified
+alloc                                                                           
+kcp:alloc1     5     10     10      2172             2172          0           0
+kcp:alloc2     3     10     10      2172             2172          0           0
+
+== kcp controls, arm / base time
+        count     min     50%     max
+suffix                               
+dup     432.0  0.9491  1.0002  1.0709
+pad0    980.0  0.8926  0.9940  1.0342
+dropped (alloc, cell) for controls outside the band:
+     alloc                 cell                             gpu_uuid                  tag  ratio
+kcp:alloc1   kcp_diag_b1.0_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d rs_p128_t256_f4_pad0  0.948
+kcp:alloc1   kcp_diag_b1.0_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p128_t512_f4_dup  1.055
+kcp:alloc1   kcp_diag_b1.0_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p16_t256_f4_pad0  0.937
+kcp:alloc1   kcp_diag_b1.0_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p32_t256_f4_pad0  0.941
+kcp:alloc1   kcp_diag_b1.0_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d   rs_p64_t512_f4_dup  1.059
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p64_t256_f2_pad0  0.937
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d   rs_p8_t256_f2_pad0  0.945
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p16_t256_f2_pad0  0.929
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p32_t256_f2_pad0  0.947
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d rs_p128_t256_f2_pad0  0.942
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p32_t256_f2_pad0  0.945
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p64_t256_f2_pad0  0.944
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d rs_p128_t256_f2_pad0  0.937
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p16_t256_f2_pad0  0.931
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p32_t256_f2_pad0  0.893
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p64_t256_f2_pad0  0.933
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d   rs_p8_t256_f2_pad0  0.932
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p16_t256_f2_pad0  0.916
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p128_t256_f2_dup  1.071
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p128_t512_f2_dup  0.949
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p32_t256_f2_pad0  0.947
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p128_t256_f2_dup  1.050
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d   rs_p8_t256_f2_pad0  0.933
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p16_t256_f2_pad0  0.946
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p64_t256_f2_pad0  0.950
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d   rs_p8_t256_f2_pad0  0.947
+kcp:alloc1 kcp_diag_dd0.05_F128 3a2ba514-95cf-a51c-55ec-abe3b4d4144d  rs_p64_t256_f2_pad0  0.920
+
+== Q1 model vs launch_info: 4344 arms, arena exact 4344, CTAs/SM exact 4344, discrepancies 0; local bytes > 0: 0
+registers per thread by (T, FPT, P): 256/2/8:40, 256/2/16:40, 256/2/32:40, 256/2/64:40, 256/2/128:40, 256/4/8:40, 256/4/16:39, 256/4/32:39, 256/4/64:39, 256/4/128:39, 512/2/8:40, 512/2/16:40, 512/2/32:40, 512/2/64:40, 512/2/128:40, 512/4/8:40, 512/4/16:39, 512/4/32:39, 512/4/64:39, 512/4/128:39
+
+== Q2 native P curves: 216 (input, F, shape, T) groups; groups with the same best P in every allocation: 210, of which best P = largest launchable P: 75
+best P distribution (consistent groups): {8: 7, 16: 31, 32: 61, 64: 64, 128: 47}
+
+== Q3 occupancy-matched (T256): 108 groups. P8/P16 slower than the best matched P by > 5% in every allocation: 210 of 216 (P, group) rows
+best matched P (median over allocations): {16: 2, 32: 14, 64: 17, 128: 75}
+
+== Q4 speedup over the fastest 32x32 arm, best P and T per shape (min / median over allocations)
+         input  features       k  speedup_min  speedup_median verdict                       best_arm  x_staged_rel  y_commits_rel
+     diag_b1.0       128 128x128        0.776           0.785  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       128 128x256        0.541           0.547  slower                 rs_p32_t512_f4         1.000          0.500
+     diag_b1.0       128  128x32        1.042           1.044    band                rs_p128_t256_f4         0.500          1.000
+     diag_b1.0       128 128x512        0.335           0.340  slower                 rs_p16_t512_f4         2.000          0.500
+     diag_b1.0       128  128x64        0.890           0.901  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       128 256x128        0.775           0.785  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       128  256x32        0.964           0.972    band                rs_p128_t256_f4         0.500          1.000
+     diag_b1.0       128  256x64        0.851           0.856  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       128   32x32        1.000           1.000    band                rs_p128_t256_f4         1.000          1.000
+     diag_b1.0       512 128x128        0.802           0.811  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       512 128x256        0.526           0.526  slower                 rs_p32_t512_f4         1.000          0.500
+     diag_b1.0       512  128x32        1.012           1.017    band                rs_p128_t256_f4         0.500          1.000
+     diag_b1.0       512 128x512        0.308           0.309  slower                 rs_p16_t512_f4         2.000          0.500
+     diag_b1.0       512  128x64        0.919           0.931  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       512 256x128        0.790           0.792  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       512  256x32        0.957           0.958    band                 rs_p64_t256_f4         0.500          1.000
+     diag_b1.0       512  256x64        0.893           0.903  slower                 rs_p64_t512_f4         0.500          0.500
+     diag_b1.0       512   32x32        1.000           1.000    band                rs_p128_t256_f4         1.000          1.000
+   diag_dd0.05       128 128x128        1.086           1.099  faster                 rs_p32_t512_f2         0.500          0.597
+   diag_dd0.05       128 128x256        0.908           0.926  slower                 rs_p16_t512_f2         1.000          0.597
+   diag_dd0.05       128  128x32        1.063           1.067  faster                 rs_p64_t256_f2         0.500          1.000
+   diag_dd0.05       128 128x512        0.661           0.676  slower                 rs_p16_t512_f2         2.000          0.597
+   diag_dd0.05       128  128x64        1.112           1.117  faster  rs_p32_t256_f2/rs_p64_t512_f2         0.500          0.597
+   diag_dd0.05       128 256x128        1.076           1.092  faster                 rs_p32_t512_f2         0.500          0.597
+   diag_dd0.05       128 256x256        1.039           1.057    band                 rs_p32_t512_f2         0.500          0.597
+   diag_dd0.05       128  256x32        0.966           0.980    band                 rs_p64_t256_f2         0.500          1.000
+   diag_dd0.05       128  256x64        1.084           1.094  faster                 rs_p32_t256_f2         0.500          0.597
+   diag_dd0.05       128   32x32        1.000           1.000    band                 rs_p64_t256_f2         1.000          1.000
+   diag_dd0.05       512 128x128        1.068           1.069  faster                 rs_p64_t512_f2         0.500          0.597
+   diag_dd0.05       512 128x256        0.814           0.818  slower                 rs_p32_t512_f2         1.000          0.597
+   diag_dd0.05       512  128x32        1.026           1.031    band                rs_p128_t512_f2         0.500          1.000
+   diag_dd0.05       512 128x512        0.547           0.551  slower                 rs_p16_t512_f2         2.000          0.597
+   diag_dd0.05       512  128x64        1.086           1.090  faster  rs_p64_t256_f2/rs_p64_t512_f2         0.500          0.597
+   diag_dd0.05       512 256x128        1.056           1.057  faster                 rs_p64_t512_f2         0.500          0.597
+   diag_dd0.05       512 256x256        0.946           0.948    band                 rs_p32_t512_f2         0.500          0.597
+   diag_dd0.05       512  256x32        0.945           0.960    band                 rs_p64_t256_f2         0.500          1.000
+   diag_dd0.05       512  256x64        1.078           1.084  faster                 rs_p64_t512_f2         0.500          0.597
+   diag_dd0.05       512   32x32        1.000           1.000    band                 rs_p64_t256_f2         1.000          1.000
+         fem2d       128 128x128        0.848           0.852  slower                 rs_p16_t512_f4         0.960          0.639
+         fem2d       128 128x256        0.665           0.669  slower                 rs_p16_t512_f4         1.338          0.540
+         fem2d       128  128x32        1.117           1.123  faster                 rs_p32_t256_f4         0.529          1.000
+         fem2d       128 128x512        0.442           0.443  slower                  rs_p8_t512_f4         1.912          0.471
+         fem2d       128  128x64        1.066           1.071  faster                 rs_p64_t512_f4         0.702          0.784
+         fem2d       128 256x128        0.935           0.945    band                 rs_p32_t512_f4         0.688          0.639
+         fem2d       128 256x256        0.554           0.557  slower                 rs_p32_t512_f4         0.946          0.540
+         fem2d       128  256x32        1.113           1.117  faster                 rs_p32_t256_f4         0.404          1.000
+         fem2d       128  256x64        1.134           1.137  faster                 rs_p64_t512_f4         0.513          0.784
+         fem2d       128   32x32        1.000           1.000    band                 rs_p64_t256_f4         1.000          1.000
+         fem2d       512 128x128        0.762           0.765  slower                 rs_p32_t512_f4         0.960          0.639
+         fem2d       512 128x256        0.519           0.519  slower                 rs_p16_t512_f4         1.338          0.540
+         fem2d       512  128x32        1.118           1.118  faster                 rs_p64_t256_f4         0.529          1.000
+         fem2d       512 128x512        0.343           0.344  slower                 rs_p32_t512_f4         1.912          0.471
+         fem2d       512  128x64        1.077           1.078  faster                 rs_p64_t512_f4         0.702          0.784
+         fem2d       512 256x128        0.884           0.892  slower                 rs_p32_t512_f4         0.688          0.639
+         fem2d       512 256x256        0.527           0.528  slower                 rs_p32_t512_f4         0.946          0.540
+         fem2d       512  256x32        1.120           1.120  faster                 rs_p64_t256_f4         0.404          1.000
+         fem2d       512  256x64        1.154           1.160  faster                 rs_p64_t512_f4         0.513          0.784
+         fem2d       512   32x32        1.000           1.000    band                 rs_p64_t256_f4         1.000          1.000
+fem2d_permuted       128 128x128        0.877           0.878  slower                 rs_p16_t512_f4         0.958          0.638
+fem2d_permuted       128 128x256        0.663           0.665  slower                 rs_p16_t512_f4         1.332          0.540
+fem2d_permuted       128  128x32        1.244           1.247  faster                 rs_p32_t256_f4         0.528          1.000
+fem2d_permuted       128 128x512        0.388           0.389  slower                  rs_p8_t512_f4         1.902          0.472
+fem2d_permuted       128  128x64        1.154           1.156  faster                 rs_p64_t512_f4         0.702          0.784
+fem2d_permuted       128 256x128        1.020           1.021    band                 rs_p32_t512_f4         0.687          0.638
+fem2d_permuted       128 256x256        0.595           0.597  slower                 rs_p32_t512_f4         0.946          0.540
+fem2d_permuted       128  256x32        1.272           1.274  faster                 rs_p32_t256_f4         0.404          1.000
+fem2d_permuted       128  256x64        1.274           1.275  faster                 rs_p64_t512_f4         0.514          0.784
+fem2d_permuted       128   32x32        1.000           1.000    band                 rs_p64_t256_f4         1.000          1.000
+fem2d_permuted       512 128x128        0.799           0.801  slower                 rs_p32_t512_f4         0.958          0.638
+fem2d_permuted       512 128x256        0.485           0.485  slower                 rs_p64_t512_f4         1.332          0.540
+fem2d_permuted       512  128x32        1.197           1.200  faster                rs_p128_t512_f4         0.528          1.000
+fem2d_permuted       512 128x512        0.361           0.362  slower                 rs_p32_t512_f4         1.902          0.472
+fem2d_permuted       512  128x64        1.144           1.146  faster                 rs_p64_t512_f4         0.702          0.784
+fem2d_permuted       512 256x128        0.958           0.958    band                 rs_p32_t512_f4         0.687          0.638
+fem2d_permuted       512 256x256        0.564           0.566  slower                 rs_p32_t512_f4         0.946          0.540
+fem2d_permuted       512  256x32        1.233           1.233  faster                 rs_p64_t256_f4         0.404          1.000
+fem2d_permuted       512  256x64        1.267           1.268  faster                 rs_p64_t512_f4         0.514          0.784
+fem2d_permuted       512   32x32        1.000           1.000    band                 rs_p64_t256_f4         1.000          1.000
+       roadnet       128 128x128        1.091           1.102  faster                 rs_p32_t512_f4         0.900          0.800
+       roadnet       128 128x256        0.860           0.872  slower                 rs_p16_t512_f4         1.328          0.784
+       roadnet       128  128x32        1.185           1.199  faster                 rs_p64_t256_f4         0.519          1.058
+       roadnet       128 128x512        0.555           0.562  slower   rs_p16_t512_f4/rs_p8_t512_f4         2.136          0.767
+       roadnet       128  128x64        1.228           1.247  faster                 rs_p32_t256_f4         0.603          0.852
+       roadnet       128 256x128        1.173           1.192  faster                 rs_p32_t512_f4         0.663          0.816
+       roadnet       128 256x256        0.894           0.912  slower                 rs_p16_t512_f4         1.075          0.787
+       roadnet       128  256x32        1.120           1.130  faster                 rs_p64_t256_f4         0.426          1.070
+       roadnet       128  256x64        1.230           1.250  faster                 rs_p32_t256_f4         0.483          0.861
+       roadnet       128   32x32        1.000           1.000    band                 rs_p64_t256_f4         1.000          1.000
+       roadnet       512 128x128        1.018           1.020    band                 rs_p32_t512_f4         0.900          0.800
+       roadnet       512 128x256        0.720           0.721  slower                 rs_p32_t512_f4         1.328          0.784
+       roadnet       512  128x32        1.140           1.143  faster rs_p128_t256_f4/rs_p64_t256_f4         0.519          1.058
+       roadnet       512 128x512        0.454           0.456  slower                 rs_p16_t512_f4         2.136          0.767
+       roadnet       512  128x64        1.196           1.198  faster                 rs_p64_t256_f4         0.603          0.852
+       roadnet       512 256x128        1.062           1.066  faster                 rs_p32_t512_f4         0.663          0.816
+       roadnet       512 256x256        0.782           0.783  slower                 rs_p32_t512_f4         1.075          0.787
+       roadnet       512  256x32        1.093           1.102  faster                 rs_p64_t256_f4         0.426          1.070
+       roadnet       512  256x64        1.208           1.209  faster                 rs_p64_t512_f4         0.483          0.861
+       roadnet       512   32x32        1.000           1.000    band                 rs_p64_t256_f4         1.000          1.000
+
+filtered: 18 of 20 (allocation, cell) kept -> experiments/2026-11-10_kc_p_tradeoff/analysis/report

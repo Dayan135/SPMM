@@ -438,4 +438,39 @@ void bind_boo_functions(pybind11::module_& m) {
               return d;
           },
           "Float32 row-segmented launch the current FPT/slab settings would select.");
+    m.def("set_boo_nnzflat_fpt", &set_boo_nnzflat_fpt);
+    m.def("get_boo_nnzflat_fpt", &get_boo_nnzflat_fpt);
+    m.def("set_boo_nnzflat_reference", &set_boo_nnzflat_reference);
+    m.def("get_boo_nnzflat_reference", &get_boo_nnzflat_reference);
+    m.def("boo_nnzflat_launch_info",
+          [](int num_blocks, int batch_size, int max_nr, int max_nc, int max_nnz_blk,
+             int features, int threads, int p, int scalar_bytes) {
+              const auto i = boo_nnzflat_launch_info(num_blocks, batch_size, max_nr, max_nc,
+                                                     max_nnz_blk, features, threads, p, scalar_bytes);
+              pybind11::dict d;
+              d["requested_p"] = i.requested_p;
+              d["effective_p"] = i.effective_p;
+              d["threads"] = i.threads;
+              d["features_per_thread"] = i.fpt;
+              d["reference"] = i.reference;
+              d["scalar_bytes"] = i.scalar_bytes;
+              d["feat_block"] = i.feat_block;
+              d["feat_block_setting"] = i.feat_block_setting;
+              d["grid_x"] = i.grid_x;
+              d["grid_y"] = i.grid_y;
+              d["grid_z"] = i.grid_z;
+              d["arena_bytes"] = i.arena_bytes;
+              d["registers_per_thread"] = i.num_regs;
+              d["local_bytes_per_thread"] = i.local_size_bytes;
+              d["static_shared_bytes"] = i.static_shared_bytes;
+              d["max_threads_per_block"] = i.max_threads_per_block;
+              d["max_dynamic_shared_bytes"] = i.max_dynamic_shared_bytes;
+              d["max_active_blocks_per_sm"] = i.max_active_blocks_per_sm;
+              d["shared_optin_bytes"] = i.shared_optin_bytes;
+              return d;
+          },
+          pybind11::arg("num_blocks"), pybind11::arg("batch_size"), pybind11::arg("max_nr"),
+          pybind11::arg("max_nc"), pybind11::arg("max_nnz_blk"), pybind11::arg("features"),
+          pybind11::arg("threads"), pybind11::arg("p"), pybind11::arg("scalar_bytes") = 4,
+          "nnzflat launch the current nnzflat FPT/reference settings would select.");
 }

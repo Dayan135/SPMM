@@ -1,0 +1,361 @@
+input,shape,compact,classes,cut_q,p_nnz_weighted,nnz_at_p64plus,launches,detail
+diag_b1.0,128x32,False,1,,128.0,1.0,1,P128 (arena@P64 21652)
+diag_b1.0,128x32,False,2,0.5,128.0,1.0,2,small 4096 blk 50% nnz P128; large 4096 blk 50% nnz P128
+diag_b1.0,128x32,False,2,0.75,128.0,1.0,2,small 6144 blk 75% nnz P128; large 2048 blk 25% nnz P128
+diag_b1.0,128x32,False,2,0.9,128.0,1.0,2,small 7372 blk 90% nnz P128; large 820 blk 10% nnz P128
+diag_b1.0,128x32,False,2,0.95,128.0,1.0,2,small 7782 blk 95% nnz P128; large 410 blk 5% nnz P128
+diag_b1.0,128x32,False,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_b1.0,128x32,True,1,,128.0,1.0,1,P128 (arena@P64 21652)
+diag_b1.0,128x32,True,2,0.5,128.0,1.0,2,small 4096 blk 50% nnz P128; large 4096 blk 50% nnz P128
+diag_b1.0,128x32,True,2,0.75,128.0,1.0,2,small 6144 blk 75% nnz P128; large 2048 blk 25% nnz P128
+diag_b1.0,128x32,True,2,0.9,128.0,1.0,2,small 7372 blk 90% nnz P128; large 820 blk 10% nnz P128
+diag_b1.0,128x32,True,2,0.95,128.0,1.0,2,small 7782 blk 95% nnz P128; large 410 blk 5% nnz P128
+diag_b1.0,128x32,True,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_b1.0,128x64,False,1,,16.0,0.0,1,P16 (arena@P64 42260)
+diag_b1.0,128x64,False,2,0.5,16.0,0.0,2,small 2048 blk 50% nnz P16; large 2048 blk 50% nnz P16
+diag_b1.0,128x64,False,2,0.75,16.0,0.0,2,small 3072 blk 75% nnz P16; large 1024 blk 25% nnz P16
+diag_b1.0,128x64,False,2,0.9,16.0,0.0,2,small 3686 blk 90% nnz P16; large 410 blk 10% nnz P16
+diag_b1.0,128x64,False,2,0.95,16.0,0.0,2,small 3891 blk 95% nnz P16; large 205 blk 5% nnz P16
+diag_b1.0,128x64,False,2,0.99,16.0,0.0,2,small 4055 blk 99% nnz P16; large 41 blk 1% nnz P16
+diag_b1.0,128x64,True,1,,16.0,0.0,1,P16 (arena@P64 42260)
+diag_b1.0,128x64,True,2,0.5,16.0,0.0,2,small 2048 blk 50% nnz P16; large 2048 blk 50% nnz P16
+diag_b1.0,128x64,True,2,0.75,16.0,0.0,2,small 3072 blk 75% nnz P16; large 1024 blk 25% nnz P16
+diag_b1.0,128x64,True,2,0.9,16.0,0.0,2,small 3686 blk 90% nnz P16; large 410 blk 10% nnz P16
+diag_b1.0,128x64,True,2,0.95,16.0,0.0,2,small 3891 blk 95% nnz P16; large 205 blk 5% nnz P16
+diag_b1.0,128x64,True,2,0.99,16.0,0.0,2,small 4055 blk 99% nnz P16; large 41 blk 1% nnz P16
+diag_b1.0,256x32,False,1,,128.0,1.0,1,P128 (arena@P64 22676)
+diag_b1.0,256x32,False,2,0.5,128.0,1.0,2,small 4096 blk 50% nnz P128; large 4096 blk 50% nnz P128
+diag_b1.0,256x32,False,2,0.75,128.0,1.0,2,small 6144 blk 75% nnz P128; large 2048 blk 25% nnz P128
+diag_b1.0,256x32,False,2,0.9,128.0,1.0,2,small 7372 blk 90% nnz P128; large 820 blk 10% nnz P128
+diag_b1.0,256x32,False,2,0.95,128.0,1.0,2,small 7782 blk 95% nnz P128; large 410 blk 5% nnz P128
+diag_b1.0,256x32,False,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_b1.0,256x32,True,1,,128.0,1.0,1,P128 (arena@P64 22676)
+diag_b1.0,256x32,True,2,0.5,128.0,1.0,2,small 4096 blk 50% nnz P128; large 4096 blk 50% nnz P128
+diag_b1.0,256x32,True,2,0.75,128.0,1.0,2,small 6144 blk 75% nnz P128; large 2048 blk 25% nnz P128
+diag_b1.0,256x32,True,2,0.9,128.0,1.0,2,small 7372 blk 90% nnz P128; large 820 blk 10% nnz P128
+diag_b1.0,256x32,True,2,0.95,128.0,1.0,2,small 7782 blk 95% nnz P128; large 410 blk 5% nnz P128
+diag_b1.0,256x32,True,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_b1.0,256x64,False,1,,16.0,0.0,1,P16 (arena@P64 43284)
+diag_b1.0,256x64,False,2,0.5,16.0,0.0,2,small 2048 blk 50% nnz P16; large 2048 blk 50% nnz P16
+diag_b1.0,256x64,False,2,0.75,16.0,0.0,2,small 3072 blk 75% nnz P16; large 1024 blk 25% nnz P16
+diag_b1.0,256x64,False,2,0.9,16.0,0.0,2,small 3686 blk 90% nnz P16; large 410 blk 10% nnz P16
+diag_b1.0,256x64,False,2,0.95,16.0,0.0,2,small 3891 blk 95% nnz P16; large 205 blk 5% nnz P16
+diag_b1.0,256x64,False,2,0.99,16.0,0.0,2,small 4055 blk 99% nnz P16; large 41 blk 1% nnz P16
+diag_b1.0,256x64,True,1,,16.0,0.0,1,P16 (arena@P64 43284)
+diag_b1.0,256x64,True,2,0.5,16.0,0.0,2,small 2048 blk 50% nnz P16; large 2048 blk 50% nnz P16
+diag_b1.0,256x64,True,2,0.75,16.0,0.0,2,small 3072 blk 75% nnz P16; large 1024 blk 25% nnz P16
+diag_b1.0,256x64,True,2,0.9,16.0,0.0,2,small 3686 blk 90% nnz P16; large 410 blk 10% nnz P16
+diag_b1.0,256x64,True,2,0.95,16.0,0.0,2,small 3891 blk 95% nnz P16; large 205 blk 5% nnz P16
+diag_b1.0,256x64,True,2,0.99,16.0,0.0,2,small 4055 blk 99% nnz P16; large 41 blk 1% nnz P16
+diag_b1.0,32x32,False,1,,128.0,1.0,1,P128 (arena@P64 14740)
+diag_b1.0,32x32,False,2,0.5,128.0,1.0,2,small 8192 blk 50% nnz P128; large 8192 blk 50% nnz P128
+diag_b1.0,32x32,False,2,0.75,128.0,1.0,2,small 12288 blk 75% nnz P128; large 4096 blk 25% nnz P128
+diag_b1.0,32x32,False,2,0.9,128.0,1.0,2,small 14745 blk 90% nnz P128; large 1639 blk 10% nnz P128
+diag_b1.0,32x32,False,2,0.95,128.0,1.0,2,small 15564 blk 95% nnz P128; large 820 blk 5% nnz P128
+diag_b1.0,32x32,False,2,0.99,128.0,1.0,2,small 16220 blk 99% nnz P128; large 164 blk 1% nnz P128
+diag_b1.0,32x32,True,1,,128.0,1.0,1,P128 (arena@P64 14740)
+diag_b1.0,32x32,True,2,0.5,128.0,1.0,2,small 8192 blk 50% nnz P128; large 8192 blk 50% nnz P128
+diag_b1.0,32x32,True,2,0.75,128.0,1.0,2,small 12288 blk 75% nnz P128; large 4096 blk 25% nnz P128
+diag_b1.0,32x32,True,2,0.9,128.0,1.0,2,small 14745 blk 90% nnz P128; large 1639 blk 10% nnz P128
+diag_b1.0,32x32,True,2,0.95,128.0,1.0,2,small 15564 blk 95% nnz P128; large 820 blk 5% nnz P128
+diag_b1.0,32x32,True,2,0.99,128.0,1.0,2,small 16220 blk 99% nnz P128; large 164 blk 1% nnz P128
+diag_b1.0,64x32,False,1,,128.0,1.0,1,P128 (arena@P64 21140)
+diag_b1.0,64x32,False,2,0.5,128.0,1.0,2,small 4096 blk 50% nnz P128; large 4096 blk 50% nnz P128
+diag_b1.0,64x32,False,2,0.75,128.0,1.0,2,small 6144 blk 75% nnz P128; large 2048 blk 25% nnz P128
+diag_b1.0,64x32,False,2,0.9,128.0,1.0,2,small 7372 blk 90% nnz P128; large 820 blk 10% nnz P128
+diag_b1.0,64x32,False,2,0.95,128.0,1.0,2,small 7782 blk 95% nnz P128; large 410 blk 5% nnz P128
+diag_b1.0,64x32,False,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_b1.0,64x32,True,1,,128.0,1.0,1,P128 (arena@P64 21140)
+diag_b1.0,64x32,True,2,0.5,128.0,1.0,2,small 4096 blk 50% nnz P128; large 4096 blk 50% nnz P128
+diag_b1.0,64x32,True,2,0.75,128.0,1.0,2,small 6144 blk 75% nnz P128; large 2048 blk 25% nnz P128
+diag_b1.0,64x32,True,2,0.9,128.0,1.0,2,small 7372 blk 90% nnz P128; large 820 blk 10% nnz P128
+diag_b1.0,64x32,True,2,0.95,128.0,1.0,2,small 7782 blk 95% nnz P128; large 410 blk 5% nnz P128
+diag_b1.0,64x32,True,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_dd0.05,128x32,False,1,,128.0,1.0,1,P128 (arena@P64 10282)
+diag_dd0.05,128x32,False,2,0.5,128.0,1.0,2,small 4096 blk 46% nnz P128; large 4096 blk 54% nnz P128
+diag_dd0.05,128x32,False,2,0.75,128.0,1.0,2,small 6144 blk 72% nnz P128; large 2048 blk 28% nnz P128
+diag_dd0.05,128x32,False,2,0.9,128.0,1.0,2,small 7372 blk 88% nnz P128; large 820 blk 12% nnz P128
+diag_dd0.05,128x32,False,2,0.95,128.0,1.0,2,small 7782 blk 94% nnz P128; large 410 blk 6% nnz P128
+diag_dd0.05,128x32,False,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_dd0.05,128x32,True,1,,128.0,1.0,1,P128 (arena@P64 10282)
+diag_dd0.05,128x32,True,2,0.5,128.0,1.0,2,small 4096 blk 48% nnz P128; large 4096 blk 52% nnz P128
+diag_dd0.05,128x32,True,2,0.75,128.0,1.0,2,small 6144 blk 73% nnz P128; large 2048 blk 27% nnz P128
+diag_dd0.05,128x32,True,2,0.9,128.0,1.0,2,small 7372 blk 89% nnz P128; large 820 blk 11% nnz P128
+diag_dd0.05,128x32,True,2,0.95,128.0,1.0,2,small 7782 blk 94% nnz P128; large 410 blk 6% nnz P128
+diag_dd0.05,128x32,True,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_dd0.05,128x64,False,1,,64.0,1.0,1,P64 (arena@P64 19256)
+diag_dd0.05,128x64,False,2,0.5,64.0,1.0,2,small 2048 blk 47% nnz P64; large 2048 blk 53% nnz P64
+diag_dd0.05,128x64,False,2,0.75,64.0,1.0,2,small 3072 blk 73% nnz P64; large 1024 blk 27% nnz P64
+diag_dd0.05,128x64,False,2,0.9,64.0,1.0,2,small 3686 blk 89% nnz P64; large 410 blk 11% nnz P64
+diag_dd0.05,128x64,False,2,0.95,64.0,1.0,2,small 3891 blk 94% nnz P64; large 205 blk 6% nnz P64
+diag_dd0.05,128x64,False,2,0.99,64.0,1.0,2,small 4055 blk 99% nnz P64; large 41 blk 1% nnz P64
+diag_dd0.05,128x64,True,1,,64.0,1.0,1,P64 (arena@P64 19256)
+diag_dd0.05,128x64,True,2,0.5,64.0,1.0,2,small 2048 blk 49% nnz P64; large 2048 blk 51% nnz P64
+diag_dd0.05,128x64,True,2,0.75,64.0,1.0,2,small 3072 blk 74% nnz P64; large 1024 blk 26% nnz P64
+diag_dd0.05,128x64,True,2,0.9,64.0,1.0,2,small 3686 blk 89% nnz P64; large 410 blk 11% nnz P64
+diag_dd0.05,128x64,True,2,0.95,64.0,1.0,2,small 3891 blk 95% nnz P64; large 205 blk 5% nnz P64
+diag_dd0.05,128x64,True,2,0.99,64.0,1.0,2,small 4055 blk 99% nnz P64; large 41 blk 1% nnz P64
+diag_dd0.05,256x32,False,1,,128.0,1.0,1,P128 (arena@P64 11306)
+diag_dd0.05,256x32,False,2,0.5,128.0,1.0,2,small 4096 blk 46% nnz P128; large 4096 blk 54% nnz P128
+diag_dd0.05,256x32,False,2,0.75,128.0,1.0,2,small 6144 blk 72% nnz P128; large 2048 blk 28% nnz P128
+diag_dd0.05,256x32,False,2,0.9,128.0,1.0,2,small 7372 blk 88% nnz P128; large 820 blk 12% nnz P128
+diag_dd0.05,256x32,False,2,0.95,128.0,1.0,2,small 7782 blk 94% nnz P128; large 410 blk 6% nnz P128
+diag_dd0.05,256x32,False,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_dd0.05,256x32,True,1,,128.0,1.0,1,P128 (arena@P64 11306)
+diag_dd0.05,256x32,True,2,0.5,128.0,1.0,2,small 4096 blk 48% nnz P128; large 4096 blk 52% nnz P128
+diag_dd0.05,256x32,True,2,0.75,128.0,1.0,2,small 6144 blk 73% nnz P128; large 2048 blk 27% nnz P128
+diag_dd0.05,256x32,True,2,0.9,128.0,1.0,2,small 7372 blk 89% nnz P128; large 820 blk 11% nnz P128
+diag_dd0.05,256x32,True,2,0.95,128.0,1.0,2,small 7782 blk 94% nnz P128; large 410 blk 6% nnz P128
+diag_dd0.05,256x32,True,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_dd0.05,256x64,False,1,,64.0,1.0,1,P64 (arena@P64 20280)
+diag_dd0.05,256x64,False,2,0.5,64.0,1.0,2,small 2048 blk 47% nnz P64; large 2048 blk 53% nnz P64
+diag_dd0.05,256x64,False,2,0.75,64.0,1.0,2,small 3072 blk 73% nnz P64; large 1024 blk 27% nnz P64
+diag_dd0.05,256x64,False,2,0.9,64.0,1.0,2,small 3686 blk 89% nnz P64; large 410 blk 11% nnz P64
+diag_dd0.05,256x64,False,2,0.95,64.0,1.0,2,small 3891 blk 94% nnz P64; large 205 blk 6% nnz P64
+diag_dd0.05,256x64,False,2,0.99,64.0,1.0,2,small 4055 blk 99% nnz P64; large 41 blk 1% nnz P64
+diag_dd0.05,256x64,True,1,,64.0,1.0,1,P64 (arena@P64 20280)
+diag_dd0.05,256x64,True,2,0.5,64.0,1.0,2,small 2048 blk 49% nnz P64; large 2048 blk 51% nnz P64
+diag_dd0.05,256x64,True,2,0.75,64.0,1.0,2,small 3072 blk 74% nnz P64; large 1024 blk 26% nnz P64
+diag_dd0.05,256x64,True,2,0.9,64.0,1.0,2,small 3686 blk 89% nnz P64; large 410 blk 11% nnz P64
+diag_dd0.05,256x64,True,2,0.95,64.0,1.0,2,small 3891 blk 95% nnz P64; large 205 blk 5% nnz P64
+diag_dd0.05,256x64,True,2,0.99,64.0,1.0,2,small 4055 blk 99% nnz P64; large 41 blk 1% nnz P64
+diag_dd0.05,32x32,False,1,,128.0,1.0,1,P128 (arena@P64 9100)
+diag_dd0.05,32x32,False,2,0.5,128.0,1.0,2,small 8192 blk 45% nnz P128; large 8192 blk 55% nnz P128
+diag_dd0.05,32x32,False,2,0.75,128.0,1.0,2,small 12288 blk 71% nnz P128; large 4096 blk 29% nnz P128
+diag_dd0.05,32x32,False,2,0.9,128.0,1.0,2,small 14745 blk 88% nnz P128; large 1639 blk 12% nnz P128
+diag_dd0.05,32x32,False,2,0.95,128.0,1.0,2,small 15564 blk 94% nnz P128; large 820 blk 6% nnz P128
+diag_dd0.05,32x32,False,2,0.99,128.0,1.0,2,small 16220 blk 99% nnz P128; large 164 blk 1% nnz P128
+diag_dd0.05,32x32,True,1,,128.0,1.0,1,P128 (arena@P64 9100)
+diag_dd0.05,32x32,True,2,0.5,128.0,1.0,2,small 8192 blk 46% nnz P128; large 8192 blk 54% nnz P128
+diag_dd0.05,32x32,True,2,0.75,128.0,1.0,2,small 12288 blk 72% nnz P128; large 4096 blk 28% nnz P128
+diag_dd0.05,32x32,True,2,0.9,128.0,1.0,2,small 14745 blk 88% nnz P128; large 1639 blk 12% nnz P128
+diag_dd0.05,32x32,True,2,0.95,128.0,1.0,2,small 15564 blk 94% nnz P128; large 820 blk 6% nnz P128
+diag_dd0.05,32x32,True,2,0.99,128.0,1.0,2,small 16220 blk 99% nnz P128; large 164 blk 1% nnz P128
+diag_dd0.05,64x32,False,1,,128.0,1.0,1,P128 (arena@P64 9770)
+diag_dd0.05,64x32,False,2,0.5,128.0,1.0,2,small 4096 blk 46% nnz P128; large 4096 blk 54% nnz P128
+diag_dd0.05,64x32,False,2,0.75,128.0,1.0,2,small 6144 blk 72% nnz P128; large 2048 blk 28% nnz P128
+diag_dd0.05,64x32,False,2,0.9,128.0,1.0,2,small 7372 blk 88% nnz P128; large 820 blk 12% nnz P128
+diag_dd0.05,64x32,False,2,0.95,128.0,1.0,2,small 7782 blk 94% nnz P128; large 410 blk 6% nnz P128
+diag_dd0.05,64x32,False,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+diag_dd0.05,64x32,True,1,,128.0,1.0,1,P128 (arena@P64 9770)
+diag_dd0.05,64x32,True,2,0.5,128.0,1.0,2,small 4096 blk 48% nnz P128; large 4096 blk 52% nnz P128
+diag_dd0.05,64x32,True,2,0.75,128.0,1.0,2,small 6144 blk 73% nnz P128; large 2048 blk 27% nnz P128
+diag_dd0.05,64x32,True,2,0.9,128.0,1.0,2,small 7372 blk 89% nnz P128; large 820 blk 11% nnz P128
+diag_dd0.05,64x32,True,2,0.95,128.0,1.0,2,small 7782 blk 94% nnz P128; large 410 blk 6% nnz P128
+diag_dd0.05,64x32,True,2,0.99,128.0,1.0,2,small 8110 blk 99% nnz P128; large 82 blk 1% nnz P128
+fem2d,128x32,False,1,,128.0,1.0,1,P128 (arena@P64 15796)
+fem2d,128x32,False,2,0.5,128.0,1.0,2,small 17988 blk 20% nnz P128; large 17988 blk 80% nnz P128
+fem2d,128x32,False,2,0.75,128.0,1.0,2,small 26982 blk 32% nnz P128; large 8994 blk 68% nnz P128
+fem2d,128x32,False,2,0.9,128.0,1.0,2,small 32378 blk 67% nnz P128; large 3598 blk 33% nnz P128
+fem2d,128x32,False,2,0.95,128.0,1.0,2,small 34177 blk 83% nnz P128; large 1799 blk 17% nnz P128
+fem2d,128x32,False,2,0.99,128.0,1.0,2,small 35616 blk 96% nnz P128; large 360 blk 4% nnz P128
+fem2d,128x32,True,1,,128.0,1.0,1,P128 (arena@P64 15796)
+fem2d,128x32,True,2,0.5,128.0,1.0,2,small 17988 blk 13% nnz P128; large 17988 blk 87% nnz P128
+fem2d,128x32,True,2,0.75,128.0,1.0,2,small 26982 blk 30% nnz P128; large 8994 blk 70% nnz P128
+fem2d,128x32,True,2,0.9,128.0,1.0,2,small 32378 blk 67% nnz P128; large 3598 blk 33% nnz P128
+fem2d,128x32,True,2,0.95,128.0,1.0,2,small 34177 blk 83% nnz P128; large 1799 blk 17% nnz P128
+fem2d,128x32,True,2,0.99,128.0,1.0,2,small 35616 blk 96% nnz P128; large 360 blk 4% nnz P128
+fem2d,128x64,False,1,,64.0,1.0,1,P64 (arena@P64 29108)
+fem2d,128x64,False,2,0.5,64.0,1.0,2,small 12542 blk 19% nnz P64; large 12543 blk 81% nnz P64
+fem2d,128x64,False,2,0.75,64.0,1.0,2,small 18813 blk 30% nnz P64; large 6272 blk 70% nnz P64
+fem2d,128x64,False,2,0.9,64.0,1.0,2,small 22576 blk 57% nnz P64; large 2509 blk 43% nnz P64
+fem2d,128x64,False,2,0.95,64.0,1.0,2,small 23830 blk 77% nnz P64; large 1255 blk 23% nnz P64
+fem2d,128x64,False,2,0.99,64.0,1.0,2,small 24834 blk 95% nnz P64; large 251 blk 5% nnz P64
+fem2d,128x64,True,1,,64.0,1.0,1,P64 (arena@P64 29108)
+fem2d,128x64,True,2,0.5,71.55155464963289,1.0,2,small 12542 blk 12% nnz P128; large 12543 blk 88% nnz P64
+fem2d,128x64,True,2,0.75,79.33973235893626,1.0,2,small 18813 blk 24% nnz P128; large 6272 blk 76% nnz P64
+fem2d,128x64,True,2,0.9,64.0,1.0,2,small 22576 blk 57% nnz P64; large 2509 blk 43% nnz P64
+fem2d,128x64,True,2,0.95,64.0,1.0,2,small 23830 blk 77% nnz P64; large 1255 blk 23% nnz P64
+fem2d,128x64,True,2,0.99,64.0,1.0,2,small 24834 blk 95% nnz P64; large 251 blk 5% nnz P64
+fem2d,256x32,False,1,,128.0,1.0,1,P128 (arena@P64 17300)
+fem2d,256x32,False,2,0.5,128.0,1.0,2,small 13739 blk 17% nnz P128; large 13740 blk 83% nnz P128
+fem2d,256x32,False,2,0.75,128.0,1.0,2,small 20609 blk 36% nnz P128; large 6870 blk 64% nnz P128
+fem2d,256x32,False,2,0.9,128.0,1.0,2,small 24731 blk 72% nnz P128; large 2748 blk 28% nnz P128
+fem2d,256x32,False,2,0.95,128.0,1.0,2,small 26105 blk 85% nnz P128; large 1374 blk 15% nnz P128
+fem2d,256x32,False,2,0.99,128.0,1.0,2,small 27204 blk 97% nnz P128; large 275 blk 3% nnz P128
+fem2d,256x32,True,1,,128.0,1.0,1,P128 (arena@P64 17300)
+fem2d,256x32,True,2,0.5,128.0,1.0,2,small 13739 blk 12% nnz P128; large 13740 blk 88% nnz P128
+fem2d,256x32,True,2,0.75,128.0,1.0,2,small 20609 blk 36% nnz P128; large 6870 blk 64% nnz P128
+fem2d,256x32,True,2,0.9,128.0,1.0,2,small 24731 blk 72% nnz P128; large 2748 blk 28% nnz P128
+fem2d,256x32,True,2,0.95,128.0,1.0,2,small 26105 blk 85% nnz P128; large 1374 blk 15% nnz P128
+fem2d,256x32,True,2,0.99,128.0,1.0,2,small 27204 blk 97% nnz P128; large 275 blk 3% nnz P128
+fem2d,256x64,False,1,,64.0,1.0,1,P64 (arena@P64 31860)
+fem2d,256x64,False,2,0.5,64.0,1.0,2,small 9183 blk 16% nnz P64; large 9183 blk 84% nnz P64
+fem2d,256x64,False,2,0.75,64.0,1.0,2,small 13774 blk 27% nnz P64; large 4592 blk 73% nnz P64
+fem2d,256x64,False,2,0.9,64.0,1.0,2,small 16529 blk 65% nnz P64; large 1837 blk 35% nnz P64
+fem2d,256x64,False,2,0.95,64.0,1.0,2,small 17447 blk 82% nnz P64; large 919 blk 18% nnz P64
+fem2d,256x64,False,2,0.99,64.0,1.0,2,small 18182 blk 96% nnz P64; large 184 blk 4% nnz P64
+fem2d,256x64,True,1,,64.0,1.0,1,P64 (arena@P64 31860)
+fem2d,256x64,True,2,0.5,70.54985718083837,1.0,2,small 9183 blk 10% nnz P128; large 9183 blk 90% nnz P64
+fem2d,256x64,True,2,0.75,79.51808247380512,1.0,2,small 13774 blk 24% nnz P128; large 4592 blk 76% nnz P64
+fem2d,256x64,True,2,0.9,64.0,1.0,2,small 16529 blk 65% nnz P64; large 1837 blk 35% nnz P64
+fem2d,256x64,True,2,0.95,64.0,1.0,2,small 17447 blk 82% nnz P64; large 919 blk 18% nnz P64
+fem2d,256x64,True,2,0.99,64.0,1.0,2,small 18182 blk 96% nnz P64; large 184 blk 4% nnz P64
+fem2d,32x32,False,1,,128.0,1.0,1,P128 (arena@P64 12628)
+fem2d,32x32,False,2,0.5,128.0,1.0,2,small 33961 blk 28% nnz P128; large 33961 blk 72% nnz P128
+fem2d,32x32,False,2,0.75,128.0,1.0,2,small 50941 blk 42% nnz P128; large 16981 blk 58% nnz P128
+fem2d,32x32,False,2,0.9,128.0,1.0,2,small 61129 blk 58% nnz P128; large 6793 blk 42% nnz P128
+fem2d,32x32,False,2,0.95,128.0,1.0,2,small 64525 blk 77% nnz P128; large 3397 blk 23% nnz P128
+fem2d,32x32,False,2,0.99,128.0,1.0,2,small 67242 blk 95% nnz P128; large 680 blk 5% nnz P128
+fem2d,32x32,True,1,,128.0,1.0,1,P128 (arena@P64 12628)
+fem2d,32x32,True,2,0.5,128.0,1.0,2,small 33961 blk 18% nnz P128; large 33961 blk 82% nnz P128
+fem2d,32x32,True,2,0.75,128.0,1.0,2,small 50941 blk 36% nnz P128; large 16981 blk 64% nnz P128
+fem2d,32x32,True,2,0.9,128.0,1.0,2,small 61129 blk 58% nnz P128; large 6793 blk 42% nnz P128
+fem2d,32x32,True,2,0.95,128.0,1.0,2,small 64525 blk 77% nnz P128; large 3397 blk 23% nnz P128
+fem2d,32x32,True,2,0.99,128.0,1.0,2,small 67242 blk 95% nnz P128; large 680 blk 5% nnz P128
+fem2d,64x32,False,1,,128.0,1.0,1,P128 (arena@P64 14324)
+fem2d,64x32,False,2,0.5,128.0,1.0,2,small 24531 blk 24% nnz P128; large 24531 blk 76% nnz P128
+fem2d,64x32,False,2,0.75,128.0,1.0,2,small 36796 blk 35% nnz P128; large 12266 blk 65% nnz P128
+fem2d,64x32,False,2,0.9,128.0,1.0,2,small 44155 blk 61% nnz P128; large 4907 blk 39% nnz P128
+fem2d,64x32,False,2,0.95,128.0,1.0,2,small 46608 blk 80% nnz P128; large 2454 blk 20% nnz P128
+fem2d,64x32,False,2,0.99,128.0,1.0,2,small 48571 blk 96% nnz P128; large 491 blk 4% nnz P128
+fem2d,64x32,True,1,,128.0,1.0,1,P128 (arena@P64 14324)
+fem2d,64x32,True,2,0.5,128.0,1.0,2,small 24531 blk 15% nnz P128; large 24531 blk 85% nnz P128
+fem2d,64x32,True,2,0.75,128.0,1.0,2,small 36796 blk 31% nnz P128; large 12266 blk 69% nnz P128
+fem2d,64x32,True,2,0.9,128.0,1.0,2,small 44155 blk 61% nnz P128; large 4907 blk 39% nnz P128
+fem2d,64x32,True,2,0.95,128.0,1.0,2,small 46608 blk 80% nnz P128; large 2454 blk 20% nnz P128
+fem2d,64x32,True,2,0.99,128.0,1.0,2,small 48571 blk 96% nnz P128; large 491 blk 4% nnz P128
+fem2d_permuted,128x32,False,1,,128.0,1.0,1,P128 (arena@P64 15892)
+fem2d_permuted,128x32,False,2,0.5,128.0,1.0,2,small 17958 blk 20% nnz P128; large 17959 blk 80% nnz P128
+fem2d_permuted,128x32,False,2,0.75,128.0,1.0,2,small 26937 blk 32% nnz P128; large 8980 blk 68% nnz P128
+fem2d_permuted,128x32,False,2,0.9,128.0,1.0,2,small 32325 blk 67% nnz P128; large 3592 blk 33% nnz P128
+fem2d_permuted,128x32,False,2,0.95,128.0,1.0,2,small 34121 blk 83% nnz P128; large 1796 blk 17% nnz P128
+fem2d_permuted,128x32,False,2,0.99,128.0,1.0,2,small 35557 blk 96% nnz P128; large 360 blk 4% nnz P128
+fem2d_permuted,128x32,True,1,,128.0,1.0,1,P128 (arena@P64 15892)
+fem2d_permuted,128x32,True,2,0.5,128.0,1.0,2,small 17958 blk 13% nnz P128; large 17959 blk 87% nnz P128
+fem2d_permuted,128x32,True,2,0.75,128.0,1.0,2,small 26937 blk 30% nnz P128; large 8980 blk 70% nnz P128
+fem2d_permuted,128x32,True,2,0.9,128.0,1.0,2,small 32325 blk 67% nnz P128; large 3592 blk 33% nnz P128
+fem2d_permuted,128x32,True,2,0.95,128.0,1.0,2,small 34121 blk 83% nnz P128; large 1796 blk 17% nnz P128
+fem2d_permuted,128x32,True,2,0.99,128.0,1.0,2,small 35557 blk 96% nnz P128; large 360 blk 4% nnz P128
+fem2d_permuted,128x64,False,1,,64.0,1.0,1,P64 (arena@P64 29204)
+fem2d_permuted,128x64,False,2,0.5,64.0,1.0,2,small 12505 blk 19% nnz P64; large 12505 blk 81% nnz P64
+fem2d_permuted,128x64,False,2,0.75,64.0,1.0,2,small 18757 blk 30% nnz P64; large 6253 blk 70% nnz P64
+fem2d_permuted,128x64,False,2,0.9,64.0,1.0,2,small 22509 blk 57% nnz P64; large 2501 blk 43% nnz P64
+fem2d_permuted,128x64,False,2,0.95,64.0,1.0,2,small 23759 blk 78% nnz P64; large 1251 blk 22% nnz P64
+fem2d_permuted,128x64,False,2,0.99,64.0,1.0,2,small 24759 blk 95% nnz P64; large 251 blk 5% nnz P64
+fem2d_permuted,128x64,True,1,,64.0,1.0,1,P64 (arena@P64 29204)
+fem2d_permuted,128x64,True,2,0.5,71.61067292025987,1.0,2,small 12505 blk 12% nnz P128; large 12505 blk 88% nnz P64
+fem2d_permuted,128x64,True,2,0.75,79.33790536441042,1.0,2,small 18757 blk 24% nnz P128; large 6253 blk 76% nnz P64
+fem2d_permuted,128x64,True,2,0.9,64.0,1.0,2,small 22509 blk 57% nnz P64; large 2501 blk 43% nnz P64
+fem2d_permuted,128x64,True,2,0.95,64.0,1.0,2,small 23759 blk 78% nnz P64; large 1251 blk 22% nnz P64
+fem2d_permuted,128x64,True,2,0.99,64.0,1.0,2,small 24759 blk 95% nnz P64; large 251 blk 5% nnz P64
+fem2d_permuted,256x32,False,1,,128.0,1.0,1,P128 (arena@P64 17300)
+fem2d_permuted,256x32,False,2,0.5,128.0,1.0,2,small 13744 blk 17% nnz P128; large 13745 blk 83% nnz P128
+fem2d_permuted,256x32,False,2,0.75,128.0,1.0,2,small 20616 blk 36% nnz P128; large 6873 blk 64% nnz P128
+fem2d_permuted,256x32,False,2,0.9,128.0,1.0,2,small 24740 blk 72% nnz P128; large 2749 blk 28% nnz P128
+fem2d_permuted,256x32,False,2,0.95,128.0,1.0,2,small 26114 blk 85% nnz P128; large 1375 blk 15% nnz P128
+fem2d_permuted,256x32,False,2,0.99,128.0,1.0,2,small 27214 blk 97% nnz P128; large 275 blk 3% nnz P128
+fem2d_permuted,256x32,True,1,,128.0,1.0,1,P128 (arena@P64 17300)
+fem2d_permuted,256x32,True,2,0.5,128.0,1.0,2,small 13744 blk 12% nnz P128; large 13745 blk 88% nnz P128
+fem2d_permuted,256x32,True,2,0.75,128.0,1.0,2,small 20616 blk 36% nnz P128; large 6873 blk 64% nnz P128
+fem2d_permuted,256x32,True,2,0.9,128.0,1.0,2,small 24740 blk 72% nnz P128; large 2749 blk 28% nnz P128
+fem2d_permuted,256x32,True,2,0.95,128.0,1.0,2,small 26114 blk 85% nnz P128; large 1375 blk 15% nnz P128
+fem2d_permuted,256x32,True,2,0.99,128.0,1.0,2,small 27214 blk 97% nnz P128; large 275 blk 3% nnz P128
+fem2d_permuted,256x64,False,1,,64.0,1.0,1,P64 (arena@P64 31764)
+fem2d_permuted,256x64,False,2,0.5,64.0,1.0,2,small 9182 blk 17% nnz P64; large 9182 blk 83% nnz P64
+fem2d_permuted,256x64,False,2,0.75,64.0,1.0,2,small 13773 blk 27% nnz P64; large 4591 blk 73% nnz P64
+fem2d_permuted,256x64,False,2,0.9,64.0,1.0,2,small 16527 blk 65% nnz P64; large 1837 blk 35% nnz P64
+fem2d_permuted,256x64,False,2,0.95,64.0,1.0,2,small 17445 blk 82% nnz P64; large 919 blk 18% nnz P64
+fem2d_permuted,256x64,False,2,0.99,64.0,1.0,2,small 18180 blk 96% nnz P64; large 184 blk 4% nnz P64
+fem2d_permuted,256x64,True,1,,64.0,1.0,1,P64 (arena@P64 31764)
+fem2d_permuted,256x64,True,2,0.5,70.50776131816292,1.0,2,small 9182 blk 10% nnz P128; large 9182 blk 90% nnz P64
+fem2d_permuted,256x64,True,2,0.75,79.45341504816312,1.0,2,small 13773 blk 24% nnz P128; large 4591 blk 76% nnz P64
+fem2d_permuted,256x64,True,2,0.9,64.0,1.0,2,small 16527 blk 65% nnz P64; large 1837 blk 35% nnz P64
+fem2d_permuted,256x64,True,2,0.95,64.0,1.0,2,small 17445 blk 82% nnz P64; large 919 blk 18% nnz P64
+fem2d_permuted,256x64,True,2,0.99,64.0,1.0,2,small 18180 blk 96% nnz P64; large 184 blk 4% nnz P64
+fem2d_permuted,32x32,False,1,,128.0,1.0,1,P128 (arena@P64 12628)
+fem2d_permuted,32x32,False,2,0.5,128.0,1.0,2,small 33980 blk 28% nnz P128; large 33981 blk 72% nnz P128
+fem2d_permuted,32x32,False,2,0.75,128.0,1.0,2,small 50970 blk 42% nnz P128; large 16991 blk 58% nnz P128
+fem2d_permuted,32x32,False,2,0.9,128.0,1.0,2,small 61164 blk 58% nnz P128; large 6797 blk 42% nnz P128
+fem2d_permuted,32x32,False,2,0.95,128.0,1.0,2,small 64562 blk 77% nnz P128; large 3399 blk 23% nnz P128
+fem2d_permuted,32x32,False,2,0.99,128.0,1.0,2,small 67281 blk 95% nnz P128; large 680 blk 5% nnz P128
+fem2d_permuted,32x32,True,1,,128.0,1.0,1,P128 (arena@P64 12628)
+fem2d_permuted,32x32,True,2,0.5,128.0,1.0,2,small 33980 blk 18% nnz P128; large 33981 blk 82% nnz P128
+fem2d_permuted,32x32,True,2,0.75,128.0,1.0,2,small 50970 blk 36% nnz P128; large 16991 blk 64% nnz P128
+fem2d_permuted,32x32,True,2,0.9,128.0,1.0,2,small 61164 blk 58% nnz P128; large 6797 blk 42% nnz P128
+fem2d_permuted,32x32,True,2,0.95,128.0,1.0,2,small 64562 blk 77% nnz P128; large 3399 blk 23% nnz P128
+fem2d_permuted,32x32,True,2,0.99,128.0,1.0,2,small 67281 blk 95% nnz P128; large 680 blk 5% nnz P128
+fem2d_permuted,64x32,False,1,,128.0,1.0,1,P128 (arena@P64 14228)
+fem2d_permuted,64x32,False,2,0.5,128.0,1.0,2,small 24493 blk 24% nnz P128; large 24494 blk 76% nnz P128
+fem2d_permuted,64x32,False,2,0.75,128.0,1.0,2,small 36740 blk 35% nnz P128; large 12247 blk 65% nnz P128
+fem2d_permuted,64x32,False,2,0.9,128.0,1.0,2,small 44088 blk 61% nnz P128; large 4899 blk 39% nnz P128
+fem2d_permuted,64x32,False,2,0.95,128.0,1.0,2,small 46537 blk 80% nnz P128; large 2450 blk 20% nnz P128
+fem2d_permuted,64x32,False,2,0.99,128.0,1.0,2,small 48497 blk 96% nnz P128; large 490 blk 4% nnz P128
+fem2d_permuted,64x32,True,1,,128.0,1.0,1,P128 (arena@P64 14228)
+fem2d_permuted,64x32,True,2,0.5,128.0,1.0,2,small 24493 blk 15% nnz P128; large 24494 blk 85% nnz P128
+fem2d_permuted,64x32,True,2,0.75,128.0,1.0,2,small 36740 blk 31% nnz P128; large 12247 blk 69% nnz P128
+fem2d_permuted,64x32,True,2,0.9,128.0,1.0,2,small 44088 blk 61% nnz P128; large 4899 blk 39% nnz P128
+fem2d_permuted,64x32,True,2,0.95,128.0,1.0,2,small 46537 blk 80% nnz P128; large 2450 blk 20% nnz P128
+fem2d_permuted,64x32,True,2,0.99,128.0,1.0,2,small 48497 blk 96% nnz P128; large 490 blk 4% nnz P128
+roadnet,128x32,False,1,,128.0,1.0,1,P128 (arena@P64 10150)
+roadnet,128x32,False,2,0.5,128.0,1.0,2,small 72956 blk 15% nnz P128; large 72956 blk 85% nnz P128
+roadnet,128x32,False,2,0.75,128.0,1.0,2,small 109434 blk 45% nnz P128; large 36478 blk 55% nnz P128
+roadnet,128x32,False,2,0.9,128.0,1.0,2,small 131320 blk 75% nnz P128; large 14592 blk 25% nnz P128
+roadnet,128x32,False,2,0.95,128.0,1.0,2,small 138616 blk 87% nnz P128; large 7296 blk 13% nnz P128
+roadnet,128x32,False,2,0.99,128.0,1.0,2,small 144452 blk 97% nnz P128; large 1460 blk 3% nnz P128
+roadnet,128x32,True,1,,128.0,1.0,1,P128 (arena@P64 10150)
+roadnet,128x32,True,2,0.5,128.0,1.0,2,small 72956 blk 15% nnz P128; large 72956 blk 85% nnz P128
+roadnet,128x32,True,2,0.75,128.0,1.0,2,small 109434 blk 46% nnz P128; large 36478 blk 54% nnz P128
+roadnet,128x32,True,2,0.9,128.0,1.0,2,small 131320 blk 76% nnz P128; large 14592 blk 24% nnz P128
+roadnet,128x32,True,2,0.95,128.0,1.0,2,small 138616 blk 87% nnz P128; large 7296 blk 13% nnz P128
+roadnet,128x32,True,2,0.99,128.0,1.0,2,small 144452 blk 97% nnz P128; large 1460 blk 3% nnz P128
+roadnet,128x64,False,1,,64.0,1.0,1,P64 (arena@P64 19106)
+roadnet,128x64,False,2,0.5,64.0,1.0,2,small 42968 blk 16% nnz P64; large 42969 blk 84% nnz P64
+roadnet,128x64,False,2,0.75,64.0,1.0,2,small 64452 blk 43% nnz P64; large 21485 blk 57% nnz P64
+roadnet,128x64,False,2,0.9,64.0,1.0,2,small 77343 blk 73% nnz P64; large 8594 blk 27% nnz P64
+roadnet,128x64,False,2,0.95,64.0,1.0,2,small 81640 blk 85% nnz P64; large 4297 blk 15% nnz P64
+roadnet,128x64,False,2,0.99,64.0,1.0,2,small 85077 blk 97% nnz P64; large 860 blk 3% nnz P64
+roadnet,128x64,True,1,,64.0,1.0,1,P64 (arena@P64 19106)
+roadnet,128x64,True,2,0.5,71.62065830184441,1.0,2,small 42968 blk 12% nnz P128; large 42969 blk 88% nnz P64
+roadnet,128x64,True,2,0.75,90.06314758480359,1.0,2,small 64452 blk 41% nnz P128; large 21485 blk 59% nnz P64
+roadnet,128x64,True,2,0.9,110.43722652361434,1.0,2,small 77343 blk 73% nnz P128; large 8594 blk 27% nnz P64
+roadnet,128x64,True,2,0.95,64.0,1.0,2,small 81640 blk 86% nnz P64; large 4297 blk 14% nnz P64
+roadnet,128x64,True,2,0.99,64.0,1.0,2,small 85077 blk 97% nnz P64; large 860 blk 3% nnz P64
+roadnet,256x32,False,1,,128.0,1.0,1,P128 (arena@P64 11204)
+roadnet,256x32,False,2,0.5,128.0,1.0,2,small 59904 blk 16% nnz P128; large 59904 blk 84% nnz P128
+roadnet,256x32,False,2,0.75,128.0,1.0,2,small 89856 blk 51% nnz P128; large 29952 blk 49% nnz P128
+roadnet,256x32,False,2,0.9,128.0,1.0,2,small 107827 blk 78% nnz P128; large 11981 blk 22% nnz P128
+roadnet,256x32,False,2,0.95,128.0,1.0,2,small 113817 blk 89% nnz P128; large 5991 blk 11% nnz P128
+roadnet,256x32,False,2,0.99,128.0,1.0,2,small 118609 blk 98% nnz P128; large 1199 blk 2% nnz P128
+roadnet,256x32,True,1,,128.0,1.0,1,P128 (arena@P64 11204)
+roadnet,256x32,True,2,0.5,128.0,1.0,2,small 59904 blk 16% nnz P128; large 59904 blk 84% nnz P128
+roadnet,256x32,True,2,0.75,128.0,1.0,2,small 89856 blk 52% nnz P128; large 29952 blk 48% nnz P128
+roadnet,256x32,True,2,0.9,128.0,1.0,2,small 107827 blk 79% nnz P128; large 11981 blk 21% nnz P128
+roadnet,256x32,True,2,0.95,128.0,1.0,2,small 113817 blk 89% nnz P128; large 5991 blk 11% nnz P128
+roadnet,256x32,True,2,0.99,128.0,1.0,2,small 118609 blk 98% nnz P128; large 1199 blk 2% nnz P128
+roadnet,256x64,False,1,,64.0,1.0,1,P64 (arena@P64 20220)
+roadnet,256x64,False,2,0.5,64.0,1.0,2,small 34458 blk 15% nnz P64; large 34458 blk 85% nnz P64
+roadnet,256x64,False,2,0.75,64.0,1.0,2,small 51687 blk 47% nnz P64; large 17229 blk 53% nnz P64
+roadnet,256x64,False,2,0.9,64.0,1.0,2,small 62024 blk 76% nnz P64; large 6892 blk 24% nnz P64
+roadnet,256x64,False,2,0.95,64.0,1.0,2,small 65470 blk 87% nnz P64; large 3446 blk 13% nnz P64
+roadnet,256x64,False,2,0.99,64.0,1.0,2,small 68226 blk 97% nnz P64; large 690 blk 3% nnz P64
+roadnet,256x64,True,1,,64.0,1.0,1,P64 (arena@P64 20220)
+roadnet,256x64,True,2,0.5,72.09948314041924,1.0,2,small 34458 blk 13% nnz P128; large 34458 blk 87% nnz P64
+roadnet,256x64,True,2,0.75,93.25274530663891,1.0,2,small 51687 blk 46% nnz P128; large 17229 blk 54% nnz P64
+roadnet,256x64,True,2,0.9,64.0,1.0,2,small 62024 blk 77% nnz P64; large 6892 blk 23% nnz P64
+roadnet,256x64,True,2,0.95,64.0,1.0,2,small 65470 blk 88% nnz P64; large 3446 blk 12% nnz P64
+roadnet,256x64,True,2,0.99,64.0,1.0,2,small 68226 blk 97% nnz P64; large 690 blk 3% nnz P64
+roadnet,32x32,False,1,,128.0,1.0,1,P128 (arena@P64 9304)
+roadnet,32x32,False,2,0.5,128.0,1.0,2,small 140487 blk 17% nnz P128; large 140487 blk 83% nnz P128
+roadnet,32x32,False,2,0.75,128.0,1.0,2,small 210730 blk 37% nnz P128; large 70244 blk 63% nnz P128
+roadnet,32x32,False,2,0.9,128.0,1.0,2,small 252876 blk 66% nnz P128; large 28098 blk 34% nnz P128
+roadnet,32x32,False,2,0.95,128.0,1.0,2,small 266925 blk 81% nnz P128; large 14049 blk 19% nnz P128
+roadnet,32x32,False,2,0.99,128.0,1.0,2,small 278164 blk 96% nnz P128; large 2810 blk 4% nnz P128
+roadnet,32x32,True,1,,128.0,1.0,1,P128 (arena@P64 9304)
+roadnet,32x32,True,2,0.5,128.0,1.0,2,small 140487 blk 17% nnz P128; large 140487 blk 83% nnz P128
+roadnet,32x32,True,2,0.75,128.0,1.0,2,small 210730 blk 38% nnz P128; large 70244 blk 62% nnz P128
+roadnet,32x32,True,2,0.9,128.0,1.0,2,small 252876 blk 67% nnz P128; large 28098 blk 33% nnz P128
+roadnet,32x32,True,2,0.95,128.0,1.0,2,small 266925 blk 82% nnz P128; large 14049 blk 18% nnz P128
+roadnet,32x32,True,2,0.99,128.0,1.0,2,small 278164 blk 96% nnz P128; large 2810 blk 4% nnz P128
+roadnet,64x32,False,1,,128.0,1.0,1,P128 (arena@P64 9620)
+roadnet,64x32,False,2,0.5,128.0,1.0,2,small 93674 blk 15% nnz P128; large 93674 blk 85% nnz P128
+roadnet,64x32,False,2,0.75,128.0,1.0,2,small 140511 blk 42% nnz P128; large 46837 blk 58% nnz P128
+roadnet,64x32,False,2,0.9,128.0,1.0,2,small 168613 blk 72% nnz P128; large 18735 blk 28% nnz P128
+roadnet,64x32,False,2,0.95,128.0,1.0,2,small 177980 blk 85% nnz P128; large 9368 blk 15% nnz P128
+roadnet,64x32,False,2,0.99,128.0,1.0,2,small 185474 blk 97% nnz P128; large 1874 blk 3% nnz P128
+roadnet,64x32,True,1,,128.0,1.0,1,P128 (arena@P64 9620)
+roadnet,64x32,True,2,0.5,128.0,1.0,2,small 93674 blk 16% nnz P128; large 93674 blk 84% nnz P128
+roadnet,64x32,True,2,0.75,128.0,1.0,2,small 140511 blk 42% nnz P128; large 46837 blk 58% nnz P128
+roadnet,64x32,True,2,0.9,128.0,1.0,2,small 168613 blk 72% nnz P128; large 18735 blk 28% nnz P128
+roadnet,64x32,True,2,0.95,128.0,1.0,2,small 177980 blk 85% nnz P128; large 9368 blk 15% nnz P128
+roadnet,64x32,True,2,0.99,128.0,1.0,2,small 185474 blk 97% nnz P128; large 1874 blk 3% nnz P128

@@ -1,0 +1,9 @@
+inp,features,kernel,arm,median_ms,arena_bytes,num_blocks,nnz_per_block_p50,max_nnz_blk,max_active_blocks_per_sm,remainder_fraction
+syn_balanced,128,nnzflat,nf_p64_t512_f1,0.1952160000801086,18192,1534,192.0,256,3,0.0
+syn_balanced,128,rowseg,rs_p32_t128_f2,0.1206560023128986,6036,1534,192.0,256,12,0.0
+syn_balanced,512,nnzflat,nf_p64_t512_f1,0.6015200018882751,18192,1534,192.0,256,3,0.0
+syn_balanced,512,rowseg,rs_p64_t256_f2,0.3109119981527328,10132,1534,192.0,256,6,0.0
+syn_skewed,128,nnzflat,nf_p64_t256_f1,0.2022079974412918,18192,1534,192.0,256,5,0.0
+syn_skewed,128,rowseg,rs_p64_t256_f2,0.1243360005319118,10132,1534,192.0,256,6,0.0
+syn_skewed,512,nnzflat,nf_p64_t256_f1,0.6270719766616821,18192,1534,192.0,256,5,0.0
+syn_skewed,512,rowseg,rs_p64_t256_f2,0.3097279965877533,10132,1534,192.0,256,6,0.0

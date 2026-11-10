@@ -5,7 +5,19 @@ The three-allocation confirmation and reproduction details are in
 [TILE_EXPERIMENTS.md](experiments/2026-10-12_tile_optimization/TILE_EXPERIMENTS.md). The original design below is retained
 for provenance; these screens should not be rerun as pending work.
 
-## Next priority after confirmation
+## Completed — nnzflat investigation (2026-10-14)
+
+The [nnzflat report](experiments/2026-10-14_nnzflat/REPORT.md) closes the
+small-P/large-block/thread-count/FPT1/2 investigation. Across three independent
+RTX3090 allocations, screened nnzflat finalists lose to tuned rowseg in all
+38 comparisons and to the strongest measured direct cuSPARSE algorithm in
+all 37 comparisons. FPT2 has 25 confirmed losses versus FPT1 and 13 unresolved
+comparisons. More threads help some settings, but do not close the gap;
+small-P shared-atomic pressure and large-block resource costs remain limiting.
+No default changed. Further tuning of this shared-atomic nnzflat mapping is
+not pending; revisiting it would require a different accumulation mechanism.
+
+## Next priority — rowseg output writes
 
 Test coalesced output atomics while preserving the existing FPT computation.
 Compare the current and experimental writes at identical labels/P/FPT/slab,

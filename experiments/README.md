@@ -23,5 +23,8 @@ Plots are optional when a run has no useful figure.
 | 2026-10-08 | [Profiling panel](2026-10-08_profiling_panel/README.md) | Completed |
 | 2026-10-09 | [Full FPT sweep](2026-10-09_full_fpt/README.md) | Completed |
 | 2026-10-12 | [Tile and slab optimization](2026-10-12_tile_optimization/README.md) | Completed and replicated |
+| 2026-10-13 | [Eran FPT comparison](2026-10-13_eran_fpt/README.md) | Screening complete; independent confirmation in progress |
+| 2026-10-14 | [nnzflat: small P, large blocks and FPT1/2](2026-10-14_nnzflat/README.md) | Completed and confirmed: nnzflat not competitive; FPT2 a regression ([report](2026-10-14_nnzflat/REPORT.md)) |
 
-The [next experiment](../NEXT_EXPERIMENTS.md) tests the output-write path.
+The [next experiment](../NEXT_EXPERIMENTS.md) investigates nnzflat; the existing
+rowseg output-write follow-up remains recorded there.

@@ -1,0 +1,5 @@
+alloc,gpus,tasks,cells,measured,kineto_verified,nsys_only,unverified
+occupancy:alloc1,1,8,16,432,405,27,0
+occupancy:alloc2,4,8,16,432,382,50,0
+occupancy:alloc3,3,8,16,432,405,27,0
+occupancy:alloc4,1,1,2,54,54,0,0

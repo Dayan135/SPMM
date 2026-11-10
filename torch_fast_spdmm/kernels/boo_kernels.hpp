@@ -29,6 +29,31 @@ struct BOORowsegLaunchInfo {
 BOORowsegLaunchInfo boo_rowseg_launch_info(int max_nr, int max_nc, int max_nnz_blk,
                                            int features, int threads, int p);
 
+// nnzflat (row_seg=false) features per thread, 1 or 2, and implementation:
+// reference=true (default) launches the original FPT=1 boo_spmm_nnzflat_kernel;
+// reference=false launches boo_spmm_nnzflat_fpt_kernel<..., FPT>. A reference
+// FPT=2 request is rejected at launch. Process-wide; read at every launch.
+void set_boo_nnzflat_fpt(int fpt);
+int get_boo_nnzflat_fpt();
+void set_boo_nnzflat_reference(bool reference);
+bool get_boo_nnzflat_reference();
+
+// Exactly what launch_boo_spmm(row_seg=false) would launch under the current
+// nnzflat settings: same selector, effective P and arena (global maxima), the
+// selected kernel's attributes and its occupancy at that arena. The slab is
+// always BOO_FEAT_BLOCK for nnzflat; feat_block_setting reports the process-wide
+// rowseg slab setting so callers can detect a mismatch. Throws like the launcher.
+struct BOONnzflatLaunchInfo {
+    int requested_p, effective_p, threads, fpt, scalar_bytes;
+    bool reference;
+    int feat_block, feat_block_setting, grid_x, grid_y, grid_z, arena_bytes;
+    int num_regs, local_size_bytes, static_shared_bytes, max_threads_per_block;
+    int max_dynamic_shared_bytes, max_active_blocks_per_sm, shared_optin_bytes;
+};
+BOONnzflatLaunchInfo boo_nnzflat_launch_info(int num_blocks, int batch_size, int max_nr, int max_nc,
+                                             int max_nnz_blk, int features, int threads, int p,
+                                             int scalar_bytes);
+
 // Launch the BOO SpMM kernel.  See BOO_FORMAT.md sec. 6.
 //
 // `threads` in {128, 256, 512} and `p` in {8, 16, 32} are swept, not fixed:

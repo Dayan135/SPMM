@@ -1,0 +1,10 @@
+{
+  "matrix_sha256": "c19ae8d92a4bc7d32cab77e0bc7dd1bd8af1217bc11696fbd44269826b4e3267",
+  "host": {
+    "node": "ise-cpu-intl-10.auth.ad.bgu.ac.il",
+    "cpu_model": "Intel(R) Xeon(R) CPU E5-2680 v2 @ 2.80GHz",
+    "cpus": 4,
+    "slurm_job_id": "24057296"
+  },
+  "seconds": 52.33063769340515
+}

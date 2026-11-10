@@ -1,0 +1,15 @@
+{
+  "cols": 1048576,
+  "host": {
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "cpus": 6,
+    "node": "ise-cpu256-16.auth.ad.bgu.ac.il",
+    "slurm_job_id": "23950908"
+  },
+  "matrix": "generated/diag_b0.1_n1048576",
+  "matrix_sha256": "e3198bdaa3c6cc6e851ce06390b14aa038bb80b97a0248529732fca384d9b168",
+  "nnz": 6710886,
+  "rows": 1048576,
+  "seconds": 342.01286688633263,
+  "square_checks": []
+}

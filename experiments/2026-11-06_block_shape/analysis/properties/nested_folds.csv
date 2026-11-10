@@ -1,0 +1,9 @@
+input,selected_model,gain_selected_model,log_mae,log_rmse,accuracy,balanced_accuracy,precision,recall,predicted_gains,actual_gains
+diag_b1.0,x+capacity_p64,x+busiest_f2_rel,0.103170729,0.139155153,0.8,0.5,,0,0,2
+diag_dd0.05,capacity_p64,x+read_fraction,0.0885590129,0.0941244176,0.214285714,0.5,,0,0,11
+diag_skewed,capacity_p64,x+busiest_f2_rel,0.0389002052,0.0463169759,1,,,,0,0
+fem2d,capacity_p64,x+busiest_f2_rel,0.0884562819,0.102230254,0.714285714,0.6875,0.75,0.5,4,6
+fem2d_permuted,x+busiest_f2_rel,x+busiest_f2_rel,0.18462884,0.191706376,0.357142857,0.55,1,0.1,1,10
+pwtk,capacity_p64,x+busiest_f2_rel,0.0949482997,0.111515193,0.7,0.388888889,0,0,2,1
+roadnet,capacity_p64,x+busiest_f2_rel,0.0985618807,0.108475678,0.5,0.6875,1,0.375,3,8
+webbase,capacity_p64,gate,0.267963424,0.333566415,0.375,,0,,10,0

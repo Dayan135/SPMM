@@ -41,6 +41,7 @@ import csv
 import json
 import math
 import os
+import random
 from pathlib import Path
 import socket
 import statistics
@@ -284,23 +285,61 @@ def build_cell(torch, core, spmm, csr, x_cpu, labeling, args, limit):
                             _event_timer(torch, lambda: torch.sparse.mm(a, x))))
 
     boo = labeling['boo']
-    p, arena, fits = feature_tile(boo, features, limit)
+    requested_p = getattr(args, 'fixed_p', None)
+    if requested_p is None:
+        p, arena, fits = feature_tile(boo, features, limit)
+        launch_by_fpt = {}
+    else:
+        from benchmark import tiles_common as tc
+        p = requested_p
+        launch_by_fpt = {}
+        for fpt in args.boo_fpt:
+            launch_by_fpt[fpt] = tc.launch_info(
+                core, boo, features, args.threads, p, fpt,
+                getattr(args, 'feat_block', 512), limit)
+        arena = max((entry[0] or {}).get('arena_bytes', 0)
+                    for entry in launch_by_fpt.values())
+        fits = any(reason is None for _, reason in launch_by_fpt.values())
     boo_config = dict(base, **labeling['config'], algorithm='boo', p=p, arena_bytes=arena,
                       shared_limit_bytes=limit)
     boo_cpp = None
-    if not fits:
+    if not fits and requested_p is None:
         skip(dict(boo_config, config='boo', scope='full_call', coords='original'),
              f'shared-memory arena {arena} B exceeds device limit {limit} B even at p={p}')
-    else:
+    if not fits and requested_p is not None:
+        for fpt, (_, reason) in launch_by_fpt.items():
+            skip(dict(boo_config, config=_boo_name(fpt), features_per_thread=fpt,
+                      scope='full_call', coords='original'), reason)
+    if fits:
         start = time.perf_counter()
         boo.to('cuda')
         torch.cuda.synchronize()
         prep['boo_staging_ms'] = 1000 * (time.perf_counter() - start)
         for fpt in args.boo_fpt:
+            launch, reason = launch_by_fpt.get(fpt, (None, None))
+            if reason:
+                skip(dict(boo_config, config=_boo_name(fpt), features_per_thread=fpt,
+                          scope='full_call', coords='original'), reason)
+                continue
             call = (lambda fpt=fpt: spmm.boo_matmul(boo, x, threads=args.threads, p=p, row_seg=True,
                                                     csr_mode=0, launch_mode='auto',
                                                     features_per_thread=fpt))
+            if requested_p is not None:
+                from benchmark import tiles_common as tc
+                def configured_call(call=call, fpt=fpt):
+                    tc.apply_settings(core, fpt, args.feat_block)
+                    return call()
+                call = configured_call
+            verification = ''
+            if getattr(args, 'verify_launch', False):
+                verification = tc.verify_call(torch, call, launch)
+                if verification != 'verified':
+                    raise RuntimeError(f'{_boo_name(fpt)}: launch {verification}')
             variants.append(Variant(dict(boo_config, config=_boo_name(fpt), features_per_thread=fpt,
+                                         effective_p=launch.get('effective_p') if launch else p,
+                                         feat_block=launch.get('feat_block') if launch else None,
+                                         grid_z=launch.get('grid_z') if launch else None,
+                                         launch_verified=verification,
                                          scope='full_call', coords='original',
                                          includes_permutation=False),
                                     call, _event_timer(torch, call)))
@@ -345,7 +384,7 @@ def build_cell(torch, core, spmm, csr, x_cpu, labeling, args, limit):
         optional.append(('direct', alg, False))
         if permuted:
             optional.append(('direct', alg, True))
-        if i == 0 and boo_cpp is not None:
+        if i == 0 and boo_cpp is not None and requested_p is None:
             optional.append(('boo_cpp', None, None))
     if permuted:
         optional.append(('restore', None, None))
@@ -431,7 +470,8 @@ def build_cell(torch, core, spmm, csr, x_cpu, labeling, args, limit):
     return variants, unsupported, prep
 
 
-def measure(torch, variants, reference, warmup, repeats, seed):
+def measure(torch, variants, reference, warmup, repeats, seed, order_mode='rotation',
+            order_seed=None):
     from benchmark.bench_spmm import round_orders
     unsupported = []
     kept = []
@@ -459,14 +499,24 @@ def measure(torch, variants, reference, warmup, repeats, seed):
             v.run()
     torch.cuda.synchronize()
     samples = []
-    for repeat, order in enumerate(round_orders(len(kept), repeats, seed)):
+    if order_seed is None:
+        order_seed = seed
+    if order_mode == 'shuffle':
+        orders = [random.Random(order_seed * 1000003 + r).sample(
+            range(len(kept)), len(kept)) for r in range(repeats)]
+    else:
+        orders = round_orders(len(kept), repeats, order_seed)
+    previous = ''
+    for repeat, order in enumerate(orders):
         for position, index in enumerate(order):
             v = kept[index][0]
             ms = v.timed()
             if not math.isfinite(ms) or ms <= 0:
                 raise RuntimeError(f"invalid elapsed time for {v.config['config']}: {ms}")
             samples.append(dict(config=v.config['config'], repeat=repeat + 1, position=position,
-                                time_ms=ms))
+                                previous=previous, order_mode=order_mode,
+                                order_seed=order_seed, time_ms=ms))
+            previous = v.config['config']
     summaries = []
     for v, check in kept:
         values = [s['time_ms'] for s in samples if s['config'] == v.config['config']]
@@ -475,7 +525,8 @@ def measure(torch, variants, reference, warmup, repeats, seed):
                               min_ms=min(values), max_ms=max(values),
                               p25_ms=float(np.percentile(values, 25)),
                               p75_ms=float(np.percentile(values, 75)),
-                              repeats=repeats, warmup=warmup))
+                              repeats=repeats, warmup=warmup, order_mode=order_mode,
+                              order_seed=order_seed))
     _speedups(summaries)
     return summaries, samples, unsupported
 
@@ -516,8 +567,9 @@ def matmul_phase(args):
     metadata = source_metadata(Path(__file__).resolve().parents[3])
     metadata.update(arguments={k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
                     status='running', completed_cells=0, matrices={},
-                    timing=('interleaved seeded-rotation order across all variants of one '
-                            '(matrix, F, labeling) cell; scope column names the interval'),
+                    timing=(f'interleaved seeded-{getattr(args, "order_mode", "rotation")} order '
+                            'across all variants of one (matrix, F, labeling) cell; '
+                            'scope column names the interval'),
                     validation=('float64 scipy reference on CPU; per-row bound (2(k_i+1)+2)u*(|A||X|)_i; '
                                 'reordered outputs compared to reference rows pr'),
                     boo_mapping='BOO consumes original-coordinate X/Y; row_ids/col_ids apply the '
@@ -596,7 +648,9 @@ def matmul_phase(args):
                         variants, unsupported, prep = build_cell(torch, core, spmm, csr, x_cpu,
                                                                  labeling, args, limit)
                         summaries, samples, more = measure(torch, variants, reference,
-                                                           args.warmup, args.repeats, args.seed)
+                                                           args.warmup, args.repeats, args.seed,
+                                                           getattr(args, 'order_mode', 'rotation'),
+                                                           getattr(args, 'order_seed', args.seed))
                         extra = dict(common, labeling=labeling['config']['labeling'], **prep)
                         rows_out = [dict(extra, **s) for s in summaries + unsupported + more]
                         append_csv_rows(args.out, rows_out,
@@ -638,7 +692,8 @@ SUMMARY_FIELDS = (
     'supported', 'unsupported_reason', 'duplicate_of', 'correctness', 'max_abs_error',
     'max_scaled_error', 'bound_violations', 'median_ms', 'mean_ms', 'min_ms', 'max_ms', 'p25_ms',
     'p75_ms', 'repeats', 'warmup', 'speedup_vs_torch_csr', 'speedup_vs_best_direct_same_scope',
-    'p', 'threads', 'features_per_thread', 'launch_mode', 'arena_bytes', 'shared_limit_bytes', 'small_block_policy',
+    'p', 'effective_p', 'feat_block', 'grid_z', 'threads', 'features_per_thread', 'launch_mode',
+    'arena_bytes', 'shared_limit_bytes', 'launch_verified', 'small_block_policy',
     'small_block_threshold', 'nz_order', 'feasible_first', 'execution_path', 'num_blocks',
     'compressed_fraction', 'remainder_nnz', 'x_loads', 'y_writes', 'max_nnz_blk', 'num_row_groups',
     'num_col_groups', 'row_group_mean', 'row_group_max', 'col_group_mean', 'col_group_max',
@@ -646,9 +701,10 @@ SUMMARY_FIELDS = (
     'perm_staging_ms', 'plan_build_ms', 'workspace_bytes', 'preprocess_status', 'cusparse_version',
     'cusparse_header_version',
     'reference_ms', 'label_sha256', 'labels_path', 'cluster_node', 'cluster_cpu', 'cluster_cpus',
-    'matrix_sha256', 'x_sha256', 'seed', 'explicit_zeros', 'dtype', 'index_dtype')
+    'matrix_sha256', 'x_sha256', 'seed', 'explicit_zeros', 'dtype', 'index_dtype',
+    'order_mode', 'order_seed')
 SAMPLE_FIELDS = ('matrix', 'features', 'labeling', 'config', 'repeat', 'position', 'time_ms',
-                 'matrix_sha256', 'x_sha256')
+                 'matrix_sha256', 'x_sha256', 'previous', 'order_mode', 'order_seed')
 
 
 def append_csv_rows(out, summaries, samples):

@@ -79,6 +79,25 @@ void set_boo_feat_block(int width) {
 
 int get_boo_feat_block() { return g_boo_feat_block; }
 
+// nnzflat (row_seg=false) features per thread and implementation. FPT=1 with
+// reference=true is the original boo_spmm_nnzflat_kernel (the default, so
+// existing callers are unchanged); reference=false selects the FPT template,
+// whose FPT=1 specialization is the identical-work control. FPT=2 exists only
+// in the template; asking for a reference FPT=2 is rejected at launch.
+// Process-wide like the rowseg settings; boo_matmul sets both at every call.
+static int g_boo_nnzflat_fpt = 1;
+static bool g_boo_nnzflat_reference = true;
+
+void set_boo_nnzflat_fpt(int fpt) {
+    if (fpt != 1 && fpt != 2)
+        throw std::invalid_argument("BOO nnzflat features_per_thread must be 1 or 2");
+    g_boo_nnzflat_fpt = fpt;
+}
+
+int get_boo_nnzflat_fpt() { return g_boo_nnzflat_fpt; }
+void set_boo_nnzflat_reference(bool reference) { g_boo_nnzflat_reference = reference; }
+bool get_boo_nnzflat_reference() { return g_boo_nnzflat_reference; }
+
 template <typename scalar_t, int N> struct BooVec;
 template <> struct BooVec<float, 1>  { using type = float; };
 template <> struct BooVec<float, 2>  { using type = float2; };
@@ -203,6 +222,155 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_kern
         // assigned to it, so every slot is live by construction. That is
         // SHOW_TO_ERAN.md sec. 4's row-compaction, free from the format.
         // atomicAdd because a row's result is split across its block-row.
+        for (uint32_t i = tx; i < n_r * P; i += THREADS) {
+            const uint32_t global_f = base_f + (i & P_MASK);
+            if (global_f < features) {
+                atomicAdd(&Y[y_batch_base
+                             + static_cast<size_t>(sh_row_ids[i >> P_LOG2]) * features
+                             + global_f],
+                          smem_Y[i]);
+            }
+        }
+        __syncthreads();
+    }
+}
+
+
+// ===========================================================================
+// nnzflat with features per thread (FPT) -- experiment template
+// ===========================================================================
+//
+// The kernel above stays the FPT=1 reference. This template changes Step B's
+// work mapping only: each work item is (nonzero, FPT adjacent features), so a
+// tile has n_nz * P/FPT items. The item decodes its row/column and loads its
+// value once, reads FPT features of smem_X (one aligned float2/double2 load
+// for FPT=2), then issues FPT scalar shared atomics into smem_Y -- FPT=2 is
+// not a vector atomic. Sparse staging, X staging, smem_Y zeroing, the flush
+// and every barrier are unchanged. FPT=1 is the identical-work control: same
+// expression, same arena layout as the reference kernel.
+//
+// FPT=2 moves smem_X to a 16-byte boundary (as rowseg does); the <= 12 bytes
+// of padding come out of the arena's 16-byte slack. P is a multiple of 8 and
+// f0 is even, so every float2/double2 read stays naturally aligned, and
+// smem_Y (smem_X + max_nc*P) keeps the 16-byte alignment.
+//
+// Odd feature counts: the second feature of the last pair reads the zero
+// padding of smem_X and accumulates into a padded smem_Y slot that the
+// guarded flush never writes, exactly like the reference kernel's padding.
+
+template <typename scalar_t, int THREADS, int P_LOG2, int FPT>
+__global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_fpt_kernel(
+    const uint32_t num_blocks,
+    const uint32_t features,
+    const uint32_t batch_size,
+    const uint32_t rows,
+    const uint32_t cols,
+    const uint32_t max_nr,
+    const uint32_t max_nc,
+    const uint32_t max_nnz_blk,
+    const int32_t* __restrict__ row_grp_ptr,
+    const int32_t* __restrict__ row_ids,
+    const int32_t* __restrict__ col_grp_ptr,
+    const int32_t* __restrict__ col_ids,
+    const int32_t* __restrict__ blk_row_grp,
+    const int32_t* __restrict__ blk_col_grp,
+    const int32_t* __restrict__ blk_nz_ptr,
+    const uint8_t* __restrict__ blk_shift,
+    const uint16_t* __restrict__ nz_idx,
+    const scalar_t* __restrict__ nz_val,
+    const scalar_t* __restrict__ X,
+    scalar_t* __restrict__ Y,
+    const int32_t* __restrict__ block_row_ptr,
+    const int32_t* __restrict__ row_starts
+) {
+    static_assert(FPT == 1 || FPT == 2, "nnzflat FPT must be 1 or 2");
+    static_assert(FPT <= (1 << P_LOG2), "FPT must not exceed P");
+    constexpr uint32_t P = 1u << P_LOG2;
+    constexpr uint32_t P_MASK = P - 1u;
+    constexpr uint32_t FPT_LOG2 = FPT == 2 ? 1u : 0u;
+    constexpr uint32_t LANES_LOG2 = P_LOG2 - FPT_LOG2;   // work items per nonzero
+    constexpr uint32_t LANES_MASK = (1u << LANES_LOG2) - 1u;
+    constexpr uint32_t X_ALIGN = FPT > 1 ? 16u / sizeof(scalar_t) : 1u;
+
+    const uint32_t b_idx = blockIdx.x;
+    const uint32_t batch_idx = blockIdx.y;
+    const uint32_t feat_slab = blockIdx.z;
+    const uint32_t tx = threadIdx.x;
+
+    if (b_idx >= num_blocks || batch_idx >= batch_size) return;
+
+    extern __shared__ __align__(16) char boo_smem_raw[];
+    scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);
+    scalar_t* smem_X = sh_nz_val + (max_nnz_blk + X_ALIGN - 1) / X_ALIGN * X_ALIGN;
+    scalar_t* smem_Y = smem_X + max_nc * P;
+    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_Y + max_nr * P);
+    int32_t* sh_row_ids = sh_col_ids + max_nc;
+    uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_ids + max_nr);
+
+    const uint32_t rg = blk_row_grp[b_idx];
+    const uint32_t cg = blk_col_grp[b_idx];
+    const uint32_t row_base = row_grp_ptr[rg];
+    const uint32_t n_r = row_grp_ptr[rg + 1] - row_base;
+    const uint32_t col_base = col_grp_ptr[cg];
+    const uint32_t n_c = col_grp_ptr[cg + 1] - col_base;
+    const uint32_t nz_base = blk_nz_ptr[b_idx];
+    const uint32_t n_nz = blk_nz_ptr[b_idx + 1] - nz_base;
+
+    if (n_r == 0 || n_c == 0 || n_nz == 0) return;
+
+    const uint32_t shift = blk_shift[b_idx];
+    const uint32_t col_mask = (1u << shift) - 1u;
+
+    // --- LOAD: unchanged from the reference kernel ---------------------------
+    for (uint32_t i = tx; i < n_nz; i += THREADS) {
+        sh_nz_val[i] = nz_val[nz_base + i];
+        sh_nz_idx[i] = nz_idx[nz_base + i];
+    }
+    for (uint32_t i = tx; i < n_c; i += THREADS) sh_col_ids[i] = col_ids[col_base + i];
+    for (uint32_t i = tx; i < n_r; i += THREADS) sh_row_ids[i] = row_ids[row_base + i];
+    __syncthreads();
+
+    const uint32_t feat_start = feat_slab * BOO_FEAT_BLOCK;
+    if (feat_start >= features) return;
+    const uint32_t feat_end = min(feat_start + BOO_FEAT_BLOCK, features);
+
+    const size_t x_batch_base = static_cast<size_t>(batch_idx) * cols * features;
+    const size_t y_batch_base = static_cast<size_t>(batch_idx) * rows * features;
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += P) {
+
+        // --- STEP A: unchanged -------------------------------------------------
+        for (uint32_t i = tx; i < n_r * P; i += THREADS) smem_Y[i] = scalar_t(0);
+
+        for (uint32_t i = tx; i < n_c * P; i += THREADS) {
+            const uint32_t c = i >> P_LOG2;
+            const uint32_t global_f = base_f + (i & P_MASK);
+            smem_X[i] = (global_f < features)
+                ? X[x_batch_base + static_cast<size_t>(sh_col_ids[c]) * features + global_f]
+                : scalar_t(0);
+        }
+        __syncthreads();
+
+        // --- STEP B: one thread per (nonzero, FPT adjacent features) -----------
+        for (uint32_t i = tx; i < (n_nz << LANES_LOG2); i += THREADS) {
+            const uint32_t k = i >> LANES_LOG2;
+            const uint32_t f0 = (i & LANES_MASK) << FPT_LOG2;
+            const uint32_t idx = sh_nz_idx[k];
+            if constexpr (FPT == 1) {
+                atomicAdd(&smem_Y[(idx >> shift) * P + f0],
+                          sh_nz_val[k] * smem_X[(idx & col_mask) * P + f0]);
+            } else {
+                using vec_t = typename BooVec<scalar_t, FPT>::type;
+                const scalar_t v = sh_nz_val[k];
+                const vec_t x = *reinterpret_cast<const vec_t*>(smem_X + (idx & col_mask) * P + f0);
+                scalar_t* y = smem_Y + (idx >> shift) * P + f0;
+                atomicAdd(y, v * x.x);
+                atomicAdd(y + 1, v * x.y);
+            }
+        }
+        __syncthreads();
+
+        // --- STEP C: unchanged -------------------------------------------------
         for (uint32_t i = tx; i < n_r * P; i += THREADS) {
             const uint32_t global_f = base_f + (i & P_MASK);
             if (global_f < features) {
@@ -443,7 +611,11 @@ static boo_kernel_t<scalar_t> boo_rowseg_by_fpt(int fpt) {
 
 template <typename scalar_t, int T, int PL>
 static boo_kernel_t<scalar_t> boo_select_kernel_tp(bool row_seg, int fpt, int slab) {
-    if (!row_seg) return boo_spmm_nnzflat_kernel<scalar_t, T, PL>;
+    if (!row_seg) {
+        if (g_boo_nnzflat_reference) return boo_spmm_nnzflat_kernel<scalar_t, T, PL>;
+        if (fpt == 2) return boo_spmm_nnzflat_fpt_kernel<scalar_t, T, PL, 2>;
+        return boo_spmm_nnzflat_fpt_kernel<scalar_t, T, PL, 1>;
+    }
     if constexpr (std::is_same_v<scalar_t, float> && T == 256) {
         switch (slab) {
             case 128:  return boo_rowseg_by_fpt<scalar_t, T, PL, 128>(fpt);
@@ -473,7 +645,10 @@ static boo_kernel_t<scalar_t> boo_select_kernel(int threads, int& p, int feature
         throw std::invalid_argument("BOO threads must be 128, 256 or 512");
     if (p != 8 && p != 16 && p != 32 && p != 64 && p != 128)
         throw std::invalid_argument("BOO p must be 8, 16, 32, 64 or 128");
-    fpt = row_seg ? g_boo_rowseg_fpt : 1;
+    fpt = row_seg ? g_boo_rowseg_fpt : g_boo_nnzflat_fpt;
+    if (!row_seg && fpt != 1 && g_boo_nnzflat_reference)
+        throw std::invalid_argument("BOO nnzflat reference kernel is FPT=1 only; "
+                                    "FPT=2 requires the nnzflat template");
     if (fpt * static_cast<int>(sizeof(scalar_t)) > 16)
         throw std::invalid_argument("BOO features_per_thread=4 requires float32");
     slab = row_seg ? g_boo_feat_block : BOO_FEAT_BLOCK;
@@ -564,6 +739,61 @@ BOORowsegLaunchInfo boo_rowseg_launch_info(int max_nr, int max_nc, int max_nnz_b
             &info.max_active_blocks_per_sm, kernel, threads, info.arena_bytes));
     }
     return info;
+}
+
+template <typename scalar_t>
+static BOONnzflatLaunchInfo boo_nnzflat_launch_info_t(int num_blocks, int batch_size, int max_nr,
+                                                      int max_nc, int max_nnz_blk, int features,
+                                                      int threads, int p) {
+    BOONnzflatLaunchInfo info{};
+    info.requested_p = p;
+    info.threads = threads;
+    info.scalar_bytes = (int)sizeof(scalar_t);
+    info.reference = g_boo_nnzflat_reference;
+    int fpt = 1, slab = BOO_FEAT_BLOCK;
+    // Same selector, P reduction and arena as launch_boo_spmm(row_seg=false).
+    const auto kernel = boo_select_kernel<scalar_t>(threads, p, features, false, fpt, slab);
+    info.effective_p = p;
+    info.fpt = fpt;
+    info.feat_block = slab;
+    info.feat_block_setting = g_boo_feat_block;
+    info.grid_x = num_blocks;
+    info.grid_y = batch_size;
+    info.grid_z = (features + slab - 1) / slab;
+    info.arena_bytes = boo_arena_bytes(max_nr, max_nc, max_nnz_blk, p, (int)sizeof(scalar_t));
+    cudaFuncAttributes attr{};
+    C10_CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
+    info.num_regs = attr.numRegs;
+    info.local_size_bytes = (int)attr.localSizeBytes;
+    info.static_shared_bytes = (int)attr.sharedSizeBytes;
+    info.max_threads_per_block = attr.maxThreadsPerBlock;
+    info.max_dynamic_shared_bytes = attr.maxDynamicSharedSizeBytes;
+    info.max_active_blocks_per_sm = 0;
+    int device = 0, optin = 0;
+    C10_CUDA_CHECK(cudaGetDevice(&device));
+    C10_CUDA_CHECK(cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, device));
+    info.shared_optin_bytes = optin;
+    if (info.arena_bytes <= optin) {  // otherwise the launch itself would fail: report 0
+        if (info.arena_bytes > 48 * 1024) {
+            C10_CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize,
+                                                info.arena_bytes));
+        }
+        C10_CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+            &info.max_active_blocks_per_sm, kernel, threads, info.arena_bytes));
+    }
+    return info;
+}
+
+BOONnzflatLaunchInfo boo_nnzflat_launch_info(int num_blocks, int batch_size, int max_nr, int max_nc,
+                                             int max_nnz_blk, int features, int threads, int p,
+                                             int scalar_bytes) {
+    if (scalar_bytes == 4)
+        return boo_nnzflat_launch_info_t<float>(num_blocks, batch_size, max_nr, max_nc, max_nnz_blk,
+                                                features, threads, p);
+    if (scalar_bytes == 8)
+        return boo_nnzflat_launch_info_t<double>(num_blocks, batch_size, max_nr, max_nc, max_nnz_blk,
+                                                 features, threads, p);
+    throw std::invalid_argument("BOO nnzflat launch info: scalar_bytes must be 4 or 8");
 }
 
 template void launch_boo_spmm<float>(

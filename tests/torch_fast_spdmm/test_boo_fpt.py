@@ -95,8 +95,8 @@ def test_invalid_and_process_wide_setting():
     x = _x((11, 16)).cuda()
     with pytest.raises(ValueError):
         boo_matmul(boo, x, features_per_thread=3)
-    with pytest.raises(ValueError):
-        boo_matmul(boo, x, features_per_thread=2, row_seg=False)
+    with pytest.raises(ValueError):  # nnzflat supports FPT 1/2 (test_boo_nnzflat_fpt.py)
+        boo_matmul(boo, x, features_per_thread=4, row_seg=False)
     mat64, rl, cl = _example(np.float64)
     boo64 = _build(mat64, rl, cl).to('cuda')
     with pytest.raises(ValueError):

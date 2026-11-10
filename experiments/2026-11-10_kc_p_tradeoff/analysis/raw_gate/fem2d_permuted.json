@@ -1,0 +1,10 @@
+{
+  "matrix_sha256": "09c194afacbf79e30e5396291705479e4c9526c0faec7a9e01269e548bd1b9ff",
+  "host": {
+    "node": "ise-cpu-intl-03.auth.ad.bgu.ac.il",
+    "cpu_model": "Intel(R) Xeon(R) Gold 6130 CPU @ 2.10GHz",
+    "cpus": 4,
+    "slurm_job_id": "24057297"
+  },
+  "seconds": 112.1075279712677
+}

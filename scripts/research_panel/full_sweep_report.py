@@ -9,7 +9,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('root', type=Path)
     a = p.parse_args()
-    tasks = json.loads((a.root / 'sweep.json').read_text())['tasks']
+    manifest = json.loads((a.root / 'sweep.json').read_text())
+    tasks = manifest['tasks']
     all_rows, status = [], []
     for i, task in enumerate(tasks):
         folder = a.root / 'results' / f'task_{i:03d}'
@@ -31,7 +32,8 @@ def main():
     boo = [r for r in passed if r['algorithm'] == 'boo' and r['scope'] == 'full_call']
     lines = ['# Full FPT sweep', '',
              f"Completed tasks: {sum(r['status'] == 'complete' for r in status)}/{len(tasks)}. "
-             f'Validated BOO full-call rows: {len(boo)}/1872 requested combinations.', '',
+             f"Validated BOO full-call rows: {len(boo)}/{manifest['expected_boo_full_call_combinations']} "
+             'requested combinations (some requested targets can alias identical labels).', '',
              'Requested duplicates, unsupported variants and incomplete tasks are retained in raw data/status. '
              'Each ratio below uses original-order direct cuSPARSE in the same task, labeling and feature cell. '
              'Winners are post-hoc; this is one allocation per task, not independent replication.', '',

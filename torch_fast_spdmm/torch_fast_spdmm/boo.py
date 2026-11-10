@@ -230,7 +230,8 @@ def _build_boo_cuda_dispatch():
 def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
                csr_mode: int = 0, row_seg: Optional[bool] = None,
                launch_mode: str = 'legacy', execution_plan=None,
-               features_per_thread: int = 1) -> torch.Tensor:
+               features_per_thread: int = 1,
+               nnzflat_impl: Optional[str] = None) -> torch.Tensor:
     """Y = A @ X.  Dispatches on x.device.
 
     `threads` in {128, 256, 512} and `p` in {8, 16, 32, 64, 128} are the two shared-memory
@@ -250,6 +251,13 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
     thread that many adjacent features, reusing every sparse value/index load
     across them. 1 is the original kernel. It is applied process-wide at each
     call (the CUDA launcher reads it), so interleaved callers need no reset.
+
+    With `row_seg=False` (nnzflat), `features_per_thread` is 1 or 2 and
+    `nnzflat_impl` selects the kernel: 'reference' is the original FPT=1 nnzflat
+    kernel (the default for FPT=1); 'template' is the FPT template (required,
+    and the default, for FPT=2; its FPT=1 specialization is the identical-work
+    control). nnzflat FPT=4 is unsupported. Every rowseg and nnzflat setting is
+    applied at each call, so interleaved rowseg/nnzflat/FPT callers are exact.
     """
     if launch_mode not in ('legacy', 'auto'):
         raise ValueError("launch_mode must be 'legacy' or 'auto'")
@@ -285,6 +293,8 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
         raise ValueError('features_per_thread must be one of 1, 2, 4')
     if features_per_thread == 4 and x.dtype != torch.float32:
         raise ValueError('features_per_thread=4 requires float32')
+    if nnzflat_impl not in (None, 'reference', 'template'):
+        raise ValueError("nnzflat_impl must be None, 'reference' or 'template'")
 
     global _BOO_CUDA_DISPATCH
     if _BOO_CUDA_DISPATCH is None:
@@ -299,9 +309,22 @@ def boo_matmul(boo_mat, x: torch.Tensor, threads: int = 256, p: int = 64,
     elif row_seg and int(boo_mat.nz_order) != _ORDER_CODE['rowmajor']:
         raise ValueError('row_seg=True requires a matrix built with nz_order="rowmajor"')
 
-    if features_per_thread != 1 and not row_seg:
-        raise ValueError('features_per_thread > 1 requires the row-segmented kernel')
-    core.set_boo_rowseg_fpt(features_per_thread)
+    if row_seg:
+        if nnzflat_impl is not None:
+            raise ValueError('nnzflat_impl applies only to row_seg=False')
+        core.set_boo_rowseg_fpt(features_per_thread)
+        core.set_boo_nnzflat_fpt(1)
+        core.set_boo_nnzflat_reference(True)
+    else:
+        if features_per_thread == 4:
+            raise ValueError('nnzflat (row_seg=False) supports features_per_thread 1 or 2')
+        if nnzflat_impl is None:
+            nnzflat_impl = 'reference' if features_per_thread == 1 else 'template'
+        if nnzflat_impl == 'reference' and features_per_thread != 1:
+            raise ValueError("nnzflat_impl='reference' is the FPT=1 kernel; use 'template'")
+        core.set_boo_rowseg_fpt(1)
+        core.set_boo_nnzflat_fpt(features_per_thread)
+        core.set_boo_nnzflat_reference(nnzflat_impl == 'reference')
 
     dispatch = _BOO_CUDA_DISPATCH[x.dtype]
     if launch_mode == 'auto':

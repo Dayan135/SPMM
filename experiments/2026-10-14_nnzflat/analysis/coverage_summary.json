@@ -1,0 +1,39 @@
+{
+ "stage1": {
+  "requested": 480,
+  "statuses": {
+   "measured": 456,
+   "unsupported": 24
+  },
+  "measured_launch_verified": 456,
+  "baselines_and_controls": {
+   "rowseg": {
+    "measured": 480
+   },
+   "control": {
+    "measured": 48
+   }
+  },
+  "objects": 16
+ },
+ "stage2": {
+  "requested": 1440,
+  "statuses": {
+   "measured": 1320,
+   "unsupported": 120
+  },
+  "measured_launch_verified": 744,
+  "baselines_and_controls": {
+   "rowseg": {
+    "measured": 1416,
+    "unsupported": 24
+   },
+   "control": {
+    "measured": 136,
+    "unsupported": 8
+   }
+  },
+  "objects": 48
+ },
+ "complete": true
+}

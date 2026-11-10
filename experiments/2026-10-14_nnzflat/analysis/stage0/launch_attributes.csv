@@ -1,0 +1,76 @@
+arena_bytes,effective_p,expected,feat_block,feat_block_setting,features_per_thread,fpt,grid_x,grid_y,grid_z,impl,kernel,local_bytes_per_thread,max_active_blocks_per_sm,max_dynamic_shared_bytes,max_threads_per_block,p,reason,reference,registers_per_thread,requested_p,scalar_bytes,shared_optin_bytes,static_shared_bytes,threads
+2764,8,"boo_spmm_nnzflat_kernel<float, 128, 3>",512,512,1,1,256,1,1,reference,nnzflat,0,12,49152,128,8,,True,36,8,4,101376,0,128
+4812,16,"boo_spmm_nnzflat_kernel<float, 128, 4>",512,512,1,1,256,1,1,reference,nnzflat,0,12,49152,128,16,,True,36,16,4,101376,0,128
+8908,32,"boo_spmm_nnzflat_kernel<float, 128, 5>",512,512,1,1,256,1,1,reference,nnzflat,0,10,49152,128,32,,True,36,32,4,101376,0,128
+17100,64,"boo_spmm_nnzflat_kernel<float, 128, 6>",512,512,1,1,256,1,1,reference,nnzflat,0,5,49152,128,64,,True,36,64,4,101376,0,128
+33484,128,"boo_spmm_nnzflat_kernel<float, 128, 7>",512,512,1,1,256,1,1,reference,nnzflat,0,2,49152,128,128,,True,38,128,4,101376,0,128
+2764,8,"boo_spmm_nnzflat_kernel<float, 256, 3>",512,512,1,1,256,1,1,reference,nnzflat,0,6,49152,256,8,,True,36,8,4,101376,0,256
+4812,16,"boo_spmm_nnzflat_kernel<float, 256, 4>",512,512,1,1,256,1,1,reference,nnzflat,0,6,49152,256,16,,True,36,16,4,101376,0,256
+8908,32,"boo_spmm_nnzflat_kernel<float, 256, 5>",512,512,1,1,256,1,1,reference,nnzflat,0,6,49152,256,32,,True,36,32,4,101376,0,256
+17100,64,"boo_spmm_nnzflat_kernel<float, 256, 6>",512,512,1,1,256,1,1,reference,nnzflat,0,5,49152,256,64,,True,36,64,4,101376,0,256
+33484,128,"boo_spmm_nnzflat_kernel<float, 256, 7>",512,512,1,1,256,1,1,reference,nnzflat,0,2,49152,256,128,,True,36,128,4,101376,0,256
+2764,8,"boo_spmm_nnzflat_kernel<float, 512, 3>",512,512,1,1,256,1,1,reference,nnzflat,0,3,49152,512,8,,True,36,8,4,101376,0,512
+4812,16,"boo_spmm_nnzflat_kernel<float, 512, 4>",512,512,1,1,256,1,1,reference,nnzflat,0,3,49152,512,16,,True,36,16,4,101376,0,512
+8908,32,"boo_spmm_nnzflat_kernel<float, 512, 5>",512,512,1,1,256,1,1,reference,nnzflat,0,3,49152,512,32,,True,36,32,4,101376,0,512
+17100,64,"boo_spmm_nnzflat_kernel<float, 512, 6>",512,512,1,1,256,1,1,reference,nnzflat,0,3,49152,512,64,,True,36,64,4,101376,0,512
+33484,128,"boo_spmm_nnzflat_kernel<float, 512, 7>",512,512,1,1,256,1,1,reference,nnzflat,0,2,49152,512,128,,True,36,128,4,101376,0,512
+2764,8,"boo_spmm_nnzflat_fpt_kernel<float, 128, 3, 1>",512,512,1,1,256,1,1,template,nnzflat,0,12,49152,128,8,,False,36,8,4,101376,0,128
+4812,16,"boo_spmm_nnzflat_fpt_kernel<float, 128, 4, 1>",512,512,1,1,256,1,1,template,nnzflat,0,12,49152,128,16,,False,36,16,4,101376,0,128
+8908,32,"boo_spmm_nnzflat_fpt_kernel<float, 128, 5, 1>",512,512,1,1,256,1,1,template,nnzflat,0,10,49152,128,32,,False,36,32,4,101376,0,128
+17100,64,"boo_spmm_nnzflat_fpt_kernel<float, 128, 6, 1>",512,512,1,1,256,1,1,template,nnzflat,0,5,49152,128,64,,False,36,64,4,101376,0,128
+33484,128,"boo_spmm_nnzflat_fpt_kernel<float, 128, 7, 1>",512,512,1,1,256,1,1,template,nnzflat,0,2,49152,128,128,,False,38,128,4,101376,0,128
+2764,8,"boo_spmm_nnzflat_fpt_kernel<float, 256, 3, 1>",512,512,1,1,256,1,1,template,nnzflat,0,6,49152,256,8,,False,36,8,4,101376,0,256
+4812,16,"boo_spmm_nnzflat_fpt_kernel<float, 256, 4, 1>",512,512,1,1,256,1,1,template,nnzflat,0,6,49152,256,16,,False,36,16,4,101376,0,256
+8908,32,"boo_spmm_nnzflat_fpt_kernel<float, 256, 5, 1>",512,512,1,1,256,1,1,template,nnzflat,0,6,49152,256,32,,False,36,32,4,101376,0,256
+17100,64,"boo_spmm_nnzflat_fpt_kernel<float, 256, 6, 1>",512,512,1,1,256,1,1,template,nnzflat,0,5,49152,256,64,,False,36,64,4,101376,0,256
+33484,128,"boo_spmm_nnzflat_fpt_kernel<float, 256, 7, 1>",512,512,1,1,256,1,1,template,nnzflat,0,2,49152,256,128,,False,36,128,4,101376,0,256
+2764,8,"boo_spmm_nnzflat_fpt_kernel<float, 512, 3, 1>",512,512,1,1,256,1,1,template,nnzflat,0,3,49152,512,8,,False,36,8,4,101376,0,512
+4812,16,"boo_spmm_nnzflat_fpt_kernel<float, 512, 4, 1>",512,512,1,1,256,1,1,template,nnzflat,0,3,49152,512,16,,False,36,16,4,101376,0,512
+8908,32,"boo_spmm_nnzflat_fpt_kernel<float, 512, 5, 1>",512,512,1,1,256,1,1,template,nnzflat,0,3,49152,512,32,,False,36,32,4,101376,0,512
+17100,64,"boo_spmm_nnzflat_fpt_kernel<float, 512, 6, 1>",512,512,1,1,256,1,1,template,nnzflat,0,3,49152,512,64,,False,36,64,4,101376,0,512
+33484,128,"boo_spmm_nnzflat_fpt_kernel<float, 512, 7, 1>",512,512,1,1,256,1,1,template,nnzflat,0,2,49152,512,128,,False,36,128,4,101376,0,512
+2764,8,"boo_spmm_nnzflat_fpt_kernel<float, 128, 3, 2>",512,512,2,2,256,1,1,template,nnzflat,0,12,49152,128,8,,False,36,8,4,101376,0,128
+4812,16,"boo_spmm_nnzflat_fpt_kernel<float, 128, 4, 2>",512,512,2,2,256,1,1,template,nnzflat,0,12,49152,128,16,,False,36,16,4,101376,0,128
+8908,32,"boo_spmm_nnzflat_fpt_kernel<float, 128, 5, 2>",512,512,2,2,256,1,1,template,nnzflat,0,10,49152,128,32,,False,36,32,4,101376,0,128
+17100,64,"boo_spmm_nnzflat_fpt_kernel<float, 128, 6, 2>",512,512,2,2,256,1,1,template,nnzflat,0,5,49152,128,64,,False,36,64,4,101376,0,128
+33484,128,"boo_spmm_nnzflat_fpt_kernel<float, 128, 7, 2>",512,512,2,2,256,1,1,template,nnzflat,0,2,49152,128,128,,False,34,128,4,101376,0,128
+2764,8,"boo_spmm_nnzflat_fpt_kernel<float, 256, 3, 2>",512,512,2,2,256,1,1,template,nnzflat,0,6,49152,256,8,,False,36,8,4,101376,0,256
+4812,16,"boo_spmm_nnzflat_fpt_kernel<float, 256, 4, 2>",512,512,2,2,256,1,1,template,nnzflat,0,6,49152,256,16,,False,36,16,4,101376,0,256
+8908,32,"boo_spmm_nnzflat_fpt_kernel<float, 256, 5, 2>",512,512,2,2,256,1,1,template,nnzflat,0,6,49152,256,32,,False,36,32,4,101376,0,256
+17100,64,"boo_spmm_nnzflat_fpt_kernel<float, 256, 6, 2>",512,512,2,2,256,1,1,template,nnzflat,0,5,49152,256,64,,False,36,64,4,101376,0,256
+33484,128,"boo_spmm_nnzflat_fpt_kernel<float, 256, 7, 2>",512,512,2,2,256,1,1,template,nnzflat,0,2,49152,256,128,,False,36,128,4,101376,0,256
+2764,8,"boo_spmm_nnzflat_fpt_kernel<float, 512, 3, 2>",512,512,2,2,256,1,1,template,nnzflat,0,3,49152,512,8,,False,36,8,4,101376,0,512
+4812,16,"boo_spmm_nnzflat_fpt_kernel<float, 512, 4, 2>",512,512,2,2,256,1,1,template,nnzflat,0,3,49152,512,16,,False,36,16,4,101376,0,512
+8908,32,"boo_spmm_nnzflat_fpt_kernel<float, 512, 5, 2>",512,512,2,2,256,1,1,template,nnzflat,0,3,49152,512,32,,False,36,32,4,101376,0,512
+17100,64,"boo_spmm_nnzflat_fpt_kernel<float, 512, 6, 2>",512,512,2,2,256,1,1,template,nnzflat,0,3,49152,512,64,,False,36,64,4,101376,0,512
+33484,128,"boo_spmm_nnzflat_fpt_kernel<float, 512, 7, 2>",512,512,2,2,256,1,1,template,nnzflat,0,2,49152,512,128,,False,36,128,4,101376,0,512
+1872,8,"boo_spmm_rowseg_kernel<float, 128, 3, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,12,49152,128,8,,False,39,8,,,0,128
+2896,16,"boo_spmm_rowseg_kernel<float, 128, 4, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,12,49152,128,16,,False,39,16,,,0,128
+4944,32,"boo_spmm_rowseg_kernel<float, 128, 5, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,12,49152,128,32,,False,39,32,,,0,128
+9040,64,"boo_spmm_rowseg_kernel<float, 128, 6, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,10,49152,128,64,,False,39,64,,,0,128
+17232,128,"boo_spmm_rowseg_kernel<float, 128, 7, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,5,49152,128,128,,False,40,128,,,0,128
+1872,8,"boo_spmm_rowseg_kernel<float, 256, 3, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,6,49152,256,8,,False,39,8,,,0,256
+2896,16,"boo_spmm_rowseg_kernel<float, 256, 4, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,6,49152,256,16,,False,39,16,,,0,256
+4944,32,"boo_spmm_rowseg_kernel<float, 256, 5, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,6,49152,256,32,,False,39,32,,,0,256
+9040,64,"boo_spmm_rowseg_kernel<float, 256, 6, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,6,49152,256,64,,False,39,64,,,0,256
+17232,128,"boo_spmm_rowseg_kernel<float, 256, 7, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,5,49152,256,128,,False,39,128,,,0,256
+1872,8,"boo_spmm_rowseg_kernel<float, 512, 3, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,3,49152,512,8,,False,39,8,,,0,512
+2896,16,"boo_spmm_rowseg_kernel<float, 512, 4, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,3,49152,512,16,,False,39,16,,,0,512
+4944,32,"boo_spmm_rowseg_kernel<float, 512, 5, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,3,49152,512,32,,False,39,32,,,0,512
+9040,64,"boo_spmm_rowseg_kernel<float, 512, 6, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,3,49152,512,64,,False,39,64,,,0,512
+17232,128,"boo_spmm_rowseg_kernel<float, 512, 7, false, 1, 512>",512,,1,1,256,1,1,,rowseg,0,3,49152,512,128,,False,39,128,,,0,512
+1872,8,"boo_spmm_rowseg_kernel<float, 128, 3, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,12,49152,128,8,,False,40,8,,,0,128
+2896,16,"boo_spmm_rowseg_kernel<float, 128, 4, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,12,49152,128,16,,False,40,16,,,0,128
+4944,32,"boo_spmm_rowseg_kernel<float, 128, 5, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,12,49152,128,32,,False,40,32,,,0,128
+9040,64,"boo_spmm_rowseg_kernel<float, 128, 6, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,10,49152,128,64,,False,40,64,,,0,128
+17232,128,"boo_spmm_rowseg_kernel<float, 128, 7, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,5,49152,128,128,,False,40,128,,,0,128
+1872,8,"boo_spmm_rowseg_kernel<float, 256, 3, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,6,49152,256,8,,False,40,8,,,0,256
+2896,16,"boo_spmm_rowseg_kernel<float, 256, 4, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,6,49152,256,16,,False,40,16,,,0,256
+4944,32,"boo_spmm_rowseg_kernel<float, 256, 5, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,6,49152,256,32,,False,40,32,,,0,256
+9040,64,"boo_spmm_rowseg_kernel<float, 256, 6, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,6,49152,256,64,,False,40,64,,,0,256
+17232,128,"boo_spmm_rowseg_kernel<float, 256, 7, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,5,49152,256,128,,False,40,128,,,0,256
+1872,8,"boo_spmm_rowseg_kernel<float, 512, 3, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,3,49152,512,8,,False,40,8,,,0,512
+2896,16,"boo_spmm_rowseg_kernel<float, 512, 4, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,3,49152,512,16,,False,40,16,,,0,512
+4944,32,"boo_spmm_rowseg_kernel<float, 512, 5, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,3,49152,512,32,,False,40,32,,,0,512
+9040,64,"boo_spmm_rowseg_kernel<float, 512, 6, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,3,49152,512,64,,False,40,64,,,0,512
+17232,128,"boo_spmm_rowseg_kernel<float, 512, 7, false, 2, 512>",512,,2,2,256,1,1,,rowseg,0,3,49152,512,128,,False,40,128,,,0,512

@@ -26,6 +26,11 @@ class BOOTimedSpMM {
                tail_row_, tail_col_, tail_val_, x3_, y_;
     int rows_, cols_, max_nr_, max_nc_, max_nnz_blk_, threads_, p_, csr_mode_, device_;
     bool row_seg_, diagnostic_;
+    // nnzflat (row_seg=false) variant, applied process-wide before every entry
+    // and outside the timed interval: interleaved harnesses cannot inherit
+    // another variant's setting. Ignored by the rowseg path.
+    int nnzflat_fpt_;
+    bool nnzflat_reference_;
     bool squeeze_output_;
     cudaStream_t cur_stream_ = nullptr, block_stream_ = nullptr,
                  csr_stream_ = nullptr, tail_stream_ = nullptr;
@@ -40,6 +45,12 @@ class BOOTimedSpMM {
         TORCH_CHECK(c10::cuda::getCurrentCUDAStream(device_).stream() == cur_stream_,
                     "BOOTimedSpMM must run on its construction stream");
     }
+    void apply_nnzflat() const {
+        if (!row_seg_) {
+            set_boo_nnzflat_fpt(nnzflat_fpt_);
+            set_boo_nnzflat_reference(nnzflat_reference_);
+        }
+    }
 
 public:
     BOOTimedSpMM(int rows, int cols, int max_nr, int max_nc, int max_nnz_blk,
@@ -51,7 +62,7 @@ public:
                  at::Tensor rem_indptr, at::Tensor rem_col_ind, at::Tensor rem_vals,
                  at::Tensor tail_row, at::Tensor tail_col, at::Tensor tail_val,
                  at::Tensor x, int threads, int p, int csr_mode, bool row_seg,
-                 bool diagnostic_raw_store)
+                 bool diagnostic_raw_store, int nnzflat_fpt, bool nnzflat_reference)
         : row_grp_ptr_(row_grp_ptr), row_ids_(row_ids), col_grp_ptr_(col_grp_ptr), col_ids_(col_ids),
           blk_row_grp_(blk_row_grp), blk_col_grp_(blk_col_grp), blk_nz_ptr_(blk_nz_ptr),
           blk_shift_(blk_shift), nz_idx_(nz_idx), nz_val_(nz_val),
@@ -60,7 +71,9 @@ public:
           x3_(((x.dim() == 2) ? x.unsqueeze(0) : x).contiguous()),
           rows_(rows), cols_(cols), max_nr_(max_nr), max_nc_(max_nc), max_nnz_blk_(max_nnz_blk),
           threads_(threads), p_(p), csr_mode_(csr_mode), device_(x.get_device()),
-          row_seg_(row_seg), diagnostic_(diagnostic_raw_store), squeeze_output_(x.dim() == 2) {
+          row_seg_(row_seg), diagnostic_(diagnostic_raw_store),
+          nnzflat_fpt_(nnzflat_fpt), nnzflat_reference_(nnzflat_reference),
+          squeeze_output_(x.dim() == 2) {
         TORCH_CHECK(x.is_cuda() && x.scalar_type() == at::kFloat,
                     "BOOTimedSpMM: X must be a CUDA FP32 tensor");
         TORCH_CHECK(x.dim() == 2 || x.dim() == 3, "BOOTimedSpMM: X must be 2D or 3D");
@@ -80,6 +93,12 @@ public:
         if (diagnostic_) {
             TORCH_CHECK(row_seg, "BOOTimedSpMM: diagnostic_raw_store requires row_seg=True");
         }
+        TORCH_CHECK(nnzflat_fpt == 1 || nnzflat_fpt == 2,
+                    "BOOTimedSpMM: nnzflat_fpt must be 1 or 2");
+        TORCH_CHECK(!row_seg || (nnzflat_fpt == 1 && nnzflat_reference),
+                    "BOOTimedSpMM: nnzflat settings require row_seg=False");
+        TORCH_CHECK(nnzflat_fpt == 1 || !nnzflat_reference,
+                    "BOOTimedSpMM: nnzflat FPT=2 requires nnzflat_reference=False");
 
         c10::cuda::CUDAGuard guard(x.device());
         cur_stream_   = c10::cuda::getCurrentCUDAStream(device_).stream();
@@ -111,6 +130,7 @@ public:
                     "-- its output is incorrect by construction");
         c10::cuda::CUDAGuard guard(device_);
         check_stream();
+        apply_nnzflat();
         boo_run_into<float>(
             y_, rows_, cols_, max_nr_, max_nc_, max_nnz_blk_,
             row_grp_ptr_, row_ids_, col_grp_ptr_, col_ids_,
@@ -130,6 +150,7 @@ public:
     float timed_run() {
         c10::cuda::CUDAGuard guard(device_);
         check_stream();
+        apply_nnzflat();
         cuda_check(cudaEventRecord(start_, cur_stream_));
         if (diagnostic_) {
             const int num_blocks = (int)blk_row_grp_.size(0);
@@ -167,6 +188,9 @@ public:
     py::dict info() const {
         py::dict d;
         d["diagnostic"] = diagnostic_;
+        d["row_seg"] = row_seg_;
+        d["nnzflat_fpt"] = nnzflat_fpt_;
+        d["nnzflat_reference"] = nnzflat_reference_;
         return d;
     }
 };
@@ -178,7 +202,7 @@ void bind_boo_timed_functions(py::module_& m) {
         .def(py::init<int, int, int, int, int, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
                       at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
                       at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
-                      at::Tensor, int, int, int, bool, bool>(),
+                      at::Tensor, int, int, int, bool, bool, int, bool>(),
              py::arg("rows"), py::arg("cols"), py::arg("max_nr"), py::arg("max_nc"),
              py::arg("max_nnz_blk"), py::arg("row_grp_ptr"), py::arg("row_ids"),
              py::arg("col_grp_ptr"), py::arg("col_ids"), py::arg("blk_row_grp"),
@@ -186,7 +210,8 @@ void bind_boo_timed_functions(py::module_& m) {
              py::arg("nz_idx"), py::arg("nz_val"), py::arg("rem_indptr"), py::arg("rem_col_ind"),
              py::arg("rem_vals"), py::arg("tail_row"), py::arg("tail_col"), py::arg("tail_val"),
              py::arg("x"), py::arg("threads") = 256, py::arg("p") = 64, py::arg("csr_mode") = 0,
-             py::arg("row_seg") = true, py::arg("diagnostic_raw_store") = false)
+             py::arg("row_seg") = true, py::arg("diagnostic_raw_store") = false,
+             py::arg("nnzflat_fpt") = 1, py::arg("nnzflat_reference") = true)
         .def("run", &BOOTimedSpMM::run)
         .def("timed_run", &BOOTimedSpMM::timed_run)
         .def_property_readonly("output", &BOOTimedSpMM::output)

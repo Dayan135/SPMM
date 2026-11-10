@@ -1,0 +1,122 @@
+{
+  "candidates": {
+    "busiest_f2_rel": [
+      "busiest_f2_rel"
+    ],
+    "capacity_p64": [
+      "capacity_p64"
+    ],
+    "gate": [
+      "passes"
+    ],
+    "imbalance": [
+      "imbalance"
+    ],
+    "max_p99": [
+      "max_p99"
+    ],
+    "null": [],
+    "read_fraction": [
+      "read_fraction"
+    ],
+    "remainder_delta": [
+      "remainder_delta"
+    ],
+    "remainder_fraction": [
+      "remainder_fraction"
+    ],
+    "reuse_gain": [
+      "reuse_gain"
+    ],
+    "reuse_staged": [
+      "reuse_staged"
+    ],
+    "x+busiest_f2_rel": [
+      "x_staged_rel",
+      "busiest_f2_rel"
+    ],
+    "x+capacity_p64": [
+      "x_staged_rel",
+      "capacity_p64"
+    ],
+    "x+read_fraction": [
+      "x_staged_rel",
+      "read_fraction"
+    ],
+    "x+y_commits_rel": [
+      "x_staged_rel",
+      "y_commits_rel"
+    ],
+    "x_staged_rel": [
+      "x_staged_rel"
+    ],
+    "y_commits_rel": [
+      "y_commits_rel"
+    ]
+  },
+  "equation": {
+    "coefficients": {
+      "F512": 0.007591285525290547,
+      "busiest_f2_rel": -0.561432034035059,
+      "x_staged_rel": -0.2894653977411296
+    },
+    "intercept": -0.1975306130099549,
+    "output": "ln(predicted speedup); F512 is 1 at F512, otherwise 0",
+    "transforms": {
+      "busiest_f2_rel": "ln",
+      "x_staged_rel": "ln"
+    }
+  },
+  "forecast_scope": "untimed shapes only as of this input snapshot; 1M siblings are scale checks, not independent families",
+  "frozen_predictions_sha256": "b8e22c200a609b09fc15fc7dd6eb482705625bceb34e564c39a48f2e7c41ba7f",
+  "inputs": {
+    "experiments/2026-11-06_block_shape/analysis/gate/gate_relative.csv": "bebe9096dc5c89174edab4c6b6d38163e2b8e14a5cfd7f03d1065eb5e7f2dc21",
+    "experiments/2026-11-06_block_shape/analysis/gpu/screen_best.csv": "da77d90e78d2f61f5ead781ec17f60759a831a94576a5f1fdb4e9c6a9eda307a",
+    "experiments/2026-11-06_block_shape/analysis/gpu/screen_table.csv": "d5a5e334ff6abf3809fe85d6e40020ddde8e46a2c1e72b87c5409aecc950cd09",
+    "scripts/research_panel/shape_gate.py": "d102012f4eb430b6e0dc0feae9fc1402599c17719ee55eb4f5b23c61a69d79c6",
+    "scripts/research_panel/shape_gate_report.py": "54d3303ba94a04b8b8819e060a6c8bf5ae4201974b95dae7ab524e7deed73862",
+    "scripts/research_panel/shape_report.py": "0aaa1d21949d09c4cb8afa6ff6ade5df96ad8fd47477b6ce41258e638c1b9dc3"
+  },
+  "model": {
+    "beta": [
+      -0.015028672200646853,
+      -0.09364599343406252,
+      -0.05285121043344344,
+      0.0037956427626452734
+    ],
+    "cols": [
+      "x_staged_rel",
+      "busiest_f2_rel"
+    ],
+    "mu": [
+      -0.4569751246180166,
+      -0.08269533804052065,
+      0.5000000000000003
+    ],
+    "sd": [
+      0.32351360184960903,
+      0.09413643545345526,
+      0.5
+    ]
+  },
+  "nested_sensitivity_log_radius": 0.5414338268505181,
+  "primary_prediction_rule": "original published gate; learned model is a frozen exploratory challenger, not a validated replacement",
+  "regression_selected_model": "capacity_p64",
+  "schema": 1,
+  "script_sha256": "51d5a7f8baf54c9a0fc9ba1a9aeb9394082acee045b1902399bacedfd3517416",
+  "selected_model": "x+busiest_f2_rel",
+  "selection_metric": "input-weighted balanced accuracy at speedup >1.05",
+  "shrinkage": 0.02,
+  "threshold": 1.05,
+  "training_inputs": [
+    "diag_b1.0",
+    "diag_dd0.05",
+    "diag_skewed",
+    "fem2d",
+    "fem2d_permuted",
+    "pwtk",
+    "roadnet",
+    "webbase"
+  ],
+  "training_rows": 98
+}

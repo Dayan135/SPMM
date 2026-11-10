@@ -52,16 +52,18 @@ def register_generated(task, seed=0):
     return spec.key
 
 
-def run(root, task, phase, cache, index, *, smoke=False):
+def run(root, task, phase, cache, index, *, smoke=False, features=(128, 256, 512),
+        groups=(32, 64, 128), warmup=5, repeats=20, order_seed=0):
     from benchmark import bench_real as br
     key = task['matrix'] if task['kind'] == 'real' else register_generated(task)
     args = SimpleNamespace(
         cache=cache, labels=root / 'labels', out=root / 'results' / f'task_{index:03d}',
-        matrices=[key], explicit_zeros='keep', methods=[task['method']], groups=[32, 64],
-        features=[32, 128, 512] if not smoke else [35],
+        matrices=[key], explicit_zeros='keep', methods=[task['method']], groups=list(groups),
+        features=list(features) if not smoke else [35, 128, 256, 257],
         direct_algorithms=list(br.DIRECT_PRIORITY), threads=256, threshold=4,
-        boo_fpt=[1, 2, 4], seed=0, warmup=5 if not smoke else 1,
-        repeats=20 if not smoke else 2)
+        boo_fpt=[1, 2, 4], seed=0, warmup=warmup if not smoke else 1,
+        repeats=repeats if not smoke else 2, fixed_p=64, feat_block=512,
+        order_mode='shuffle', order_seed=order_seed, verify_launch=smoke)
     if phase == 'cluster':
         br.cluster_phase(args)
     else:
@@ -75,21 +77,30 @@ def main():
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--cache', type=Path)
     p.add_argument('--index', type=int, default=int(os.environ.get('SLURM_ARRAY_TASK_ID', '0')))
+    p.add_argument('--features', nargs='+', type=int, default=[128, 256, 512])
+    p.add_argument('--groups', nargs='+', type=int, default=[32, 64, 128])
+    p.add_argument('--warmup', type=int, default=5)
+    p.add_argument('--repeats', type=int, default=20)
+    p.add_argument('--order-seed', type=int, default=0)
     a = p.parse_args()
     if a.phase == 'manifest':
         a.root.mkdir(parents=True, exist_ok=True)
-        (a.root / 'sweep.json').write_text(json.dumps(dict(tasks=tasks(), features=[32,128,512],
-            groups=[32,64], fpt=[1,2,4], seed=0, warmup=5, repeats=20,
-            expected_boo_full_call_combinations=1872), indent=2) + '\n')
+        (a.root / 'sweep.json').write_text(json.dumps(dict(tasks=tasks(), features=a.features,
+            groups=a.groups, fpt=[1,2,4], p=64, threads=256, slab=512,
+            order_mode='shuffle', order_seed=a.order_seed, seed=0, warmup=a.warmup,
+            repeats=a.repeats, expected_boo_full_call_combinations=2808), indent=2) + '\n')
     elif a.phase == 'smoke':
         # CPU labels are prepared by the caller with CUDA_VISIBLE_DEVICES empty.
         phase = os.environ['SWEEP_SMOKE_PHASE']
         for i, method in enumerate(METHODS):
             run(a.root, dict(kind='generated', profile='fem2d', size=1024, method=method),
-                phase, a.cache, i, smoke=True)
+                phase, a.cache, i, smoke=True, groups=(128,), order_seed=a.order_seed)
     else:
         manifest = json.loads((a.root / 'sweep.json').read_text())
-        run(a.root, manifest['tasks'][a.index], a.phase, a.cache, a.index)
+        run(a.root, manifest['tasks'][a.index], a.phase, a.cache, a.index,
+            features=manifest['features'], groups=manifest['groups'],
+            warmup=manifest['warmup'], repeats=manifest['repeats'],
+            order_seed=manifest['order_seed'])
 
 
 if __name__ == '__main__':

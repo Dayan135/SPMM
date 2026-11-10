@@ -1,0 +1,31 @@
+{
+  "cols": 262144,
+  "host": {
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "cpus": 6,
+    "node": "ise-cpu256-19.auth.ad.bgu.ac.il",
+    "slurm_job_id": "23950520"
+  },
+  "matrix": "generated/diag_b1.0_n262144",
+  "matrix_sha256": "fe2330ea428935250963c348de9f553bbe688a53ca765aebecb135b346b22556",
+  "nnz": 16777216,
+  "rows": 262144,
+  "seconds": 124.40170093020424,
+  "square_checks": [
+    {
+      "boo_digest": "69e2be19f3cbe541e7e929401dc00d32e3a4015120758886319729a5ba352a3c",
+      "k": 32,
+      "method": "identity"
+    },
+    {
+      "boo_digest": "5829f097c99689fa4b068872c7e0aa50e9ced2b590ab5bad56477cc77be4d0e0",
+      "k": 64,
+      "method": "identity"
+    },
+    {
+      "boo_digest": "310990ab55cf886aa8ce9befe0b620a526aa1eb0c3b2015b6ba57c9c2a184554",
+      "k": 128,
+      "method": "identity"
+    }
+  ]
+}

@@ -1,0 +1,3549 @@
+{
+ "fpt1_vs_reference": {
+  "double_T128_PL3": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 464,
+   "template_instructions": 464
+  },
+  "double_T128_PL4": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T128_PL5": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T128_PL6": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T128_PL7": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 904,
+   "template_instructions": 904
+  },
+  "double_T256_PL3": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 464,
+   "template_instructions": 464
+  },
+  "double_T256_PL4": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T256_PL5": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T256_PL6": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T256_PL7": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T512_PL3": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 464,
+   "template_instructions": 464
+  },
+  "double_T512_PL4": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T512_PL5": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T512_PL6": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "double_T512_PL7": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 472,
+   "template_instructions": 472
+  },
+  "float_T128_PL3": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T128_PL4": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T128_PL5": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T128_PL6": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T128_PL7": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 880,
+   "template_instructions": 880
+  },
+  "float_T256_PL3": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T256_PL4": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T256_PL5": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T256_PL6": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T256_PL7": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T512_PL3": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T512_PL4": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T512_PL5": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T512_PL6": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  },
+  "float_T512_PL7": {
+   "identical_opcodes": true,
+   "opcode_count_delta": {},
+   "opcode_count_missing": {},
+   "reference_instructions": 424,
+   "template_instructions": 424
+  }
+ },
+ "kernels": {
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 3, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 464,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 3, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 4, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 4, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 5, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 5, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 6, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 6, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 7, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 904,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 7,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 7,
+    "DMUL": 7,
+    "LDG.E.64.CONSTANT": 15,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 14,
+    "LDS.64": 56,
+    "LDS.U16": 14,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 7,
+    "STS": 16,
+    "STS.64": 50,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 128, 7, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 904,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 15,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 14,
+    "LDS.128": 1,
+    "LDS.64": 20,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 7,
+    "STS": 16,
+    "STS.64": 50,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 3, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 464,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 3, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 4, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 4, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 5, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 5, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 6, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 6, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 7, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 256, 7, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 3, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 464,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 3, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 4, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 4, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 5, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 5, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 6, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 6, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 7, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<double, 512, 7, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 2,
+    "DMUL": 2,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.128": 1,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 3, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 3, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 4, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 4, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 5, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 5, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 6, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 6, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 7, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 880,
+   "selected": {
+    "ATOMS.CAST.SPIN": 7,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 7,
+    "FMUL": 7,
+    "LDG.E.CONSTANT": 39,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 42,
+    "LDS.U16": 14,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 7,
+    "STS": 66,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 128, 7, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 848,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 39,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 24,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 7,
+    "STS": 66,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 3, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 3, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 4, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 4, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 5, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 5, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 6, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 6, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 7, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 256, 7, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 3, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 3, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 4, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 4, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 5, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 5, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 6, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 6, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 7, 1>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_fpt_kernel<float, 512, 7, 2>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 440,
+   "selected": {
+    "ATOMS.CAST.SPIN": 2,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 2,
+    "FMUL": 2,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.64": 2,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 128, 3>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 464,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 128, 4>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 128, 5>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 128, 6>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 128, 7>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 904,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 7,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 7,
+    "DMUL": 7,
+    "LDG.E.64.CONSTANT": 15,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 14,
+    "LDS.64": 56,
+    "LDS.U16": 14,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 7,
+    "STS": 16,
+    "STS.64": 50,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 256, 3>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 464,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 256, 4>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 256, 5>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 256, 6>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 256, 7>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 512, 3>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 464,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 512, 4>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 512, 5>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 512, 6>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<double, 512, 7>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, double const*, double const*, double*, int const*, int const*)": {
+   "instructions": 472,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 9,
+    "LDG.E.CONSTANT": 24,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 2,
+    "LDS.64": 8,
+    "LDS.U16": 2,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.64": 17,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 128, 3>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 128, 4>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 128, 5>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 128, 6>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 128, 7>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 880,
+   "selected": {
+    "ATOMS.CAST.SPIN": 7,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 7,
+    "FMUL": 7,
+    "LDG.E.CONSTANT": 39,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 42,
+    "LDS.U16": 14,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 7,
+    "STS": 66,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 256, 3>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 256, 4>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 256, 5>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 256, 6>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 256, 7>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 512, 3>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 512, 4>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 512, 5>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 512, 6>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void boo_spmm_nnzflat_kernel<float, 512, 7>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int const*, int const*, int const*, int const*, int const*, int const*, int const*, unsigned char const*, unsigned short const*, float const*, float const*, float*, int const*, int const*)": {
+   "instructions": 424,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.CONSTANT": 33,
+    "LDG.E.U16.CONSTANT": 8,
+    "LDG.E.U8.CONSTANT": 1,
+    "LDS": 6,
+    "LDS.U16": 2,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 33,
+    "STS.U16": 8
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 544,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 544,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, double, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 544,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 544,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 544,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<int, float, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 544,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 496,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 608,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 600,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 608,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 552,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, double, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 11,
+    "LDG.E.CONSTANT": 2,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 600,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 600,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 600,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_kernel<long, float, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 592,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 2,
+    "LDG.E.CONSTANT": 11,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, double, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<int, float, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, double, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "DADD": 1,
+    "DMUL": 1,
+    "FMUL": 2,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 344,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 400,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_onthefly_kernel<long, float, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 488,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 1,
+    "FMUL": 3,
+    "FMUL.RZ": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 368,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 368,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 368,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, double, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, double const*, double const*, double*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 360,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 360,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 360,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 528,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 528,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<int, float, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, int const*, int const*, float const*, float const*, float*)": {
+   "instructions": 528,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 368,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 368,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 368,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, double, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, double const*, double const*, double*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN.64": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "DADD": 1,
+    "DMUL": 1,
+    "LDG.E.64.CONSTANT": 10,
+    "LDG.E.CONSTANT": 3,
+    "LDS.64": 6,
+    "LDS.U8": 1,
+    "RED.E.ADD.F64.RN.STRONG.GPU": 1,
+    "STS.64": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 2, 2, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 360,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 2, 2, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 360,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 2, 2, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 360,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 4, 4, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 4, 4, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 4, 4, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 432,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 8, 8, 1024, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 8, 8, 2048, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  },
+  "void pbr_spmm_nnzflat_shared_kernel<long, float, 8, 8, 512, 128, 512>(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, long const*, long const*, long const*, float const*, float const*, float*)": {
+   "instructions": 536,
+   "selected": {
+    "ATOMS.CAST.SPIN": 1,
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "FADD": 1,
+    "FMUL": 1,
+    "LDG.E.64.CONSTANT": 1,
+    "LDG.E.CONSTANT": 12,
+    "LDS": 3,
+    "LDS.U8": 1,
+    "RED.E.ADD.F32.FTZ.RN.STRONG.GPU": 1,
+    "STS": 16,
+    "STS.U8": 1
+   }
+  }
+ }
+}

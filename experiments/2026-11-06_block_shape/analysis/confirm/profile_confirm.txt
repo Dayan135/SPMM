@@ -1,0 +1,21 @@
+# label                         cell                                    arm
+# Matched-shape profiles (2026-11-10): frozen winner vs tuned 32x32 comparator, plus the fastest
+# same-cell cuSPARSE arms. Large gains: fem2d_permuted, roadnet. Loses to cuSPARSE: fem2d.
+# Occupancy drops yet wins: diag_b1.0 (67->50% threads), diag_dd0.05 (100->83% threads).
+fp512_win    confirm_fem2d_permuted_F512_orig       fem2d_permuted@k256x64:rs_p64_t512_f4
+fp512_32     confirm_fem2d_permuted_F512_orig       fem2d_permuted@k32x32:rs_p64_t256_f4
+fp512_csr3   confirm_fem2d_permuted_F512_orig       fem2d_permuted:direct_CSR_ALG3_api
+fp512_p_alg2 confirm_fem2d_permuted_F512_perm32x32  fem2d_permuted:perm32x32_direct_CSR_ALG2_steady_api
+fp512_p_def  confirm_fem2d_permuted_F512_perm32x32  fem2d_permuted:perm32x32_direct_DEFAULT_steady_api
+rn128_win    confirm_roadnet_F128_orig              roadnet@k128x64:rs_p32_t256_f4
+rn128_32     confirm_roadnet_F128_orig              roadnet@k32x32:rs_p32_t128_f4
+rn128_csr3   confirm_roadnet_F128_orig              roadnet:direct_CSR_ALG3_api
+rn128_p_alg3 confirm_roadnet_F128_perm32x32         roadnet:perm32x32_direct_CSR_ALG3_steady_api
+fe512_win    confirm_fem2d_F512_orig                fem2d@k256x64:rs_p64_t512_f4
+fe512_32     confirm_fem2d_F512_orig                fem2d@k32x32:rs_p64_t256_f4
+fe512_csr2   confirm_fem2d_F512_orig                fem2d:direct_CSR_ALG2_api
+fe512_p_alg2 confirm_fem2d_F512_perm256x64          fem2d:perm256x64_direct_CSR_ALG2_steady_api
+db128_win    confirm_diag_b1.0_F128_orig            diag_b1.0@k64x32:rs_p128_t256_f4
+db128_32     confirm_diag_b1.0_F128_orig            diag_b1.0@k32x32:rs_p128_t256_f4
+dd512_win    confirm_diag_dd0.05_F512_orig          diag_dd0.05@k128x64:rs_p64_t256_f2
+dd512_32     confirm_diag_dd0.05_F512_orig          diag_dd0.05@k32x32:rs_p64_t256_f2

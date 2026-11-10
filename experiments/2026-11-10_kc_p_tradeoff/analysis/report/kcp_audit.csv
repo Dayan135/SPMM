@@ -1,0 +1,3 @@
+alloc,gpus,tasks,cells,measured,kineto_verified,nsys_only,unverified
+kcp:alloc1,5,10,10,2172,2172,0,0
+kcp:alloc2,3,10,10,2172,2172,0,0

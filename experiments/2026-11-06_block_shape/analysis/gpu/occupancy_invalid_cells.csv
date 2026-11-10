@@ -1,0 +1,3 @@
+alloc,cell,gpu_uuid,tag,ratio
+occupancy:alloc2,occupancy_webbase_F128,991c4f33-740b-2c0f-21f1-4ca18834ca59,rs_p64_t256_f2_dup,1.238246369499332
+occupancy:alloc2,occupancy_webbase_F128,991c4f33-740b-2c0f-21f1-4ca18834ca59,rs_p64_t256_f1_pad0,0.4553691941487709

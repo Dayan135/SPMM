@@ -1,0 +1,150 @@
+{
+ "stage": "quick_decode",
+ "warmup": 5,
+ "repeats": 20,
+ "order_seed": 711000,
+ "order_mode": "independent seeded shuffle per repeat",
+ "extension_sha256": "9d4318d5149ce732a5dc38d8c3e0bd9a507491561069b956563cb0d21214f1cd",
+ "gate_sha256": {
+  "diag_b1.0.csv": "8bb6ac7dcff74fa49743a55d210bc24b16031fa7868ef8ad346c2cff3b18424e",
+  "diag_dd0.05.csv": "ba76725b549ebb91a11812e10b9c8c1f3c9d8852f3f8412b1019a453144ec052",
+  "fem2d.csv": "e05ef97cff37515eeb4f2ccbad29640c50a68f1757ff21ce49405f34e9fb67ef",
+  "fem2d_permuted.csv": "69bab59e285c3cbda851b24177a19fb5ae9cdadf21efa9969545acd5631dead4",
+  "roadnet.csv": "5c11a55d5921944235b8f8ec1ecb5a3e9389c809359489eeb0576f8853c9f71f"
+ },
+ "resources_sha256": "8efaadb4a4eea387aa5fd5b0ee0f4f043dd0b1e70ba83e793a72bb9cd416d1a7",
+ "fixed": {
+  "dtype": "float32",
+  "batch": 1,
+  "seed": 0,
+  "slab": 512,
+  "nz_order": "rowmajor",
+  "launch_mode": "auto",
+  "csr_mode": 0,
+  "explicit_zeros": "keep",
+  "small_block_policy": "remainder"
+ },
+ "requested_arm_names": [],
+ "tasks": [
+  {
+   "task": 0,
+   "inputs": [
+    "fem2d_permuted"
+   ],
+   "cells": [
+    {
+     "cell": "qd_fem2d_permuted_F512",
+     "features": 512,
+     "objects": [
+      {
+       "input": "fem2d_permuted",
+       "method": "hem",
+       "row_label_sha256": "790b09b2d58e8eabd7fcdcaad03d3ea669b4a8b750d279264ddcdb846d068d7c",
+       "col_label_sha256": "790b09b2d58e8eabd7fcdcaad03d3ea669b4a8b750d279264ddcdb846d068d7c",
+       "boo_digest": "6cce0cb895a35203f6f89ee2e6d84579c59dcd59070bf59439a52dfb1334d06d",
+       "kr": 32,
+       "kc": 32,
+       "gate_passes": true,
+       "arms": [
+        "rs_p64_t256_f4"
+       ]
+      },
+      {
+       "input": "fem2d_permuted",
+       "method": "hem",
+       "row_label_sha256": "171efb68cf601f9a61573ce2bf9970a46a390ff8d6e188db45e3380361baeb77",
+       "col_label_sha256": "002015a98130b34f48626ff2898aba6aa972b5a8d0699c06f137c7b6838680bd",
+       "boo_digest": "27e1da0faa304cc2ddab10fb00959974b52c3818cf7f7aaf88552b771dfcdbab",
+       "kr": 128,
+       "kc": 64,
+       "gate_passes": true,
+       "arms": [
+        "rs_p8_t256_f4",
+        "rs_p16_t256_f4",
+        "rs_p32_t256_f4",
+        "rs_p64_t256_f4",
+        "rs_p128_t256_f4",
+        "rs_p32_t256_f4_dup"
+       ]
+      },
+      {
+       "input": "fem2d_permuted",
+       "method": "hem",
+       "row_label_sha256": "a35fb25671df66bfb85b61beee49c92dcf81bba4e0cb762cd524bc931162205c",
+       "col_label_sha256": "002015a98130b34f48626ff2898aba6aa972b5a8d0699c06f137c7b6838680bd",
+       "boo_digest": "36244e675a06bf749299eef24361b56d9f1364155dc459661997ee04bd4c07b4",
+       "kr": 256,
+       "kc": 64,
+       "gate_passes": true,
+       "arms": [
+        "rs_p64_t512_f4",
+        "rs_p64_t512_f4_dup"
+       ]
+      }
+     ],
+     "role": "quick_edit"
+    }
+   ]
+  },
+  {
+   "task": 1,
+   "inputs": [
+    "roadnet"
+   ],
+   "cells": [
+    {
+     "cell": "qd_roadnet_F512",
+     "features": 512,
+     "objects": [
+      {
+       "input": "roadnet",
+       "method": "metis",
+       "row_label_sha256": "20cfd43aad9c0a173b13558cb1b8459f3e1f99ddbcd0c408cfb03d061a3cd02a",
+       "col_label_sha256": "20cfd43aad9c0a173b13558cb1b8459f3e1f99ddbcd0c408cfb03d061a3cd02a",
+       "boo_digest": "b66d0e56388ae1a92ccf05726fb1cbeb0ea51b63b667ded8f06140a8719b2c23",
+       "kr": 32,
+       "kc": 32,
+       "gate_passes": true,
+       "arms": [
+        "rs_p64_t256_f4"
+       ]
+      },
+      {
+       "input": "roadnet",
+       "method": "metis",
+       "row_label_sha256": "142068c90cdb07733c943d25bdcab07869b568958dd1b55b79fad0b99186a183",
+       "col_label_sha256": "88f26f99ce6891a680cdc374d1a28d597bd699c7f00f2538025ff8a24422cc79",
+       "boo_digest": "9d7df201891566439ff82d4b4fad36f0768bc95e46c31b0f2b8afaa5b44cb0f5",
+       "kr": 128,
+       "kc": 64,
+       "gate_passes": true,
+       "arms": [
+        "rs_p8_t256_f4",
+        "rs_p16_t256_f4",
+        "rs_p32_t256_f4",
+        "rs_p64_t256_f4",
+        "rs_p128_t256_f4",
+        "rs_p32_t256_f4_dup"
+       ]
+      },
+      {
+       "input": "roadnet",
+       "method": "metis",
+       "row_label_sha256": "0f30eb1da3e896fce294965864f309fade85807872c661b30efa788660b958dd",
+       "col_label_sha256": "88f26f99ce6891a680cdc374d1a28d597bd699c7f00f2538025ff8a24422cc79",
+       "boo_digest": "2c592ac7e6d5802f9961252dea29e8057adb6f39f06ad54b2534e86be23a06ff",
+       "kr": 256,
+       "kc": 64,
+       "gate_passes": true,
+       "arms": [
+        "rs_p64_t512_f4",
+        "rs_p64_t512_f4_dup"
+       ]
+      }
+     ],
+     "role": "quick_edit"
+    }
+   ]
+  }
+ ]
+}

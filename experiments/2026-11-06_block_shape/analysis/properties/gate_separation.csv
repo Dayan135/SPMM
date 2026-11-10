@@ -1,0 +1,3 @@
+passes,rows,median_speedup,wins,win_fraction
+False,30,0.9125,2,0.0666666667
+True,68,1.055,36,0.529411765
