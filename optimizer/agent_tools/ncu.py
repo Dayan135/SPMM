@@ -90,7 +90,8 @@ def _name(value: str) -> str:
 
 
 def _value(row, idx, units, key):
-    return num(row[idx[key]], units[idx[key]]) if key in idx else None
+    # Launch metrics carry a per-block unit ('Kbyte/block'); scale by the prefix part.
+    return num(row[idx[key]], units[idx[key]].removesuffix('/block')) if key in idx else None
 
 
 def _load(path: Path):
