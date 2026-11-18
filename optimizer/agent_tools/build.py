@@ -51,7 +51,9 @@ def _snapshot(sha: str, config: dict) -> tuple[str, str]:
         f'git -C {shlex.quote(repo)} cat-file -e {shlex.quote(sha)}^{{commit}} && '
         f'if [ ! -f {shlex.quote(src_dir)}/.agent_snapshot_ok ]; then '
         f'git -C {shlex.quote(repo)} archive {shlex.quote(sha)} | '
-        f'tar -x -C {shlex.quote(src_dir)} --exclude=torch_fast_spdmm '
+        # No --exclude=torch_fast_spdmm: GNU tar matches it against any path component
+        # and would also drop tests/torch_fast_spdmm/. The top-level dir is removed below.
+        f'tar -x -C {shlex.quote(src_dir)} '
         f'--exclude=tests/torch_fast_spdmm/benchmark/results && '
         f'rm -rf {shlex.quote(src_dir)}/torch_fast_spdmm '
         f'{shlex.quote(src_dir)}/tests/torch_fast_spdmm/benchmark/results && '
@@ -95,7 +97,9 @@ def ensure_build(sha: str, *, config: dict | None = None) -> dict:
         result = submit_slurm_job(script, name=f'spmm-build-{tree}', time='00:45:00',
                                   mem='64G', sha=sha, config=cfg)
         if result['state'] != 'COMPLETED' or result['exit']:
-            checked_ssh(f'rm -rf {shlex.quote(build_dir)}', config=cfg)
+            # Keep a dir whose .so linked (failure came after compiling); retry reuses it.
+            checked_ssh(f'ls {shlex.quote(build_dir)}/torch_fast_spdmm/torch_fast_spdmm_core*.so '
+                        f'>/dev/null 2>&1 || rm -rf {shlex.quote(build_dir)}', config=cfg)
             return {'ok': False, 'cached': False, 'sha': sha, 'src_hash': tree,
                     'build_dir': build_dir, 'reason': 'build failed; rollback_workspace or fix and recommit',
                     'warnings': result['err_tail'].lower().count('warning'),

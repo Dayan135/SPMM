@@ -138,3 +138,15 @@ def test_commit_and_rollback(tmp_path):
     assert (repo/'torch_fast_spdmm/kernels/kernel.cu').read_text() == 'base\n'
     assert (repo/'CHANGELOG.md').read_text() == 'unrelated log\n'
     assert _git(repo, 'merge-base', '--is-ancestor', before, 'HEAD') == ''
+
+
+def test_slurm_header_merge():
+    config = dict(state.DEFAULT, preamble='', verified=None)
+    cpu = submit_slurm_job('#SBATCH --partition=main\n#SBATCH --time=00:10:00\necho x',
+                           gpu=False, dry_run=True, config=config)['rendered']
+    assert '--partition=main' in cpu and '--time=00:10:00' in cpu
+    assert '--account=erant' in cpu and '--qos=normal' in cpu and '--mem=' in cpu
+    gpu = submit_slurm_job('#SBATCH --partition=foo\n#SBATCH --gres=gpu:2\necho x',
+                           dry_run=True, config=config)['rendered']
+    assert '--partition=rtx3090' in gpu and '--gres=gpu:rtx_3090:1' in gpu
+    assert 'foo' not in gpu and 'gpu:2' not in gpu and '--qos=erant' in gpu

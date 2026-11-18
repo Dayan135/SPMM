@@ -35,25 +35,25 @@ def render(script_content: str, *, time='02:00:00', mem='64G', cpus=8,
     base_hash = git('rev-parse', f'{base_sha}:torch_fast_spdmm').stdout.strip()[:12]
     build_dir = f'{root}/builds/{src_hash}'
     out_dir = f'{root}/runs/{sha}'
-    directives = [
-        f'#SBATCH --job-name={name}',
-        f'#SBATCH --account=erant', f'#SBATCH --qos=erant',
-        f'#SBATCH --cpus-per-task={cpus}', f'#SBATCH --mem={mem}',
-        f'#SBATCH --time={time}', f'#SBATCH --output={out_dir}/%j.out',
-        f'#SBATCH --error={out_dir}/%j.err',
-    ]
-    if gpu:
-        directives += ['#SBATCH --partition=rtx3090', '#SBATCH --gres=gpu:rtx_3090:1',
-                       '#SBATCH --exclude=' + ','.join(cfg['exclude_nodes'])]
-    else:
-        directives += ['#SBATCH --partition=cpu']
     lines = script_content.splitlines()
+    # Script-supplied #SBATCH options override the defaults, except the ones the
+    # tool must control: log paths always, and partition/gres/exclude for GPU jobs.
+    merged = {'job-name': name, 'account': 'erant', 'qos': 'erant' if gpu else 'normal',
+              'cpus-per-task': str(cpus), 'mem': mem, 'time': time}
+    enforced = {'output', 'error', 'gres', 'exclude'} | ({'partition'} if gpu else set())
+    for line in lines:
+        match = re.match(r'#SBATCH\s+--([A-Za-z0-9-]+)(?:[=\s]\s*(\S.*?))?\s*$', line)
+        if match and match[1] not in enforced:
+            merged[match[1]] = match[2]
+    if gpu:
+        merged.update({'partition': 'rtx3090', 'gres': 'gpu:rtx_3090:1',
+                       'exclude': ','.join(cfg['exclude_nodes'])})
+    else:
+        merged.setdefault('partition', 'cpu')
+    merged.update({'output': f'{out_dir}/%j.out', 'error': f'{out_dir}/%j.err'})
+    directives = [f'#SBATCH --{key}' + ('' if value is None else f'={value}')
+                  for key, value in merged.items()]
     body = [line for line in lines if not line.startswith('#SBATCH') and not line.startswith('#!')]
-    # Existing header values are retained only for CPU partition selection.
-    if not gpu:
-        partition = next((line for line in lines if line.startswith('#SBATCH --partition=')), None)
-        if partition:
-            directives[-1] = partition
     preamble = '' if '# AGENT_NO_PREAMBLE' in script_content else cfg.get('preamble', '')
     script = '\n'.join(['#!/bin/bash', *directives, preamble,
                         f'mkdir -p {shlex.quote(root)}/runs/{sha}/$SLURM_JOB_ID',
