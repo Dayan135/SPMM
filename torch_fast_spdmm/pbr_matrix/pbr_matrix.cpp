@@ -388,7 +388,8 @@ pbr_matrix_t<index_t, scalar_t> csr_to_pbr(const py::array_t<index_t, py::array:
 
         // Are we done processing a stripe (row of blocks)?
         // If so, decide for each block whether it should be stored in the PBR matrix or in the remainder COO matrix.
-        if ((row + 1) / block_rows > block_row) {
+        // The final stripe is partial when rows % block_rows != 0, so also flush on the last row.
+        if ((row + 1) / block_rows > block_row || row + 1 == rows) {
             for (const auto& [block_index, code] : stripe_block_codes) {
                 int nnz_in_block = (int)code.count();
                 if (nnz_in_block >= min_nnz_per_block) {

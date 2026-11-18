@@ -203,3 +203,38 @@ def test_experimental_kernel_matches_reference_on_row_skewed_pattern(kernel_name
 
     assert_close(y_experimental, y_block, rtol=1e-5, atol=1e-5,
                  msg=f"{kernel_name} kernel output differs from block kernel on row_skewed pattern")
+
+
+def _partial_stripe_mat(rows, dtype, seed=0):
+    """Random square CSR whose last row is guaranteed non-empty, so a dropped
+    final partial stripe (rows % block_rows != 0) is always visible."""
+    rng = np.random.default_rng(seed)
+    mat = sp.random(rows, rows, density=0.3, format='lil', dtype=dtype, random_state=rng)
+    mat[rows - 1, rng.integers(0, rows, size=min(3, rows))] = 1.0
+    mat = mat.tocsr()
+    mat.sort_indices()
+    return mat
+
+
+@mark.parametrize('rows', [1, 9, 13, 17, 1001])
+@mark.parametrize('block_size', [4, 8])
+@mark.parametrize('min_nnz_per_block', [1, 4, 64], ids=['all_blocks', 'default', 'mostly_coo'])
+def test_pbr_roundtrip_partial_last_stripe(rows, block_size, min_nnz_per_block):
+    mat = _partial_stripe_mat(rows, np.float32)
+    pbr_mat = csr_to_pbr(mat, block_rows=block_size, block_cols=block_size, min_nnz_per_block=min_nnz_per_block)
+    result = pbr_to_csr(pbr_mat)
+    np.testing.assert_array_equal(result.indptr, mat.indptr, err_msg="Indptr mismatch")
+    np.testing.assert_array_equal(result.indices, mat.indices, err_msg="Indices mismatch")
+    np.testing.assert_allclose(result.data, mat.data, err_msg="Data values mismatch")
+
+
+@mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@mark.parametrize('rows', [9, 13, 1001])
+@mark.parametrize('min_nnz_per_block', [1, 4, 64], ids=['all_blocks', 'default', 'mostly_coo'])
+def test_pbr_matmul_cuda_partial_last_stripe(rows, min_nnz_per_block):
+    mat = _partial_stripe_mat(rows, np.float32)
+    x = torch.randn((1, rows, 32), dtype=torch.float32, device='cuda')
+    pbr_mat = csr_to_pbr(mat, block_rows=8, block_cols=8, min_nnz_per_block=min_nnz_per_block).to('cuda')
+    y = pbr_batched_matmul_cuda(pbr_mat, x)
+    expected = torch.from_numpy(mat.astype(np.float64) @ x[0].cpu().double().numpy()).float()[None]
+    assert_close(y.cpu(), expected, rtol=1e-5, atol=1e-5)
