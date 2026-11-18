@@ -165,19 +165,23 @@ def _format_stats(csr):
     }
 
 
-def download(root, cache):
-    for name, (group, *_rest) in SPECS.items():
-        if group is not None:
+def download(root, cache, names=None):
+    for name in expand(names or ['all']):
+        if SPECS[name][0] is not None:
             rm.download(rm.resolve([name])[0], cache)
 
 
-def prepare(root, cache):
+def prepare(root, cache, names=None):
     root = Path(root)
     (root / 'generated').mkdir(parents=True, exist_ok=True)
+    path = root / 'manifest.json'
+    # Incremental: matrices prepared earlier keep their records.
+    previous = json.loads(path.read_text())['matrices'] if path.exists() else {}
     manifest = {'version': 1, 'numpy_version': np.__version__,
                 'scipy_version': scipy.__version__, 'python_version': platform.python_version(),
-                'matrices': {}}
-    for name, (group, rows, cols, nnz) in SPECS.items():
+                'matrices': previous}
+    for name in expand(names or ['all']):
+        group, rows, cols, nnz = SPECS[name]
         if group is None:
             path = _generated_path(root, name)
             if path.exists():
@@ -211,12 +215,12 @@ def prepare(root, cache):
     return manifest
 
 
-def refs(root, cache, features=FEATURES):
+def refs(root, cache, features=FEATURES, names=None):
     root = Path(root)
     out = root / 'refs'
     out.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((root / 'manifest.json').read_text())
-    for name in SPECS:
+    for name in expand(names or ['all']):
         csr, _ = load_matrix(root, name, cache)
         for f in features:
             stem = out / f'{name}_F{f}'
@@ -239,10 +243,12 @@ def main(argv=None):
     ap.add_argument('stage', choices=['download', 'prepare', 'refs'])
     ap.add_argument('--root', type=Path, required=True)
     ap.add_argument('--cache', type=Path, default=rm.default_cache())
+    ap.add_argument('--matrices', nargs='*', default=None,
+                    help='matrix ids or subset names (default: all)')
     args = ap.parse_args(argv)
-    if args.stage == 'download': download(args.root, args.cache)
-    elif args.stage == 'prepare': prepare(args.root, args.cache)
-    else: refs(args.root, args.cache)
+    if args.stage == 'download': download(args.root, args.cache, args.matrices)
+    elif args.stage == 'prepare': prepare(args.root, args.cache, args.matrices)
+    else: refs(args.root, args.cache, names=args.matrices)
 
 
 if __name__ == '__main__':

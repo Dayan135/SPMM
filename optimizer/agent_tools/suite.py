@@ -16,9 +16,13 @@ EXPECTED_NNZ = {'web-Google': 5105039, 'soc-Pokec': 30622564,
                 'blockdiag32': 8388608, 'pruned16x16': 4194304}
 
 
-def setup_suite(stage: str) -> dict:
+def setup_suite(stage: str, matrices: list[str] | None = None) -> dict:
     if stage not in ('download', 'prepare', 'refs', 'all'):
         raise ArgumentError('stage must be download, prepare, refs or all')
+    if matrices is not None and (not isinstance(matrices, list) or
+                                 any(not isinstance(m, str) for m in matrices)):
+        raise ArgumentError('matrices must be a list of matrix ids or subset names')
+    only = (' --matrices ' + ' '.join(shlex.quote(m) for m in matrices)) if matrices else ''
     cfg = state.read()
     if not cfg['preamble']:
         built = load_build_env(cfg['env_name'], cfg['modules'])
@@ -36,17 +40,18 @@ def setup_suite(stage: str) -> dict:
     prefix = f'use {shlex.quote(build)} {shlex.quote(source)}; '
     if stage in ('download', 'all'):
         command = ('bash -lc ' + shlex.quote(cfg['preamble'] + '\n' + prefix +
-                   f'python -m benchmark.universal_suite download --root {suite} --cache {cache}'))
+                   f'python -m benchmark.universal_suite download --root {suite} --cache {cache}{only}'))
         checked_ssh(command, timeout=7200, config=cfg)
         if stage == 'download':
-            return {'matrices': {name: {'nnz': nnz, 'ok': True}
-                                 for name, nnz in EXPECTED_NNZ.items()},
+            from .bench import expand
+            return {'matrices': {name: {'nnz': EXPECTED_NNZ[name], 'ok': True}
+                                 for name in expand(matrices or ['all'])},
                     'manifest': f'{suite}/manifest.json'}
     for phase in ('prepare', 'refs'):
         if stage not in (phase, 'all'):
             continue
         body = (f'use {shlex.quote(build)} {shlex.quote(source)}\n'
-                f'python -m benchmark.universal_suite {phase} --root {suite} --cache {cache}\n')
+                f'python -m benchmark.universal_suite {phase} --root {suite} --cache {cache}{only}\n')
         job = submit_slurm_job(body, name=f'spmm-suite-{phase}', gpu=False,
                                time='12:00:00', mem='128G', cpus=16, sha=sha, config=cfg)
         if job['state'] != 'COMPLETED' or job['exit']:
