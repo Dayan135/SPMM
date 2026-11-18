@@ -13,6 +13,7 @@
 
 #include "../kernels/boo_kernels.hpp"
 #include "../kernels/csr_kernels.hpp"
+#include "../kernels/pbr_kernels.hpp"  // launch_csr_spmm declaration
 
 namespace {
 
