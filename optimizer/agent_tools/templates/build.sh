@@ -5,7 +5,13 @@ SHA=@@SHA@@
 TREE=@@SRC_HASH@@
 start=$SECONDS
 cd "$BUILD/torch_fast_spdmm"
-python setup.py build_ext --inplace > "$BUILD/build.log" 2>&1 || { tail -40 "$BUILD/build.log" >&2; exit 1; }
+python setup.py build_ext --inplace > "$BUILD/build.log" 2>&1 || {
+  cp "$BUILD/build.log" "{{RUN_DIR}}/build.log"
+  grep -n -C 2 -E 'error:|FAILED:|fatal error:' "$BUILD/build.log" >&2 || true
+  tail -40 "$BUILD/build.log" >&2
+  exit 1
+}
+cp "$BUILD/build.log" "{{RUN_DIR}}/build.log"
 so=$(find "$BUILD/torch_fast_spdmm" -maxdepth 1 -name 'torch_fast_spdmm_core*.so' -print -quit)
 test -n "$so"
 use "$BUILD" "{{SRC_DIR}}"

@@ -51,7 +51,7 @@ EXTRA = (
     *FLOP, 'dram__bytes_read.sum', 'dram__bytes_write.sum',
     'sm__sass_thread_inst_executed_op_ffma_pred_on.sum.peak_sustained',
     'sm__cycles_elapsed.avg.per_second', 'dram__bytes.sum.peak_sustained',
-    'dram__cycles_elapsed.avg.per_second', DERIVED_FFMA,
+    'dram__cycles_elapsed.avg.per_second',
     'l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum',
     'l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum',
     'l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum',
@@ -64,6 +64,7 @@ EXTRA = (
     *(STALL_FMT.format(s) for s in STALLS),
 )
 EXPECTED = tuple(dict.fromkeys((*SOL.values(), *DIRECT.values(), *EXTRA)))
+RAW_FIELDS = EXPECTED + (DERIVED_FFMA,)
 COUNTS = {'warp.div_br', 'mem.atom_req', 'mem.smem_inst'}
 COLS = ['name', 'us', 'share', 'launch', 'sol', 'roof', 'occ', 'warp', 'stall', 'mem']
 
@@ -100,7 +101,7 @@ def _load(path: Path):
     missing = sorted(name for name in EXPECTED if name not in idx)
     by_name = defaultdict(list)
     for row in rows:
-        raw = {name: _value(row, idx, units, name) for name in EXPECTED}
+        raw = {name: _value(row, idx, units, name) for name in RAW_FIELDS}
         by_name[_name(row[idx['Kernel Name']])].append(raw)
     if not by_name:
         raise ArgumentError(f'{path}: no kernel rows')
@@ -274,12 +275,14 @@ def _parse(location: str):
         raise ArgumentError(f'case metadata missing: {sidecar}')
     case = json.loads(sidecar.read_text())
     groups, missing = _load(path)
-    entries = [_aggregate(name, launches) for name, launches in groups.items()]
-    entries.sort(key=lambda pair: -pair[0]['us'])
-    total = sum(x['us'] for x, _ in entries)
+    ordered = sorted(groups.items(), key=lambda item: -sum(
+        row['gpu__time_duration.sum'] for row in item[1]))
+    entries = [_aggregate(name, launches) for name, launches in ordered]
+    total = sum(sum(row['gpu__time_duration.sum'] for row in launches)/1000
+                for _, launches in ordered)
     out = []
-    for kernel, stalls in entries:
-        kernel['share'] = _q(kernel['us'] / total)
+    for (kernel, stalls), (_, launches) in zip(entries, ordered):
+        kernel['share'] = _q(sum(row['gpu__time_duration.sum'] for row in launches)/1000 / total)
         if kernel['share'] < .15:
             kernel = {key: kernel[key] for key in ('name', 'us', 'share', 'sol')}
             kernel['stall'] = [[reason, round(pct, 1)] for reason, pct in

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import fcntl
 import os
 from pathlib import Path
 import re
@@ -68,28 +69,42 @@ def ensure_build(sha: str, *, config: dict | None = None) -> dict:
     sha = git('rev-parse', f'{sha}^{{commit}}').stdout.strip()
     if not _pushed(sha):
         return {'ok': False, 'sha': sha, 'reason': 'commit is not pushed to origin; push it first'}
-    tree, build_dir = _snapshot(sha, cfg)
-    marker = f'{build_dir}/BUILD_OK.json'
-    cached = ssh(f'cat {shlex.quote(marker)}', config=cfg)
-    if cached.returncode == 0:
-        info = json.loads(cached.stdout)
-        info.update(ok=True, cached=True, build_dir=build_dir, err_tail=None)
+    tree = git('rev-parse', f'{sha}:torch_fast_spdmm').stdout.strip()[:12]
+    lock_dir = state.STATE.parent / 'locks'
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    with (lock_dir / f'{tree}.lock').open('a+') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        root = cfg['agent_root'].rstrip('/')
+        build_dir = f'{root}/builds/{tree}'
+        src_dir = f'{root}/src/{sha}'
+        marker = f'{build_dir}/BUILD_OK.json'
+        cached = ssh(f'test -f {shlex.quote(src_dir)}/.agent_snapshot_ok && '
+                     f'cat {shlex.quote(marker)}', config=cfg)
+        if cached.returncode == 0:
+            info = json.loads(cached.stdout)
+            info.update(ok=True, cached=True, build_dir=build_dir, err_tail=None)
+            return info
+        tree, build_dir = _snapshot(sha, cfg)
+        cached = ssh(f'cat {shlex.quote(marker)}', config=cfg)
+        if cached.returncode == 0:
+            info = json.loads(cached.stdout)
+            info.update(ok=True, cached=True, build_dir=build_dir, err_tail=None)
+            return info
+        template = (Path(__file__).parent / 'templates' / 'build.sh').read_text()
+        script = template.replace('@@BUILD_DIR@@', build_dir).replace('@@SHA@@', sha).replace('@@SRC_HASH@@', tree)
+        result = submit_slurm_job(script, name=f'spmm-build-{tree}', time='00:45:00',
+                                  mem='64G', sha=sha, config=cfg)
+        if result['state'] != 'COMPLETED' or result['exit']:
+            checked_ssh(f'rm -rf {shlex.quote(build_dir)}', config=cfg)
+            return {'ok': False, 'cached': False, 'sha': sha, 'src_hash': tree,
+                    'build_dir': build_dir, 'reason': 'build failed; rollback_workspace or fix and recommit',
+                    'warnings': result['err_tail'].lower().count('warning'),
+                    'err_tail': result['err_tail'], 'job': result['job']}
+        info = json.loads(checked_ssh(f'cat {shlex.quote(marker)}', config=cfg).stdout)
+        info.update(ok=True, cached=False, build_dir=build_dir, err_tail=None)
+        with state.locked() as current:
+            current['builds'][tree] = {'sha': sha, 'so_sha256': info['so_sha256']}
         return info
-    template = (Path(__file__).parent / 'templates' / 'build.sh').read_text()
-    script = template.replace('@@BUILD_DIR@@', build_dir).replace('@@SHA@@', sha).replace('@@SRC_HASH@@', tree)
-    result = submit_slurm_job(script, name=f'spmm-build-{tree}', time='00:45:00',
-                              mem='64G', sha=sha, config=cfg)
-    if result['state'] != 'COMPLETED' or result['exit']:
-        checked_ssh(f'rm -rf {shlex.quote(build_dir)}', config=cfg)
-        return {'ok': False, 'cached': False, 'sha': sha, 'src_hash': tree,
-                'build_dir': build_dir, 'reason': 'build failed; rollback_workspace or fix and recommit',
-                'warnings': result['err_tail'].lower().count('warning'),
-                'err_tail': result['err_tail'], 'job': result['job']}
-    info = json.loads(checked_ssh(f'cat {shlex.quote(marker)}', config=cfg).stdout)
-    info.update(ok=True, cached=False, build_dir=build_dir, err_tail=None)
-    with state.locked() as current:
-        current['builds'][tree] = {'sha': sha, 'so_sha256': info['so_sha256']}
-    return info
 
 
 def load_build_env(env_name: str, modules: list[str]) -> dict:
