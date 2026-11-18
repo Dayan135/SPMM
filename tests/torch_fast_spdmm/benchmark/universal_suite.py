@@ -130,15 +130,19 @@ def _format_stats(csr):
     pbr_nnz = len(pbr.block_data)
     pbr_origins = np.asarray(pbr.block_coords).reshape(-1, 2)[:, 0] if pbr_blocks else np.empty(0)
     pbr_touches = np.zeros(csr.shape[0], np.int32)
-    for row, code in zip(pbr_origins, pbr.block_codes):
-        for local in range(8):
-            if int(row)+local < csr.shape[0] and (int(code) >> (8*local)) & 255:
-                pbr_touches[int(row)+local] += 1
+    codes = np.asarray(pbr.block_codes, dtype=np.uint64)
+    origins = pbr_origins.astype(np.int64)
+    for local in range(8):
+        rows = origins + local
+        hit = (((codes >> np.uint64(8*local)) & np.uint64(255)) != 0) & (rows < csr.shape[0])
+        np.add.at(pbr_touches, rows[hit], 1)
     boo = spmm.csr_to_boo(csr, cluster='hem', target_nr=32, target_nc=32)
     boo_nnz = len(boo.nz_val)
     grp = np.asarray(boo.blk_row_grp, dtype=np.int32)
     touches = np.zeros(csr.shape[0], np.int32)
+    # Each BOO array property returns a fresh copy: read every array once, never in a loop.
     ptr, ids = np.asarray(boo.row_grp_ptr), np.asarray(boo.row_ids)
+    cptr, bcg = np.asarray(boo.col_grp_ptr), np.asarray(boo.blk_col_grp, dtype=np.int64)
     counts = np.diff(np.asarray(boo.blk_nz_ptr, dtype=np.int64))
     block_index = np.repeat(np.arange(len(grp), dtype=np.int64), counts)
     local_row = np.right_shift(np.asarray(boo.nz_idx, dtype=np.uint16),
@@ -153,10 +157,9 @@ def _format_stats(csr):
                 'remainder_fraction': len(pbr.remainder_col_ind)/csr.nnz,
                 'groups_touching_row_mean': float(pbr_touches.mean()),
                 'groups_touching_row_max': int(pbr_touches.max(initial=0))},
-        'boo': {'useful_block_occupancy': boo_nnz/sum(
-                    (ptr[g+1]-ptr[g]) *
-                    (boo.col_grp_ptr[boo.blk_col_grp[i]+1]-boo.col_grp_ptr[boo.blk_col_grp[i]])
-                    for i,g in enumerate(grp)) if boo_nnz else 0.,
+        'boo': {'useful_block_occupancy': boo_nnz/int(np.sum(
+                    np.diff(ptr.astype(np.int64))[grp] * np.diff(cptr.astype(np.int64))[bcg]))
+                    if boo_nnz else 0.,
                 'allocated_bytes_per_useful_nnz': (2*boo_nnz+4*boo_nnz+
                     4*len(boo.blk_nz_ptr)+9*len(boo.blk_row_grp))/boo_nnz if boo_nnz else 0.,
                 'remainder_fraction': len(boo.rem_col_ind)/csr.nnz,
