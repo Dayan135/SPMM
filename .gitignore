@@ -17,6 +17,8 @@ local-archives/
 /occupancy_sweep_results.json
 /REORDER_VS_BOO_*SAMPLES.csv
 /CUSPARSE_DIRECT_samples.csv.gz
+/.agent_loop/
+/tests/torch_fast_spdmm/benchmark/results/agent_runs/
 
 # Benchmark captures are archived separately; keep reports and summaries visible.
 /tests/torch_fast_spdmm/benchmark/results/**/*.npz

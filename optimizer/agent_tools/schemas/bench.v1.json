@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spmm-agent-loop/bench.v1.json",
+  "title": "bench.1 - compact SpMM benchmark result",
+  "description": "Output of run_benchmarks. Field meanings: reports/agent_loop/BENCH_SCHEMA.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "ok", "fmt", "kernel", "cand", "base", "env", "noise", "sum", "prep_ms", "cols", "rows", "skipped", "raw"],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "subset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n", "geo_x_base", "geo_x_cusp", "W", "L", "T"],
+      "properties": {
+        "n": {"type": "integer", "minimum": 0},
+        "geo_x_base": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "geo_x_cusp": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "W": {"type": "integer", "minimum": 0},
+        "L": {"type": "integer", "minimum": 0},
+        "T": {"type": "integer", "minimum": 0}
+      }
+    },
+    "pos": {"type": "number", "exclusiveMinimum": 0},
+    "posOrNull": {"type": ["number", "null"], "exclusiveMinimum": 0}
+  },
+  "properties": {
+    "v": {"const": "bench.1"},
+    "ok": {"type": "boolean"},
+    "fmt": {"enum": ["pbr", "boo"]},
+    "kernel": {"type": "string", "minLength": 1},
+    "cand": {"$ref": "#/$defs/sha"},
+    "base": {"$ref": "#/$defs/sha"},
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "job", "dtype", "reps", "warmup", "rounds"],
+      "properties": {
+        "node": {"type": "string"},
+        "job": {"type": "integer"},
+        "dtype": {"const": "fp32"},
+        "reps": {"type": "integer", "minimum": 1},
+        "warmup": {"type": "integer", "minimum": 0},
+        "rounds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "noise": {"type": "number", "minimum": 0},
+    "sum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tune", "held", "bw_pct_max", "fail", "skip"],
+      "properties": {
+        "tune": {"$ref": "#/$defs/subset"},
+        "held": {"$ref": "#/$defs/subset"},
+        "bw_pct_max": {"type": ["number", "null"], "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0},
+        "skip": {"type": "integer", "minimum": 0}
+      }
+    },
+    "prep_ms": {"type": "object", "additionalProperties": {"$ref": "#/$defs/pos"}},
+    "cols": {
+      "const": ["mat", "F", "k_ms", "k_iqr", "call_ms", "base_ms", "cusp_ms", "x_base", "x_cusp", "gbps", "mem_mib", "v"]
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {"type": "string"},
+          {"type": "integer", "minimum": 1},
+          {"$ref": "#/$defs/posOrNull"},
+          {"type": ["number", "null"], "minimum": 0},
+          {"$ref": "#/$defs/posOrNull"},
+          {"$ref": "#/$defs/posOrNull"},
+          {"$ref": "#/$defs/posOrNull"},
+          {"$ref": "#/$defs/posOrNull"},
+          {"$ref": "#/$defs/posOrNull"},
+          {"type": ["number", "null"], "minimum": 0},
+          {"type": ["number", "null"], "minimum": 0},
+          {"enum": ["W", "L", "T", "F"]}
+        ],
+        "items": false,
+        "minItems": 12
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [{"type": "string"}, {"type": "integer"}, {"type": "string"}],
+        "items": false,
+        "minItems": 3
+      }
+    },
+    "raw": {"type": "string"}
+  }
+}
