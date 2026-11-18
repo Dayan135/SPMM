@@ -223,15 +223,22 @@ def run_benchmarks(kernel_name: str, matrix_datasets: list[str], *, features=Non
     if not built_cand.get('ok') or not built_base.get('ok'):
         raise ArgumentError('candidate or baseline build unavailable; run load_build_env first')
     root = cfg['agent_root'].rstrip('/')
-    needed = ' '.join(shlex.quote(f'{root}/suite/refs/{m}_F{f}.json')
-                      for m in matrices for f in features)
-    check = ssh(f'test -f {root}/suite/manifest.json && for p in {needed}; do test -f "$p" || exit 4; done',
-                config=cfg)
-    if check.returncode:
-        raise ArgumentError('suite manifest or references missing; run setup_suite with stage=all or refs')
+    if ssh(f'test -f {root}/suite/manifest.json', config=cfg).returncode:
+        raise ArgumentError('suite manifest missing; run setup_suite with stage=all')
+    # Cases whose reference was never ingested (e.g. a download that failed upstream) are
+    # reported in `skipped` instead of aborting the run; the job runs the rest.
+    present = set(checked_ssh(f'ls {root}/suite/refs/ 2>/dev/null || true', config=cfg).stdout.split())
+    cases, unavailable = [], []
+    for m in matrices:
+        for f in features:
+            if f'{m}_F{f}.json' in present:
+                cases.append({'mat': m, 'F': f})
+            else:
+                unavailable.append([m, f, 'missing: reference not in suite (run setup_suite)'])
+    if not cases:
+        raise ArgumentError('no requested case has a reference; run setup_suite with stage=all or refs')
     manifest = json.loads(checked_ssh(f'cat {root}/suite/manifest.json', config=cfg).stdout)
     seed = 20261117
-    cases = [{'mat': m, 'F': f} for m in matrices for f in features]
     command = shlex.quote(json.dumps(cases, separators=(',', ':')))
     runner = []
     for r in range(1, rounds+1):
@@ -259,7 +266,9 @@ def run_benchmarks(kernel_name: str, matrix_datasets: list[str], *, features=Non
     result = aggregate(run_local/'samples.csv', run_local/'summary.csv', manifest,
                        fmt=parsed['fmt'], kernel=parsed['kernel'], cand=cand, base=base,
                        job=job['job'], node=job['node'], reps=reps, warmup=warmup, rounds=rounds)
-    expected = {(c['mat'], c['F']) for c in cases}
+    result['skipped'].extend(unavailable)
+    result['sum']['skip'] = len(result['skipped'])
+    expected = {(c['mat'], c['F']) for c in cases} | {(u[0], u[1]) for u in unavailable}
     reported = {(r[0], r[1]) for r in result['rows']} | {(r[0], r[1]) for r in result['skipped']}
     if reported != expected:
         raise RuntimeError(f'benchmark case coverage mismatch: missing={sorted(expected-reported)}, '
