@@ -137,6 +137,12 @@ def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest):
                        direct.run, direct.timed_run, ref.check)]
         summary, samples, failed = bn.measure(torch, arms, args.warmup, args.reps,
                                                20261117 + round_*1009 + f)
+        for row in failed:
+            reason = row.get('reason', '')
+            if role == 'base' and reason.startswith('AttributeError:'):
+                row.update(status='unsupported', reason='unsupported in base')
+            elif 'unsupported' in reason.lower() and not row.get('bound_violations'):
+                row.update(status='unsupported', reason='unsupported: '+reason[:200])
         peak = torch.cuda.max_memory_allocated()/(1 << 20)
         for row in summary + failed:
             row.update(base, prep_ms=prep_ms, mem_mib=peak)
