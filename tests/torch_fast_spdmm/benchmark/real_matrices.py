@@ -69,12 +69,21 @@ PANEL = (
     MatrixSpec('SNAP', 'roadNet-CA', 'undirected binary road graph; very sparse'),
     MatrixSpec('LPnetlib', 'lp_cre_b', 'rectangular LP; independent row/column grouping'),
 )
-CATALOG = {spec.key: spec for spec in PANEL}
+UNIVERSAL = (
+    MatrixSpec('Williams', 'cant', 'finite-element structure'),
+    MatrixSpec('SNAP', 'web-Google', 'directed web graph'),
+    MatrixSpec('SNAP', 'soc-Pokec', 'social graph'),
+    MatrixSpec('Williams', 'pdb1HYS', 'protein structure'),
+    MatrixSpec('Sandia', 'ASIC_680k', 'circuit simulation'),
+    MatrixSpec('SNAP', 'amazon0312', 'product graph'),
+    MatrixSpec('Mittelmann', 'rail4284', 'rectangular railway set cover'),
+)
+CATALOG = {spec.key: spec for spec in PANEL + UNIVERSAL}
 
 
 def resolve(names):
     """Accept 'Group/name' or bare 'name'; preserve order, reject unknowns."""
-    by_name = {spec.name: spec for spec in PANEL}
+    by_name = {spec.name: spec for spec in PANEL + UNIVERSAL}
     out = []
     for name in names:
         spec = CATALOG.get(name) or by_name.get(name)
