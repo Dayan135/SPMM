@@ -293,10 +293,13 @@ void pbr_to_csr(const pbr_matrix_t<index_t, scalar_t>& pbr_mat,
         const auto& code = pbr_mat.block_codes[b];
         const auto& coord = pbr_mat.block_coords[b];
         for (index_t r = 0; r < pbr_mat.block_rows; ++r) {
-            // Safety check: ensure we don't write past the last row of the matrix
-            // If we reached the last block and the matrix dimensions are not perfectly divisible by block size, we might have some "partial" blocks at the edges.
+            // Blocks in the final stripe are partial when rows % block_rows != 0: their padding
+            // rows past the matrix end are legal but must carry no nonzeros.
             if (coord.row + r >= pbr_mat.rows) {
-                throw std::runtime_error("Block coordinate exceeds matrix dimensions. Check block size and matrix dimensions for compatibility.");
+                for (index_t c = 0; c < pbr_mat.block_cols; ++c)
+                    if (code.test(r * pbr_mat.block_cols + c))
+                        throw std::runtime_error("Block has a nonzero past the last matrix row. Check block size and matrix dimensions for compatibility.");
+                continue;
             }
             for (index_t c = 0; c < pbr_mat.block_cols; ++c) {
                 // Safety check: ensure we don't write past the last column
