@@ -13,6 +13,7 @@
 #include <c10/cuda/CUDAException.h>
 
 #include "../kernels/pbr_kernels.hpp"
+#include "../kernels/csr_kernels.hpp"
 
 namespace {
 
@@ -26,6 +27,7 @@ class PBRTimedSpMM {
     int cols_, rows_, block_rows_, block_cols_, csr_mode_, smem_size_, device_;
     bool diagnostic_;
     bool squeeze_output_;
+    std::string kernel_;
     cudaStream_t cur_stream_ = nullptr, block_stream_ = nullptr, csr_stream_ = nullptr;
     cudaEvent_t start_ = nullptr, end_ = nullptr;
 
@@ -38,19 +40,70 @@ class PBRTimedSpMM {
         TORCH_CHECK(c10::cuda::getCurrentCUDAStream(device_).stream() == cur_stream_,
                     "PBRTimedSpMM must run on its construction stream");
     }
+    void run_selected() {
+        if (kernel_ == "block") {
+            pbr_run_into<int32_t, float>(
+                y_, cols_, rows_, block_rows_, block_cols_,
+                block_codes_, block_coords_, block_offsets_, block_data_,
+                rem_indptr_, rem_col_ind_, rem_vals_, x3_, csr_mode_, smem_size_,
+                cur_stream_, block_stream_, csr_stream_);
+            return;
+        }
+        cuda_check(cudaMemsetAsync(y_.data_ptr<float>(), 0, y_.numel() * sizeof(float), cur_stream_));
+        cudaEvent_t ready, block_done, csr_done;
+        cuda_check(cudaEventCreateWithFlags(&ready, cudaEventDisableTiming));
+        cuda_check(cudaEventRecord(ready, cur_stream_));
+        cuda_check(cudaStreamWaitEvent(block_stream_, ready, 0));
+        cuda_check(cudaStreamWaitEvent(csr_stream_, ready, 0));
+        cuda_check(cudaEventDestroy(ready));
+        const int blocks = (int)block_codes_.size(0);
+        if (blocks) {
+            const int f = (int)x3_.size(-1), batch = (int)x3_.size(0);
+            auto launch = [&](auto fn) {
+                fn(blocks, f, batch, cols_, rows_, block_rows_, block_cols_,
+                   block_codes_.data_ptr<int64_t>(), block_coords_.data_ptr<int32_t>(),
+                   block_offsets_.data_ptr<int32_t>(), block_data_.data_ptr<float>(),
+                   x3_.data_ptr<float>(), y_.data_ptr<float>(), block_stream_, smem_size_);
+            };
+            if (kernel_ == "chunkcols") launch(launch_pbr_chunkcols_spmm<int32_t, float>);
+            else if (kernel_ == "nnzflat") launch(launch_pbr_nnzflat_spmm<int32_t, float>);
+            else if (kernel_ == "nnzflat_shared") launch(launch_pbr_nnzflat_shared_spmm<int32_t, float>);
+            else launch(launch_pbr_nnzflat_onthefly_spmm<int32_t, float>);
+        }
+        const int nnz = (int)rem_col_ind_.size(0);
+        if (nnz) launch_csr_spmm<int32_t, float>(
+            rows_, (int)x3_.size(-1), (int)x3_.size(0), cols_, nnz,
+            rem_indptr_.data_ptr<int32_t>(), rem_col_ind_.data_ptr<int32_t>(),
+            rem_vals_.data_ptr<float>(), x3_.data_ptr<float>(), y_.data_ptr<float>(),
+            csr_stream_, csr_mode_);
+        cuda_check(cudaEventCreateWithFlags(&block_done, cudaEventDisableTiming));
+        cuda_check(cudaEventCreateWithFlags(&csr_done, cudaEventDisableTiming));
+        cuda_check(cudaEventRecord(block_done, block_stream_));
+        cuda_check(cudaEventRecord(csr_done, csr_stream_));
+        cuda_check(cudaStreamWaitEvent(cur_stream_, block_done, 0));
+        cuda_check(cudaStreamWaitEvent(cur_stream_, csr_done, 0));
+        cuda_check(cudaEventDestroy(block_done));
+        cuda_check(cudaEventDestroy(csr_done));
+    }
 
 public:
     PBRTimedSpMM(int cols, int rows, int block_rows, int block_cols,
                  at::Tensor block_codes, at::Tensor block_coords, at::Tensor block_offsets,
                  at::Tensor block_data, at::Tensor rem_indptr, at::Tensor rem_col_ind,
                  at::Tensor rem_vals, at::Tensor x, int csr_mode, int smem_size,
-                 bool diagnostic_raw_store)
+                 bool diagnostic_raw_store, std::string kernel)
         : block_codes_(block_codes), block_coords_(block_coords), block_offsets_(block_offsets),
           block_data_(block_data), rem_indptr_(rem_indptr), rem_col_ind_(rem_col_ind),
           rem_vals_(rem_vals), x3_((x.dim() == 2) ? x.unsqueeze(0) : x),
           cols_(cols), rows_(rows), block_rows_(block_rows), block_cols_(block_cols),
           csr_mode_(csr_mode), smem_size_(smem_size), device_(x.get_device()),
-          diagnostic_(diagnostic_raw_store), squeeze_output_(x.dim() == 2) {
+          diagnostic_(diagnostic_raw_store), squeeze_output_(x.dim() == 2),
+          kernel_(std::move(kernel)) {
+        TORCH_CHECK(kernel_ == "block" || kernel_ == "chunkcols" || kernel_ == "nnzflat" ||
+                    kernel_ == "nnzflat_shared" || kernel_ == "nnzflat_onthefly",
+                    "unsupported PBR kernel selector: ", kernel_);
+        TORCH_CHECK(!diagnostic_ || kernel_ == "block",
+                    "diagnostic_raw_store is available only with kernel=block");
         TORCH_CHECK(x.is_cuda() && x.scalar_type() == at::kFloat,
                     "PBRTimedSpMM: X must be a CUDA FP32 tensor");
         TORCH_CHECK(x.dim() == 2 || x.dim() == 3, "PBRTimedSpMM: X must be 2D or 3D");
@@ -96,11 +149,7 @@ public:
                     "-- its output is incorrect by construction");
         c10::cuda::CUDAGuard guard(device_);
         check_stream();
-        pbr_run_into<int32_t, float>(
-            y_, cols_, rows_, block_rows_, block_cols_,
-            block_codes_, block_coords_, block_offsets_, block_data_,
-            rem_indptr_, rem_col_ind_, rem_vals_, x3_, csr_mode_, smem_size_,
-            cur_stream_, block_stream_, csr_stream_);
+        run_selected();
         // Matches pbr_matmul's y.squeeze(0) for 2D input.
         return squeeze_output_ ? y_.squeeze(0) : y_;
     }
@@ -122,11 +171,7 @@ public:
                 block_offsets_.data_ptr<int32_t>(), block_data_.data_ptr<float>(),
                 x3_.data_ptr<float>(), y_.data_ptr<float>(), cur_stream_, smem_size_);
         } else {
-            pbr_run_into<int32_t, float>(
-                y_, cols_, rows_, block_rows_, block_cols_,
-                block_codes_, block_coords_, block_offsets_, block_data_,
-                rem_indptr_, rem_col_ind_, rem_vals_, x3_, csr_mode_, smem_size_,
-                cur_stream_, block_stream_, csr_stream_);
+            run_selected();
         }
         cuda_check(cudaEventRecord(end_, cur_stream_));
         cuda_check(cudaEventSynchronize(end_));
@@ -152,12 +197,13 @@ public:
 void bind_pbr_timed_functions(py::module_& m) {
     py::class_<PBRTimedSpMM, std::shared_ptr<PBRTimedSpMM>>(m, "PBRTimedSpMM")
         .def(py::init<int, int, int, int, at::Tensor, at::Tensor, at::Tensor, at::Tensor,
-                      at::Tensor, at::Tensor, at::Tensor, at::Tensor, int, int, bool>(),
+                      at::Tensor, at::Tensor, at::Tensor, at::Tensor, int, int, bool, std::string>(),
              py::arg("cols"), py::arg("rows"), py::arg("block_rows"), py::arg("block_cols"),
              py::arg("block_codes"), py::arg("block_coords"), py::arg("block_offsets"),
              py::arg("block_data"), py::arg("rem_indptr"), py::arg("rem_col_ind"),
              py::arg("rem_vals"), py::arg("x"), py::arg("csr_mode") = 0,
-             py::arg("smem_size") = 2048, py::arg("diagnostic_raw_store") = false)
+             py::arg("smem_size") = 2048, py::arg("diagnostic_raw_store") = false,
+             py::arg("kernel") = "block")
         .def("run", &PBRTimedSpMM::run)
         .def("timed_run", &PBRTimedSpMM::timed_run)
         .def_property_readonly("output", &PBRTimedSpMM::output)
