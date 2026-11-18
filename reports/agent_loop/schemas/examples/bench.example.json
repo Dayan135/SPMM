@@ -1,0 +1,19 @@
+{
+  "v": "bench.1", "ok": true,
+  "fmt": "boo", "kernel": "rowseg", "cand": "a1b2c3d", "base": "e4f5a6b",
+  "env": {"node": "ise-3090-07", "job": 23141, "dtype": "fp32", "reps": 30, "warmup": 5, "rounds": 3},
+  "noise": 0.031,
+  "sum": {
+    "tune": {"n": 25, "geo_x_base": 1.062, "geo_x_cusp": 0.941, "W": 9, "L": 1, "T": 15},
+    "held": {"n": 29, "geo_x_base": 1.018, "geo_x_cusp": 0.902, "W": 4, "L": 2, "T": 23},
+    "bw_pct_max": 71.4, "fail": 0, "skip": 1
+  },
+  "prep_ms": {"cant": 182.0, "web-Google": 941.3},
+  "cols": ["mat","F","k_ms","k_iqr","call_ms","base_ms","cusp_ms","x_base","x_cusp","gbps","mem_mib","v"],
+  "rows": [
+    ["cant",128,0.412,1.8,0.455,0.441,0.398,1.070,0.966,512.3,1210,"W"],
+    ["web-Google",512,6.210,2.4,6.390,6.180,5.020,0.995,0.808,388.1,4410,"T"]
+  ],
+  "skipped": [["rail4284",512,"unsupported: rectangular"]],
+  "raw": "tests/torch_fast_spdmm/benchmark/results/agent_runs/a1b2c3d/23141/samples.csv"
+}

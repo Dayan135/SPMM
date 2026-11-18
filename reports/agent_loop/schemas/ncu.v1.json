@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spmm-agent-loop/ncu.v1.json",
+  "title": "ncu.1 - compact Nsight Compute bottleneck summary",
+  "description": "Output of parse_ncu_profile. Field meanings: reports/agent_loop/NCU_SCHEMA.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "rep", "case", "k", "d", "flags", "missing"],
+  "$defs": {
+    "pct": {"type": ["number", "null"], "minimum": 0},
+    "num": {"type": ["number", "null"]},
+    "stallList": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "array",
+        "prefixItems": [{"type": "string"}, {"type": "number", "minimum": 0, "maximum": 100}],
+        "items": false,
+        "minItems": 2
+      }
+    },
+    "sol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sm", "mem", "dram", "l2", "l1"],
+      "properties": {
+        "sm": {"$ref": "#/$defs/pct"}, "mem": {"$ref": "#/$defs/pct"}, "dram": {"$ref": "#/$defs/pct"},
+        "l2": {"$ref": "#/$defs/pct"}, "l1": {"$ref": "#/$defs/pct"}
+      }
+    },
+    "kernelFull": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "us", "share", "launch", "sol", "roof", "occ", "warp", "stall", "mem"],
+      "properties": {
+        "name": {"type": "string"},
+        "us": {"type": "number", "minimum": 0},
+        "share": {"type": "number", "minimum": 0, "maximum": 1},
+        "launch": {
+          "type": "object", "additionalProperties": false,
+          "required": ["grid", "block", "regs", "smem_kb"],
+          "properties": {
+            "grid": {"type": ["integer", "null"]}, "block": {"type": ["integer", "null"]},
+            "regs": {"type": ["integer", "null"]}, "smem_kb": {"$ref": "#/$defs/num"}
+          }
+        },
+        "sol": {"$ref": "#/$defs/sol"},
+        "roof": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ai", "gflops", "ridge_ai", "bound", "src"],
+          "properties": {
+            "ai": {"$ref": "#/$defs/num"}, "gflops": {"$ref": "#/$defs/num"},
+            "ridge_ai": {"$ref": "#/$defs/num"},
+            "bound": {"enum": ["memory", "compute", null]},
+            "src": {"enum": ["full", "ffma_only", null]}
+          }
+        },
+        "occ": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ach", "theo", "limiter", "waves"],
+          "properties": {
+            "ach": {"$ref": "#/$defs/pct"}, "theo": {"$ref": "#/$defs/pct"},
+            "limiter": {"enum": ["registers", "smem", "warps", "blocks", null]},
+            "waves": {"$ref": "#/$defs/num"}
+          }
+        },
+        "warp": {
+          "type": "object", "additionalProperties": false,
+          "required": ["lanes", "branch_eff", "div_br", "ipc"],
+          "properties": {
+            "lanes": {"type": ["number", "null"], "minimum": 0, "maximum": 32},
+            "branch_eff": {"$ref": "#/$defs/pct"},
+            "div_br": {"$ref": "#/$defs/num"},
+            "ipc": {"$ref": "#/$defs/num"}
+          }
+        },
+        "stall": {"$ref": "#/$defs/stallList"},
+        "mem": {
+          "type": "object", "additionalProperties": false,
+          "required": ["l1_hit", "l2_hit", "dram_gb", "ld_sec_req", "smem_conf_ld", "smem_conf_st", "red_sec_req", "atom_req", "smem_inst"],
+          "properties": {
+            "l1_hit": {"$ref": "#/$defs/pct"}, "l2_hit": {"$ref": "#/$defs/pct"},
+            "dram_gb": {"$ref": "#/$defs/num"}, "ld_sec_req": {"$ref": "#/$defs/num"},
+            "smem_conf_ld": {"$ref": "#/$defs/num"}, "smem_conf_st": {"$ref": "#/$defs/num"},
+            "red_sec_req": {"$ref": "#/$defs/num"}, "atom_req": {"$ref": "#/$defs/num"},
+            "smem_inst": {"$ref": "#/$defs/num"}
+          }
+        }
+      }
+    },
+    "kernelMinor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "us", "share", "sol", "stall"],
+      "properties": {
+        "name": {"type": "string"},
+        "us": {"type": "number", "minimum": 0},
+        "share": {"type": "number", "minimum": 0, "maximum": 1},
+        "sol": {"$ref": "#/$defs/sol"},
+        "stall": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/stallList/items"}}
+      }
+    }
+  },
+  "properties": {
+    "v": {"const": "ncu.1"},
+    "rep": {"type": "string"},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mat", "F", "fmt", "kernel", "commit"],
+      "properties": {
+        "mat": {"type": "string"},
+        "F": {"type": "integer", "minimum": 1},
+        "fmt": {"enum": ["pbr", "boo"]},
+        "kernel": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"}
+      }
+    },
+    "k": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"oneOf": [{"$ref": "#/$defs/kernelFull"}, {"$ref": "#/$defs/kernelMinor"}]}
+    },
+    "d": {"type": "object", "additionalProperties": {"type": "number"}},
+    "flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(smem_pipe_pressure|barrier_bound|occ_limiter:(registers|smem|warps|blocks)|lane_underuse|divergence|uncoalesced_ld|uncoalesced_red|memory_bound|latency_bound)$"
+      }
+    },
+    "missing": {"type": "array", "items": {"type": "string"}}
+  }
+}

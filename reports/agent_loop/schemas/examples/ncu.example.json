@@ -1,0 +1,25 @@
+{
+  "v": "ncu.1", "rep": "tests/torch_fast_spdmm/benchmark/results/agent_runs/a1b2c3d/23150/ncu/cant_F128.ncu-rep",
+  "case": {"mat": "cant", "F": 128, "fmt": "boo", "kernel": "rowseg", "commit": "a1b2c3d"},
+  "k": [
+    {
+      "name": "boo_spmm_rowseg_kernel", "us": 412.0, "share": 0.91,
+      "launch": {"grid": 7812, "block": 256, "regs": 40, "smem_kb": 34.5},
+      "sol":  {"sm": 42.1, "mem": 78.3, "dram": 61.0, "l2": 55.4, "l1": 70.2},
+      "roof": {"ai": 0.31, "gflops": 210.0, "ridge_ai": 32.1, "bound": "memory", "src": "full"},
+      "occ":  {"ach": 48.2, "theo": 66.7, "limiter": "smem", "waves": 3.1},
+      "warp": {"lanes": 27.9, "branch_eff": 96.1, "div_br": 1234, "ipc": 1.10},
+      "stall": [["mio_throttle",31.2],["barrier",18.0],["long_scoreboard",14.5],["lg_throttle",6.1],["short_scoreboard",4.0]],
+      "mem":  {"l1_hit": 41.0, "l2_hit": 72.5, "dram_gb": 0.21, "ld_sec_req": 4.1,
+               "smem_conf_ld": 0.02, "smem_conf_st": 0.0, "red_sec_req": 8.0, "atom_req": 1.2e6, "smem_inst": 3.4e6}
+    },
+    {
+      "name": "spdmm_csr_naive_kernel", "us": 40.1, "share": 0.09,
+      "sol": {"sm": 12.0, "mem": 35.2, "dram": 30.1, "l2": 22.0, "l1": 28.4},
+      "stall": [["long_scoreboard",55.0],["lg_throttle",12.0],["wait",8.0]]
+    }
+  ],
+  "d": {"us": -0.071, "stall.mio_throttle": -12.4, "occ.ach": 10.1},
+  "flags": ["smem_pipe_pressure", "occ_limiter:smem", "uncoalesced_red"],
+  "missing": []
+}

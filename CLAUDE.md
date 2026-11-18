@@ -115,6 +115,17 @@ are missing in the local `fem` env: `conda run -n fem pip install wandb pandas m
 | `tests/torch_fast_spdmm/benchmark/profile_cusparse.py` | ncu profiling driver for the cuSPARSE baseline |
 | `tests/torch_fast_spdmm/benchmark/csr_kernel_sweep.py` | CSR-kernel-fast vs fallback head-to-head experiment |
 | `optimizer/quick.py` | Single-config fast path for live kernel-edit iteration — see "Quick kernel-edit iteration" above |
+| `optimizer/agent_tools/` | Six JSON CLI tools for isolated Slurm builds, tests, benchmarks, profiles and loop version control |
+| `tests/torch_fast_spdmm/benchmark/universal_suite.py` | Canonical eleven-matrix suite, seeded X, manifest and CPU references |
+| `tests/torch_fast_spdmm/benchmark/agent_bench.py` | Same-node paired benchmark driver using the shared timing loop |
+| `tests/torch_fast_spdmm/benchmark/agent_profile.py` | Single-case Nsight Compute profiling driver |
+
+### Agent loop tools
+
+Run `python -m optimizer.agent_tools <tool> --args '<json object>'` from the local
+worktree. The package and three benchmark drivers above keep remote builds in
+`/home/dayanb/research/spmm-agent/` and leave the shared remote clone checked out
+where other sessions need it.
 
 ## Current kernel state
 
