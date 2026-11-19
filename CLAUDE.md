@@ -1,6 +1,6 @@
 # SPMM — torch_fast_spdmm
 
-Custom CUDA SpMM kernels for sparse-dense matrix multiplication using PBR (Packed Block Representation). A naive CSR SpMM kernel is also kept as a benchmark baseline.
+Custom CUDA SpMM kernels for sparse-dense matrix multiplication using BOO (clustered blocks) and PBR (Packed Block Representation). A naive CSR SpMM kernel is also kept as a benchmark baseline.
 
 ## Remote machine requirement
 
@@ -84,6 +84,11 @@ conda run -n fem python -m benchmark.plot_benchmarks \
 Run from `tests/torch_fast_spdmm/`. If `wandb`, `pandas`, or `matplotlib`
 are missing in the local `fem` env: `conda run -n fem pip install wandb pandas matplotlib`.
 
+## Branching
+
+`main` is the latest verified state (builds, and the GPU suite passes). Experiments branch from `main`. The agent loop
+works on `opt/loop`, with tag `opt/verified`. See README "Branching workflow".
+
 ## Key files
 
 | Path | Purpose |
@@ -129,7 +134,13 @@ where other sessions need it.
 
 ## Current kernel state
 
-One PBR kernel family (`block`), dispatched from `pbr_matmul`/`pbr_batched_matmul_cuda`:
+**BOO** (`kernels/boo_kernel.cu`, Python API in `torch_fast_spdmm/boo.py`): clustered-block format.
+The main kernel is `boo_spmm_rowseg_kernel`, with `boo_spmm_tail_kernel` and the CSR remainder.
+`launch_mode='legacy'|'auto'`, with optional execution plans (buckets).
+`boo_spmm_nnzflat_kernel`/`_fpt_kernel` are the experimental alternatives. The agent loop targets
+`boo:rowseg` first.
+
+**PBR:** one kernel family (`block`), dispatched from `pbr_matmul`/`pbr_batched_matmul_cuda`:
 
 - **`pbr_spmm_zero_idle_kernel`** (scalar) and **`pbr_spmm_vec_kernel`** (vectorized, `float4`/`double2`
   lanes) — one CUDA block per PBR block, `atomicAdd` to Y, concurrent with the CSR remainder kernel on a
@@ -157,7 +168,9 @@ thread owns a whole row's active columns today, up to `BLOCK_COLS`), scalar-only
 
 ## Commit scopes
 
-- `kernel` — CUDA kernels (`pbr_kernel.cu`, `csr_kernels.cu`)
+- `kernel` — CUDA kernels (`boo_kernel.cu`, `pbr_kernel.cu`, `csr_kernels.cu`)
+- `boo` — BOO format and Python API (`boo_matrix/`, `boo.py`)
+- `tools` — agent-loop tools (`optimizer/agent_tools/`)
 - `bindings` — pybind11 wrappers
 - `pbr` — PBR format construction (`pbr_matrix/`)
 - `tests` — test suite

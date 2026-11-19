@@ -84,6 +84,23 @@ experiments/               # dated reports, explanations, and selected figures
 docs/reference/            # shared format and testing notes
 ```
 
+## Branching workflow
+
+`main` is the latest verified state of the project: it builds, and the full
+GPU test suite passes. Everything else branches from it.
+
+- **Experiments** (`experiment/<topic>`, `feat/<topic>`) branch from `main`.
+  Results and reports go in `experiments/<date>_<topic>/`. A change that wins
+  merges back into `main`. A change that does not stays on its branch as the
+  record of the attempt.
+- **The agent optimization loop** works on `opt/loop`. The `opt/verified` tag
+  marks its last commit that passed the tests and a correct benchmark. Only
+  verified wins are fast-forwarded into `main`. Every attempt, including
+  failed ones, is logged in `CHANGELOG.md`
+  ([entry template](reports/agent_loop/CHANGELOG_TEMPLATE.md)).
+- **Your own work:** `git switch -c <name> main`. The full experiment history
+  stays in the tree, so any earlier result can be traced from there.
+
 ## Research record and result archive
 
 - [Research index](RESEARCH_INDEX.md)
