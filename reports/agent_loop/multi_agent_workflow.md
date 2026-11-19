@@ -56,6 +56,11 @@ and Auditor it passes only:
 **Matrix identity is not a leak.** The held matrices' names, descriptions and manifest structure
 statistics may be known and discussed. The prompt is used as written.
 
+**`synthetic_controls` is not held-out.** Results from `synthetic_controls` (`synthetic_controls.json`
+and `controls_failure.json` for `fem2d`, `fem2d_permuted`, `diag_b1.0`) may be read by the Builder and
+Auditor. They are auxiliary and non-gating: they never enter `tune`/`held`/`all` aggregates, never
+influence `promote_attempt`, and never compensate for real-matrix regressions.
+
 The fresh Auditor invocation for the pre-promotion audit may read the sealed-in-policy data for that one
 attempt. It reports only to the Runner.
 
@@ -115,7 +120,7 @@ Prompt steps are referenced as "§3.n".
 | P7 | Commit and build | Runner | `commit_kernel_attempt("kernel: <title>")`; `load_build_env` (§3.3–4) | build `ok` | compile fix: the Builder fixes, the Auditor gives H3 on the fix diff, the Runner commits again. At most 3 (§3.4), then `FAIL (build)`. |
 | P8 | Tests | Runner | `submit_slurm_job` with `templates/tests.sh` (§3.5) | `tests_passed: true` | related failure: Builder fix, H3, P7 again (same attempt), or `FAIL (tests)`. Infrastructure failure: re-run as the tools allow. |
 | P9 | Tune benchmark | Runner | `run_benchmarks boo:rowseg ["tune"]` (§3.6a) | `ok`, no `F` | `FAIL (correctness)`, including a returned `{"ok": false, "failure": "candidate_runtime"}` (the candidate process crashed while the baseline ran cleanly; do not re-run it) |
-| P10 | Tune gate | Runner | mechanical check: `geo_x_base ≥ 1.02` and `W > L`. Optional profile (§3.7) only if H1 or H2 states a diagnostic question; tune cases only. | gate met: P11 | not met: go to P12 as `ROLLED BACK` |
+| P10 | Tune gate | Runner | mechanical check: `geo_x_base ≥ 1.02` and `W > L`. Optional profile (§3.7) or `synthetic_controls` only if H1 or H2 states a diagnostic question that requires it (not required for every attempt; `synthetic_controls` may run earlier only if H1 names a specific diagnostic question requiring it; non-gating; panel failure is not a promotion failure unless an independent promotion check fails). | gate met: P11 | not met: go to P12 as `ROLLED BACK` |
 | P11 | Promotion | Runner | `run_benchmarks ["all"]` (§3.6b); fresh Auditor invocation audits `bench.json` and candidate state against the prompt §6 gate *before* `promote_attempt`, returning `{"verdict", "failed_checks", "reason"}` (§5); the Runner archives it as `<run_id>/<ordinal>/promotion_audit.json` (and `index.jsonl`) before acting; if `pass`, call `promote_attempt(bench.json)`. | `pass` and `promote_attempt` returns `promoted: true` | `performance_fail`: do not call `promote_attempt`; P12 as `ROLLED BACK`, then continue under normal stop rules. `correctness_fail` (`bench.ok=false`, `sum.fail>0`, or any `F`): do not call `promote_attempt`; P12 as `FAIL (correctness)`, then continue under normal stop rules. `integrity_fail`: do not call `promote_attempt`; safely restore/close the active attempt consistently, stop the campaign and report. `pass` but `promote_attempt` refuses: tool refusal is authoritative; P12 as `ROLLED BACK`. |
 | P12 | Close attempt | Runner | `rollback_workspace` unless promoted; CHANGELOG entry; `commit_kernel_attempt("docs: changelog for <title>")`; `finish_attempt(...)` citing H1, H2, final H3 and (if P11 was reached) `promotion_audit.json` hashes in `decision_reason` (§3.8–10); `changelog_sha` must be the CHANGELOG commit made by `commit_kernel_attempt` in this attempt | `finish_attempt` succeeds | fix records only, never source; a second refusal stops the campaign |
 | P13 | Learn | Builder drafts H4; Auditor annotates | Runner archives H4 by run ID and ordinal under `.agent_loop/handoffs/<run_id>/<ordinal>/H4.json` (and `index.jsonl`) and checks the prompt §7 stop rules | attempts remain, no stop rule | P14 |
@@ -126,7 +131,7 @@ Prompt steps are referenced as "§3.n".
   interrupted call is re-called with the same arguments, and the tools reattach to the Slurm job. A job
   that ended in an infrastructure failure is resubmitted as the tools allow.
 - **Benchmarks:** a valid benchmark result is never re-run, however noisy it looks. A candidate crash
-  (`failure: candidate_runtime`) is a valid result, not an infrastructure failure.
+  (`failure: candidate_runtime` on `run_benchmarks` or `synthetic_controls`) is a valid result, not an infrastructure failure. Correctness failures and infrastructure failures remain distinct for both `run_benchmarks` and `synthetic_controls`.
 - **Exit 4** means the tool's side effect (commit, push, promotion, job) already happened but its audit
   record could not be written. Never retry it.
   - `audit_finalization: "pending_recovery"` (`recovery_record` set): read `result` from the response
@@ -225,7 +230,7 @@ wins if `phase.json` is missing, stale or disagrees):
 | candidate committed, last `load_build_env` failed (`ok: false`) (failed build awaiting fix) | P7 compile-fix path (Builder fix → Auditor H3 → commit & rebuild; if 3 fixes already exhausted, P12 as `FAIL (build)`) |
 | build `ok`, no completed test job for HEAD | P8 |
 | build `ok`, last completed test job has `tests_passed=false` because of a related test failure | P8 Builder test-fix path (Builder fix → Auditor H3 → P7); do not rerun the same valid failed test job unchanged |
-| an interrupted `run_benchmarks` or `submit_slurm_job` | re-call with identical arguments (reattach or receive terminal-failure report) |
+| an interrupted `run_benchmarks`, `synthetic_controls`, or `submit_slurm_job` | re-call with identical arguments (reattach or receive terminal-failure report, reconciling the ledger, job state, artifacts, and recovery records) |
 | completed infrastructure-invalid test or benchmark job (non-`COMPLETED` Slurm state, exit 3, node/infra failure) | follow the existing infrastructure retry policy (§4 Retries), distinct from a valid correctness/test failure |
 | tune `bench.json` exists for HEAD with `ok=false`, `sum.fail>0` or an `F` | P12 as `FAIL (correctness)` |
 | tune `bench.json` exists for HEAD (`ok=true`, no `F`), no `all` run | P10 (mechanical tune gate; if not met, P12 as `ROLLED BACK`) |
@@ -384,7 +389,8 @@ The normative loop is reports/agent_loop/optimization_loop_prompt.md (5 counted 
    not aligned to the finalized tooling commit, `promote_attempt` refuses every candidate as "harness
    changed").
 3. Suite references for the full promotion grid exist (the soc-Pokec and amazon0312 preparation is
-   finished).
+   finished). Controls setup (`setup_controls` under `suite/controls/`) is separate from promotion-suite
+   setup (`setup_suite` under `suite/`) and never satisfies promotion-suite readiness.
 4. The offline tests pass (`tests/agent_tools`).
 
 ## 10. Optional future hardening (not required for launch)

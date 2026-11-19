@@ -520,6 +520,17 @@ def summarize_result(tool_name: str, result) -> str:
             'skip_count': len(result.get('skipped', [])),
             'raw': result.get('raw'),
         }
+    elif tool_name == 'synthetic_controls' and result.get('v') in ('synthetic_controls.1', 'controls_failure.1'):
+        summary = {
+            k: result.get(k)
+            for k in ('v', 'panel', 'gating', 'promotion_eligible', 'ok', 'fmt', 'kernel',
+                      'run_id', 'attempt_id', 'attempt_ordinal', 'cand', 'base', 'env',
+                      'noise', 'synthetic_control_summary', 'controls_manifest_sha256',
+                      'failure', 'verdict', 'raw')
+            if k in result
+        }
+        if 'cases' in result:
+            summary['case_count'] = len(result['cases'])
     elif tool_name == 'parse_ncu_profile' and result.get('v') == 'ncu.1':
         kernels = result.get('k', [])
         top = kernels[0] if kernels else None
@@ -913,6 +924,33 @@ def attach_artifact(
         str(local_path) if local_path is not None else None,
         str(remote_path) if remote_path is not None else None,
     ))
+
+
+def active_attempt_context(*, db_path: Path | None = None) -> dict | None:
+    """Return {'run_id', 'attempt_id', 'ordinal'} for the active attempt, or None."""
+    ctx = _ACTIVE_CALL.get()
+    target = db_path or (ctx.db_path if ctx is not None else default_db_path())
+    if not target.exists():
+        return None
+    conn = _connect(target)
+    try:
+        if ctx is not None and ctx.attempt_id is not None:
+            row = conn.execute(
+                "SELECT run_id, attempt_id, ordinal FROM attempts WHERE attempt_id = ? AND status = 'active'",
+                (ctx.attempt_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT a.run_id, a.attempt_id, a.ordinal FROM attempts a "
+                "JOIN runs r ON r.run_id = a.run_id "
+                "WHERE r.status = 'active' AND a.status = 'active' "
+                "ORDER BY a.attempt_id DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return {'run_id': str(row['run_id']), 'attempt_id': int(row['attempt_id']), 'ordinal': int(row['ordinal'])}
+    finally:
+        conn.close()
 
 
 def record_suite_manifest_sha256(

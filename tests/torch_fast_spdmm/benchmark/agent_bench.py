@@ -14,6 +14,7 @@ import numpy as np
 
 from benchmark import bench_nnzflat as bn
 from benchmark import bench_real as br
+from benchmark import controls_suite as cs
 from benchmark import real_matrices as rm
 from benchmark import universal_suite as suite
 from optimizer.agent_tools.bench import parse_kernel
@@ -21,7 +22,11 @@ from optimizer.agent_tools.bench import parse_kernel
 SAMPLE_FIELDS = ('role', 'round', 'mat', 'F', 'arm', 'repeat', 'position', 'previous',
                  'time_ms', 'node', 'package_file', 'core_file', 'x_sha256')
 SUMMARY_FIELDS = ('role', 'round', 'mat', 'F', 'arm', 'status', 'reason', 'median_ms',
-                  'prep_ms', 'mem_mib', 'node', 'package_file', 'core_file', 'x_sha256')
+                  'mean_ms', 'min_ms', 'max_ms', 'p25_ms', 'p75_ms', 'mad_ms',
+                  'prep_ms', 'mem_mib', 'max_abs_error', 'max_scaled_error',
+                  'bound_violations', 'label_method', 'label_k', 'label_hash',
+                  'label_cached', 'label_cache_path', 'clustering_src_sha256',
+                  'ref_hash', 'node', 'package_file', 'core_file', 'x_sha256')
 
 
 def _append(path, rows, columns):
@@ -92,12 +97,15 @@ def _boo_labels(spmm, csr, mat, params, root, manifest):
     return row, col, False
 
 
-def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest):
+def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest, suite_mode='promotion'):
     mat, f = case['mat'], int(case['F'])
     base = dict(role=role, round=round_, mat=mat, F=f, node=socket.gethostname(),
                 package_file=str(Path(spmm.__file__).resolve()),
                 core_file=str(Path(core.__file__).resolve()))
-    csr, _ = suite.load_matrix(root, mat, os.environ['SPMM_MATRIX_CACHE'])
+    if suite_mode == 'controls':
+        csr, _ = cs.load_matrix(root, mat, manifest)
+    else:
+        csr, _ = suite.load_matrix(root, mat, os.environ['SPMM_MATRIX_CACHE'])
     csr_bytes = csr.indptr.nbytes + csr.indices.nbytes + csr.data.nbytes
     x_bytes = csr.shape[1]*f*4
     y_bytes = csr.shape[0]*f*4
@@ -109,6 +117,7 @@ def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest):
     base['x_sha256'] = xsha
     ref = bn.GpuReference(torch, root/'refs'/f'{mat}_F{f}',
                           manifest['matrices'][mat]['csr_hash'], xsha, f)
+    base['ref_hash'] = ref.sha256
     torch.cuda.reset_peak_memory_stats()
     x = torch.from_numpy(x_cpu).cuda()
     start = time.perf_counter()
@@ -119,10 +128,25 @@ def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest):
         else:
             params = spec['params']
             # prep_ms excludes clustering on a cache hit; base and cand share the labels.
-            row_labels, col_labels, _ = _boo_labels(spmm, csr, mat, params, root, manifest)
+            if suite_mode == 'controls':
+                row_labels, col_labels, lmeta = cs.load_or_build_labels(csr, mat, root, manifest)
+                base.update(
+                    label_method=lmeta['label_method'],
+                    label_k=lmeta['k'],
+                    label_hash=lmeta['label_hash'],
+                    label_cached=lmeta['cached'],
+                    label_cache_path=lmeta['cache_path'],
+                    clustering_src_sha256=lmeta['clustering_src_sha256'],
+                )
+                cluster_method = lmeta['label_method']
+                target_k = lmeta['k']
+            else:
+                row_labels, col_labels, _ = _boo_labels(spmm, csr, mat, params, root, manifest)
+                cluster_method = params['cluster']
+                target_k = params['target_nr']
             start = time.perf_counter()
-            sparse = spmm.csr_to_boo(csr, cluster=params['cluster'],
-                                      target_nr=params['target_nr'], target_nc=params['target_nc'],
+            sparse = spmm.csr_to_boo(csr, cluster=cluster_method,
+                                      target_nr=target_k, target_nc=target_k,
                                       row_labels=row_labels, col_labels=col_labels)
         sparse.to('cuda')
         torch.cuda.synchronize()
@@ -206,6 +230,7 @@ def main(argv=None):
     ap.add_argument('--reps', type=int, required=True)
     ap.add_argument('--warmup', type=int, required=True)
     ap.add_argument('--out', type=Path, required=True)
+    ap.add_argument('--suite', choices=['promotion', 'controls'], default='promotion')
     args = ap.parse_args(argv)
     import torch
     import torch_fast_spdmm as spmm
@@ -215,12 +240,30 @@ def main(argv=None):
     assert Path(core.__file__).resolve().is_relative_to(build_dir)
     print('MODULE_PATHS', spmm.__file__, core.__file__, flush=True)
     args.out.mkdir(parents=True, exist_ok=True)
-    root = Path(os.environ['AGENT_ROOT'])/'suite'
+    root = Path(os.environ['AGENT_ROOT']) / ('suite/controls' if args.suite == 'controls' else 'suite')
     manifest = json.loads((root/'manifest.json').read_text())
+    if args.suite == 'controls':
+        if manifest.get('panel') != cs.PANEL_NAME:
+            raise ValueError(f'expected {cs.PANEL_NAME} manifest, got {manifest.get("panel")!r}')
+        env_info = {
+            'role': args.role,
+            'round': args.round,
+            'node': socket.gethostname(),
+            'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'unknown',
+            'cuda': getattr(torch.version, 'cuda', None),
+            'torch': getattr(torch, '__version__', None),
+            'python': sys.version.split()[0],
+            'package_file': str(Path(spmm.__file__).resolve()),
+            'core_file': str(Path(core.__file__).resolve()),
+        }
+        (args.out / f'env_{args.role}_r{args.round}.json').write_text(
+            json.dumps(env_info, indent=2, sort_keys=True) + '\n'
+        )
     spec = parse_kernel(args.kernel)
     for case in json.loads(args.cases):
         samples, summaries = _case(torch, spmm, core, case, spec, args.role,
-                                    args.round, args.out, root, manifest)
+                                    args.round, args.out, root, manifest,
+                                    suite_mode=args.suite)
         _append(args.out/'samples.csv', samples, SAMPLE_FIELDS)
         _append(args.out/'summary.csv', summaries, SUMMARY_FIELDS)
         torch.cuda.empty_cache()

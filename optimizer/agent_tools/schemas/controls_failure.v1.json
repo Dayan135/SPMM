@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spmm-agent-loop/controls_failure.v1.json",
+  "title": "controls_failure.1 - governed candidate runtime crash on synthetic_controls",
+  "description": "Candidate runtime failure record for synthetic_controls. Non-gating and never promotion-eligible.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v", "panel", "gating", "promotion_eligible", "ok", "failure", "verdict",
+    "fmt", "kernel", "kernel_config", "run_id", "attempt_id", "attempt_ordinal",
+    "cand", "base", "tool_commit", "build_fingerprints", "controls_manifest_sha256",
+    "job_provenance", "failures", "err_tail", "action"
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "buildRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["src_hash", "build_dir", "so_sha256"],
+      "properties": {
+        "src_hash": {"type": "string", "minLength": 1},
+        "build_dir": {"type": "string", "minLength": 1},
+        "so_sha256": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "properties": {
+    "v": {"const": "controls_failure.1"},
+    "panel": {"const": "synthetic_controls"},
+    "gating": {"const": false},
+    "promotion_eligible": {"const": false},
+    "ok": {"const": false},
+    "failure": {"const": "candidate_runtime"},
+    "verdict": {"const": "F"},
+    "fmt": {"const": "boo"},
+    "kernel": {"const": "rowseg"},
+    "kernel_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "threads", "p", "features_per_thread", "launch_mode", "cluster_k"],
+      "properties": {
+        "implementation": {"const": "boo:rowseg"},
+        "threads": {"const": 256},
+        "p": {"const": 64},
+        "features_per_thread": {"const": 1},
+        "launch_mode": {"const": "auto"},
+        "cluster_k": {"const": 32}
+      }
+    },
+    "run_id": {"type": "string", "minLength": 1},
+    "attempt_id": {"type": "integer", "minimum": 1},
+    "attempt_ordinal": {"type": "integer", "minimum": 1},
+    "cand": {"$ref": "#/$defs/sha"},
+    "base": {"$ref": "#/$defs/sha"},
+    "tool_commit": {"$ref": "#/$defs/sha"},
+    "build_fingerprints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cand", "base"],
+      "properties": {
+        "cand": {"$ref": "#/$defs/buildRole"},
+        "base": {"$ref": "#/$defs/buildRole"}
+      }
+    },
+    "controls_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "job_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job", "node", "state", "exit", "reattached", "resume_key"],
+      "properties": {
+        "job": {"type": "integer", "minimum": 0},
+        "node": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1},
+        "exit": {"type": "integer"},
+        "reattached": {"type": "boolean"},
+        "resume_key": {"type": "string", "minLength": 1}
+      }
+    },
+    "failures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "round", "rc"],
+        "properties": {
+          "role": {"const": "cand"},
+          "round": {"type": "integer", "minimum": 1},
+          "rc": {"type": "integer"}
+        }
+      }
+    },
+    "err_tail": {"type": "string"},
+    "action": {"type": "string", "minLength": 1}
+  }
+}

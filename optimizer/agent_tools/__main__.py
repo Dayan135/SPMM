@@ -19,11 +19,13 @@ from .util import ArgumentError, InfrastructureError
 
 TOOLS = ('load_build_env', 'submit_slurm_job', 'commit_kernel_attempt',
          'rollback_workspace', 'run_benchmarks', 'parse_ncu_profile', 'setup_suite',
+         'setup_controls', 'synthetic_controls',
          'promote_attempt', 'begin_attempt', 'finish_attempt', 'close_run',
          'get_loop_status', 'export_attempt_log', 'clear_pending_job',
          'clean_attempt_workspace')
 ATTEMPT_REQUIRED_TOOLS = frozenset({
-    'commit_kernel_attempt', 'rollback_workspace', 'run_benchmarks', 'promote_attempt',
+    'commit_kernel_attempt', 'rollback_workspace', 'run_benchmarks', 'synthetic_controls',
+    'promote_attempt',
 })
 # Pre-attempt recovery only: refused while an attempt is active (rollback_workspace covers that).
 NO_ACTIVE_ATTEMPT_TOOLS = frozenset({'clean_attempt_workspace'})
@@ -78,6 +80,12 @@ def dispatch(tool: str, arguments: dict) -> dict:
     if tool == 'clear_pending_job':
         from .slurm import clear_pending_job
         return clear_pending_job(**arguments)
+    if tool == 'setup_controls':
+        from .controls import setup_controls
+        return setup_controls(**arguments)
+    if tool == 'synthetic_controls':
+        from .controls import synthetic_controls
+        return synthetic_controls(**arguments)
     from .suite import setup_suite
     return setup_suite(**arguments)
 

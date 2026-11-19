@@ -110,6 +110,51 @@ def _sig(value):
     return None if value is None else float(f'{value:.3g}')
 
 
+def paired_order(rounds: int, seed: int = 20261117) -> list[tuple[str, int]]:
+    order = []
+    for r in range(1, rounds + 1):
+        roles = ['base', 'cand']
+        random.Random(seed * 1000003 + r).shuffle(roles)
+        order.extend((role, r) for role in roles)
+    return order
+
+
+def compute_noise_95(times: dict, cases: list[tuple[str, int]]) -> tuple[float, dict[tuple[str, int], float]]:
+    per_case: dict[tuple[str, int], float] = {}
+    for mat, f in cases:
+        def med(role, arm):
+            xs = times.get((role, mat, f, arm), [])
+            return statistics.median(xs) if xs else None
+        a, b, c, d = med('cand', 'kernel'), med('cand', 'kernel_dup'), med('base', 'cusparse'), med('cand', 'cusparse')
+        if all(x is not None and x > 0 for x in (a, b, c, d)):
+            per_case[(mat, f)] = max(abs(b / a - 1), abs(c / d - 1))
+    noise = _percentile(list(per_case.values()), 95) or 0.
+    return noise, per_case
+
+
+def compute_verdict(xb: float | None, failures: list | bool, noise: float) -> str:
+    threshold = max(noise, .04)
+    if failures:
+        return 'F'
+    if xb is not None and xb > 1 + threshold:
+        return 'W'
+    if xb is not None and xb < 1 / (1 + threshold):
+        return 'L'
+    return 'T'
+
+
+def resolve_cand_base_builds(cfg: dict, baseline_ref: str | None = None) -> tuple[str, str, dict, dict]:
+    cand = head()
+    if not baseline_ref and not cfg.get('verified'):
+        raise ArgumentError('state.verified is unset; initialize it to the tools baseline commit')
+    base = git('rev-parse', f'{baseline_ref or cfg["verified"]}^{{commit}}').stdout.strip()
+    built_cand = ensure_build(cand, config=cfg)
+    built_base = ensure_build(base, config=cfg)
+    if not built_cand.get('ok') or not built_base.get('ok'):
+        raise ArgumentError('candidate or baseline build unavailable; run load_build_env first')
+    return cand, base, built_cand, built_base
+
+
 def aggregate(samples_path: Path, summary_path: Path, manifest: dict, *, fmt: str,
               kernel: str, cand: str, base: str, job: int, node: str,
               reps: int, warmup: int, rounds: int) -> dict:
@@ -122,15 +167,7 @@ def aggregate(samples_path: Path, summary_path: Path, manifest: dict, *, fmt: st
         key = (row['role'], row['mat'], int(row['F']), row['arm'])
         times.setdefault(key, []).append(float(row['time_ms']))
     cases = sorted({(r['mat'], int(r['F'])) for r in summaries})
-    per_case_noise = []
-    for mat, f in cases:
-        def med(role, arm):
-            xs = times.get((role, mat, f, arm), [])
-            return statistics.median(xs) if xs else None
-        a, b, c, d = med('cand', 'kernel'), med('cand', 'kernel_dup'), med('base', 'cusparse'), med('cand', 'cusparse')
-        if all(x is not None and x > 0 for x in (a, b, c, d)):
-            per_case_noise.append(max(abs(b/a-1), abs(c/d-1)))
-    noise = _percentile(per_case_noise, 95) or 0.
+    noise, _ = compute_noise_95(times, cases)
     rows, skipped, prep = [], [], {}
     for mat, f in cases:
         records = [r for r in summaries if r['mat'] == mat and int(r['F']) == f]
@@ -166,9 +203,7 @@ def aggregate(samples_path: Path, summary_path: Path, manifest: dict, *, fmt: st
                       and r.get('prep_ms')]
             if values:
                 prep[mat] = _sig(statistics.median(values))
-        threshold = max(noise, .04)
-        verdict = ('F' if failures else 'W' if xb is not None and xb > 1+threshold else
-                   'L' if xb is not None and xb < 1/(1+threshold) else 'T')
+        verdict = compute_verdict(xb, failures, noise)
         rows.append([mat, f, _sig(km), _round(iqr, 1), _sig(call),
                      _sig(bm), _sig(cm), _round(xb), _round(xc),
                      _round(gbps, 1), _sig(peak), verdict])
@@ -207,7 +242,7 @@ BENCH_EXIT_INTEGRITY = 87         # baseline/harness failed: never blamed on the
 
 
 def bench_runner(order: list[tuple[str, int]], *, base_dir: str, cand_dir: str, kernel_name: str,
-                 cases_json: str, reps: int, warmup: int) -> str:
+                 cases_json: str, reps: int, warmup: int, suite_mode: str = 'promotion') -> str:
     """Bash body that runs every (role, round) in `order` and classifies failures.
 
     Each role/round runs in its own process. A nonzero exit prints a structured
@@ -217,6 +252,7 @@ def bench_runner(order: list[tuple[str, int]], *, base_dir: str, cand_dir: str, 
     line is `AGENT_BENCH_VERDICT ok|candidate_crash|integrity`, with exit codes 0/86/87.
     Placeholders {{RUN_DIR}} and {{SRC_DIR}} are filled by slurm.render.
     """
+    suite_flag = f' --suite {shlex.quote(suite_mode)}' if suite_mode != 'promotion' else ''
     lines = [
         'CAND_FAIL=0; BASE_FAIL=0; BASE_OK=0',
         f'AGENT_KERNEL={shlex.quote(kernel_name)}',
@@ -232,7 +268,7 @@ def bench_runner(order: list[tuple[str, int]], *, base_dir: str, cand_dir: str, 
         '  if [ "$role" = base ] && [ "$CAND_FAIL" = 1 ] && [ "$BASE_OK" = 1 ]; then return 0; fi',
         '  ( use "$build" {{SRC_DIR}} && python -m benchmark.agent_bench --role "$role" --round "$round" '
         f'--kernel "$AGENT_KERNEL" --cases "$AGENT_CASES" --reps {int(reps)} --warmup {int(warmup)} '
-        '--out {{RUN_DIR}} ) || rc=$?',
+        '--out {{RUN_DIR}}' + suite_flag + ' ) || rc=$?',
         '  if [ "$rc" -eq 0 ]; then',
         '    touch "$done_file"',
         '    if [ "$role" = base ]; then BASE_OK=1; fi',
@@ -303,14 +339,7 @@ def run_benchmarks(kernel_name: str, matrix_datasets: list[str], *, features=Non
            ((reps, 1), (warmup, 0), (rounds, 1))):
         raise ArgumentError('reps/rounds must be positive and warmup nonnegative')
     cfg = state.read()
-    cand = head()
-    if not baseline_ref and not cfg.get('verified'):
-        raise ArgumentError('state.verified is unset; initialize it to the tools baseline commit')
-    base = git('rev-parse', f'{baseline_ref or cfg["verified"]}^{{commit}}').stdout.strip()
-    built_cand = ensure_build(cand, config=cfg)
-    built_base = ensure_build(base, config=cfg)
-    if not built_cand.get('ok') or not built_base.get('ok'):
-        raise ArgumentError('candidate or baseline build unavailable; run load_build_env first')
+    cand, base, built_cand, built_base = resolve_cand_base_builds(cfg, baseline_ref)
     root = cfg['agent_root'].rstrip('/')
     if ssh(f'test -f {root}/suite/manifest.json', config=cfg).returncode:
         raise ArgumentError('suite manifest missing; run setup_suite with stage=all')
@@ -329,12 +358,7 @@ def run_benchmarks(kernel_name: str, matrix_datasets: list[str], *, features=Non
     manifest_text = checked_ssh(f'cat {root}/suite/manifest.json', config=cfg).stdout
     attempt_log.record_suite_manifest_sha256(hashlib.sha256(manifest_text.encode('utf-8')).hexdigest())
     manifest = json.loads(manifest_text)
-    seed = 20261117
-    order = []
-    for r in range(1, rounds+1):
-        roles = ['base', 'cand']
-        random.Random(seed*1000003+r).shuffle(roles)
-        order.extend((role, r) for role in roles)
+    order = paired_order(rounds, seed=20261117)
     script = (Path(__file__).parent/'templates/bench.sh').read_text() + bench_runner(
         order, base_dir=built_base['build_dir'], cand_dir=built_cand['build_dir'],
         kernel_name=kernel_name, cases_json=json.dumps(cases, separators=(',', ':')),
@@ -515,7 +539,15 @@ def promote_attempt(bench_json: str) -> dict:
         path = state.ROOT / path
     try:
         result = json.loads(path.read_text())
+        if (isinstance(result, dict) and (
+                result.get('panel') == 'synthetic_controls'
+                or result.get('gating') is False
+                or result.get('promotion_eligible') is False
+                or str(result.get('v', '')).startswith('synthetic_controls'))):
+            raise ArgumentError('synthetic_controls artifacts are non-gating and cannot be promoted')
         validate(result, json.loads((Path(__file__).parent/'schemas/bench.v1.json').read_text()))
+    except ArgumentError:
+        raise
     except (OSError, ValueError) as exc:
         raise ArgumentError(f'not a valid bench.1 file: {exc}') from exc
     cfg = state.read()

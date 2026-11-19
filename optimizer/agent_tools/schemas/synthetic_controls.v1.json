@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spmm-agent-loop/synthetic_controls.v1.json",
+  "title": "synthetic_controls.1 - non-gating synthetic diagnostic panel result",
+  "description": "Output of synthetic_controls. Non-gating and never promotion-eligible.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v", "panel", "gating", "promotion_eligible", "ok", "fmt", "kernel",
+    "kernel_config", "run_id", "attempt_id", "attempt_ordinal", "cand", "base",
+    "tool_commit", "build_fingerprints", "env", "controls_manifest_sha256",
+    "noise", "synthetic_control_summary", "cases", "job_provenance", "raw"
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "posOrNull": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "nonnegOrNull": {"type": ["number", "null"], "minimum": 0},
+    "buildRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["src_hash", "build_dir", "so_sha256"],
+      "properties": {
+        "src_hash": {"type": "string", "minLength": 1},
+        "build_dir": {"type": "string", "minLength": 1},
+        "so_sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "armStats": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["median_ms", "mean_ms", "min_ms", "max_ms", "p25_ms", "p75_ms", "mad_ms"],
+      "properties": {
+        "median_ms": {"$ref": "#/$defs/posOrNull"},
+        "mean_ms": {"$ref": "#/$defs/posOrNull"},
+        "min_ms": {"$ref": "#/$defs/posOrNull"},
+        "max_ms": {"$ref": "#/$defs/posOrNull"},
+        "p25_ms": {"$ref": "#/$defs/posOrNull"},
+        "p75_ms": {"$ref": "#/$defs/posOrNull"},
+        "mad_ms": {"$ref": "#/$defs/nonnegOrNull"}
+      }
+    },
+    "numArray": {
+      "type": "array",
+      "items": {"type": "number", "exclusiveMinimum": 0}
+    }
+  },
+  "properties": {
+    "v": {"const": "synthetic_controls.1"},
+    "panel": {"const": "synthetic_controls"},
+    "gating": {"const": false},
+    "promotion_eligible": {"const": false},
+    "ok": {"type": "boolean"},
+    "fmt": {"const": "boo"},
+    "kernel": {"const": "rowseg"},
+    "kernel_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "threads", "p", "features_per_thread", "launch_mode", "cluster_k"],
+      "properties": {
+        "implementation": {"const": "boo:rowseg"},
+        "threads": {"const": 256},
+        "p": {"const": 64},
+        "features_per_thread": {"const": 1},
+        "launch_mode": {"const": "auto"},
+        "cluster_k": {"const": 32}
+      }
+    },
+    "run_id": {"type": "string", "minLength": 1},
+    "attempt_id": {"type": "integer", "minimum": 1},
+    "attempt_ordinal": {"type": "integer", "minimum": 1},
+    "cand": {"$ref": "#/$defs/sha"},
+    "base": {"$ref": "#/$defs/sha"},
+    "tool_commit": {"$ref": "#/$defs/sha"},
+    "build_fingerprints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cand", "base"],
+      "properties": {
+        "cand": {"$ref": "#/$defs/buildRole"},
+        "base": {"$ref": "#/$defs/buildRole"}
+      }
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "job", "gpu", "cuda", "torch", "python", "compiler", "dtype", "reps", "warmup", "rounds"],
+      "properties": {
+        "node": {"type": "string", "minLength": 1},
+        "job": {"type": "integer", "minimum": 0},
+        "gpu": {"type": "string", "minLength": 1},
+        "cuda": {"type": ["string", "null"]},
+        "torch": {"type": ["string", "null"]},
+        "python": {"type": ["string", "null"]},
+        "compiler": {"type": ["string", "null"]},
+        "dtype": {"const": "fp32"},
+        "reps": {"type": "integer", "minimum": 1},
+        "warmup": {"type": "integer", "minimum": 0},
+        "rounds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "controls_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "noise": {"type": "number", "minimum": 0},
+    "synthetic_control_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n", "control_geomean_x_base", "control_geomean_x_cusp", "W", "L", "T", "fail", "bw_pct_max"],
+      "properties": {
+        "n": {"type": "integer", "minimum": 0},
+        "control_geomean_x_base": {"$ref": "#/$defs/posOrNull"},
+        "control_geomean_x_cusp": {"$ref": "#/$defs/posOrNull"},
+        "W": {"type": "integer", "minimum": 0},
+        "L": {"type": "integer", "minimum": 0},
+        "T": {"type": "integer", "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0},
+        "bw_pct_max": {"$ref": "#/$defs/nonnegOrNull"}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mat", "diagnostic_role", "F", "shape", "nnz", "generator",
+          "matrix_hash", "label_method", "k", "label_provenance", "label_hash",
+          "ref_hash", "x_sha256", "actual_kernel_config", "correctness",
+          "timing", "timing_samples", "x_base", "x_cusp", "verdict"
+        ],
+        "properties": {
+          "mat": {"enum": ["fem2d", "fem2d_permuted", "diag_b1.0"]},
+          "diagnostic_role": {"enum": ["regression_negative_control", "positive_ordering_locality_control", "ideal_dense_block_ceiling_control"]},
+          "F": {"enum": [128, 512]},
+          "shape": {
+            "type": "array",
+            "prefixItems": [{"const": 262144}, {"const": 262144}],
+            "items": false,
+            "minItems": 2
+          },
+          "nnz": {"type": "integer", "minimum": 1},
+          "generator": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "params", "seed"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "params": {"type": "object"},
+              "seed": {"type": "integer"}
+            }
+          },
+          "matrix_hash": {"$ref": "#/$defs/sha256"},
+          "label_method": {"enum": ["hem", "identity"]},
+          "k": {"const": 32},
+          "label_provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cached", "cache_path", "clustering_src_sha256"],
+            "properties": {
+              "cached": {"type": ["boolean", "null"]},
+              "cache_path": {"type": ["string", "null"]},
+              "clustering_src_sha256": {"type": ["string", "null"]}
+            }
+          },
+          "label_hash": {"type": "string", "minLength": 1},
+          "ref_hash": {"type": "string", "minLength": 1},
+          "x_sha256": {"$ref": "#/$defs/sha256"},
+          "actual_kernel_config": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["implementation", "threads", "p", "features_per_thread", "launch_mode", "cluster", "k"],
+            "properties": {
+              "implementation": {"const": "boo:rowseg"},
+              "threads": {"const": 256},
+              "p": {"const": 64},
+              "features_per_thread": {"const": 1},
+              "launch_mode": {"const": "auto"},
+              "cluster": {"enum": ["hem", "identity"]},
+              "k": {"const": 32}
+            }
+          },
+          "correctness": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["passed", "max_abs_error", "max_scaled_error", "bound_violations", "error_detail"],
+            "properties": {
+              "passed": {"type": "boolean"},
+              "max_abs_error": {"$ref": "#/$defs/nonnegOrNull"},
+              "max_scaled_error": {"$ref": "#/$defs/nonnegOrNull"},
+              "bound_violations": {"type": ["integer", "null"], "minimum": 0},
+              "error_detail": {"type": ["string", "null"]}
+            }
+          },
+          "timing": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["k_ms", "k_iqr", "call_ms", "base_ms", "cusp_ms", "dup_noise", "prep_ms", "gbps", "mem_mib", "cand_stats", "base_stats", "cusp_stats"],
+            "properties": {
+              "k_ms": {"$ref": "#/$defs/posOrNull"},
+              "k_iqr": {"$ref": "#/$defs/nonnegOrNull"},
+              "call_ms": {"$ref": "#/$defs/posOrNull"},
+              "base_ms": {"$ref": "#/$defs/posOrNull"},
+              "cusp_ms": {"$ref": "#/$defs/posOrNull"},
+              "dup_noise": {"$ref": "#/$defs/nonnegOrNull"},
+              "prep_ms": {"$ref": "#/$defs/nonnegOrNull"},
+              "gbps": {"$ref": "#/$defs/nonnegOrNull"},
+              "mem_mib": {"$ref": "#/$defs/nonnegOrNull"},
+              "cand_stats": {"$ref": "#/$defs/armStats"},
+              "base_stats": {"$ref": "#/$defs/armStats"},
+              "cusp_stats": {"$ref": "#/$defs/armStats"}
+            }
+          },
+          "timing_samples": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cand_kernel_ms", "cand_kernel_dup_ms", "cand_kernel_api_ms", "base_kernel_ms", "cand_cusparse_ms", "base_cusparse_ms"],
+            "properties": {
+              "cand_kernel_ms": {"$ref": "#/$defs/numArray"},
+              "cand_kernel_dup_ms": {"$ref": "#/$defs/numArray"},
+              "cand_kernel_api_ms": {"$ref": "#/$defs/numArray"},
+              "base_kernel_ms": {"$ref": "#/$defs/numArray"},
+              "cand_cusparse_ms": {"$ref": "#/$defs/numArray"},
+              "base_cusparse_ms": {"$ref": "#/$defs/numArray"}
+            }
+          },
+          "x_base": {"$ref": "#/$defs/posOrNull"},
+          "x_cusp": {"$ref": "#/$defs/posOrNull"},
+          "verdict": {"enum": ["W", "L", "T", "F"]}
+        }
+      }
+    },
+    "job_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job", "node", "state", "exit", "reattached", "resume_key"],
+      "properties": {
+        "job": {"type": "integer", "minimum": 0},
+        "node": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1},
+        "exit": {"type": "integer"},
+        "reattached": {"type": "boolean"},
+        "resume_key": {"type": "string", "minLength": 1}
+      }
+    },
+    "raw": {"type": "string", "minLength": 1}
+  }
+}

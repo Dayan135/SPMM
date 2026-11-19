@@ -39,6 +39,8 @@ are the deliverable, even if none of them is a speedup.
 | `load_build_env` | `{"env_name": "fem", "modules": []}` | Builds HEAD (cached by source hash). Needs a clean, pushed tree. |
 | `submit_slurm_job` | `{"script_content": "<text of optimizer/agent_tools/templates/tests.sh>", "name": "spmm-tests", "time": "01:00:00"}` | Runs the GPU test suite. Success is `tests_passed: true`. |
 | `run_benchmarks` | `{"kernel_name": "boo:rowseg", "matrix_datasets": ["tune"]}` (or `["all"]`, see §3 step 6) | Paired timing of HEAD against `opt/verified` on the same GPU, plus cuSPARSE. Returns `bench.1`, and writes `bench.json` under `tests/torch_fast_spdmm/benchmark/results/agent_runs/<sha>/<job>/`. |
+| `setup_controls` | `{"stage": "all"}` (or `"status"`) | Prepares or checks the isolated `suite/controls/` namespace (`fem2d`, `fem2d_permuted`, `diag_b1.0`). Separate from `setup_suite`. |
+| `synthetic_controls` | `{}` | Optional, non-gating paired diagnostic benchmark (`fem2d`, `fem2d_permuted`, `diag_b1.0` at N=262144, F=128/512) using the same paired driver. Writes `synthetic_controls.json` (`gating: false`, `promotion_eligible: false`). |
 | `submit_slurm_job` + `parse_ncu_profile` | see §4 | Nsight Compute profile. Returns `ncu.1`. |
 | `promote_attempt` | `{"bench_json": "<path to the bench.json of an [\"all\"] run>"}` | Applies the fixed promotion gate (§6). If it passes, `opt/verified` advances to your commit. The file must be exactly as `run_benchmarks` wrote it. |
 | `rollback_workspace` | `{}` | Adds a revert commit that restores `torch_fast_spdmm/**` and top-level `test_*.py` to `opt/verified`. Never touches `CHANGELOG.md` or the benchmark harness. |
@@ -97,8 +99,19 @@ P=64, FPT=1, `launch_mode=auto`, and F = 32/64/128/256/512.
      the running or finished Slurm job instead of submitting a duplicate. If that job genuinely reached a
      terminal failure (`FAILED`, `TIMEOUT`, `OUT_OF_MEMORY`, etc.), reattaching reports the failure and
      clears its pending record rather than silently resubmitting it.
-7. **Profile** (optional when the result is clearly flat): see §4. Profile one or two cases where the
+7. **Profile / synthetic controls** (optional when the result is clearly flat): see §4. Profile one or two cases where the
    change should matter, and pass the baseline report so you get the `d` (delta) block.
+   - **`synthetic_controls` (auxiliary, non-gating):** normally invoked only after the tune gate passes,
+     and only when its result can distinguish mechanisms relevant to the hypothesis (not required for every
+     attempt). It may run earlier only if the pre-registered hypothesis names a specific diagnostic
+     question that requires it.
+   - Builder and Auditor may inspect `synthetic_controls.json` because the controls (`fem2d`,
+     `fem2d_permuted`, `diag_b1.0` at N=262144, F=128/512) are not held-out.
+   - Controls results never enter `tune`/`held`/`all` aggregates, never influence `promote_attempt`, and
+     never compensate for real-matrix regressions. A controls failure is not a promotion failure unless an
+     independent promotion check fails (though a candidate correctness failure or crash on controls is
+     recorded as a candidate correctness failure and not retried as infrastructure).
+   - `setup_controls` (`suite/controls/`) and `setup_suite` (`suite/`) remain completely separate.
 8. **Decide.** Run the steps of the matching row in order:
 
    | Outcome | Action |
