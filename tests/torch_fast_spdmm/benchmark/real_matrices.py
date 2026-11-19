@@ -178,6 +178,74 @@ def download(spec, cache, url=None, timeout=120):
     return source
 
 
+# SNAP mirrors of SuiteSparse SNAP-group matrices: edge-list file and its first node id.
+# SuiteSparse stores edge FromNodeId -> ToNodeId as A(from, to) with 1-based ids, so the
+# published shape is (max id + 1) for 0-based lists and (max id) for 1-based ones.
+SNAP_EDGELISTS = {
+    'web-Google': ('web-Google.txt.gz', 0),
+    'amazon0312': ('amazon0312.txt.gz', 0),
+    'soc-Pokec': ('soc-pokec-relationships.txt.gz', 1),
+}
+SNAP_URL = 'https://snap.stanford.edu/data/{file}'
+
+
+def download_snap(spec, cache, shape, nnz, timeout=600):
+    """Fallback when the SuiteSparse file host refuses a SNAP-group matrix.
+
+    Downloads the SNAP edge list, writes `<name>/<name>.mtx` (coordinate pattern
+    general, row = FromNodeId) into `<name>.tar.gz`, and records the provenance in
+    source.json. The archive then goes through the same hash checks and canonicalization
+    as a SuiteSparse download. The published shape and NNZ are checked before writing.
+    """
+    import gzip
+    import io
+    file, base = SNAP_EDGELISTS[spec.name]
+    directory = matrix_dir(cache, spec)
+    directory.mkdir(parents=True, exist_ok=True)
+    archive = directory / f'{spec.name}.tar.gz'
+    mtx = directory / f'{spec.name}.mtx'
+    edgelist = directory / file
+    url = SNAP_URL.format(file=file)
+    start = time.perf_counter()
+    with urllib.request.urlopen(url, timeout=timeout) as response, \
+            open(edgelist.with_suffix('.part'), 'wb') as f:
+        final_url = response.geturl()
+        shutil.copyfileobj(response, f, 1 << 22)
+    edgelist.with_suffix('.part').replace(edgelist)
+    download_s = time.perf_counter() - start
+    with gzip.open(edgelist, 'rt') as f:
+        edges = np.loadtxt(f, dtype=np.int64, comments='#', ndmin=2)
+    edges = edges[:, :2] - base + 1
+    rows, cols = shape
+    if len(edges) != nnz or edges.min() < 1 or edges[:, 0].max() > rows or edges[:, 1].max() > cols:
+        raise ValueError(f'{spec.name}: SNAP edge list has {len(edges)} edges, ids '
+                         f'{edges.min()}..{edges.max()}; expected {nnz} within {shape}')
+    member_name = f'{spec.name}/{spec.name}.mtx'
+    buf = io.StringIO()
+    buf.write('%%MatrixMarket matrix coordinate pattern general\n')
+    buf.write(f'% converted from SNAP {file} (row = FromNodeId - {base} + 1)\n')
+    buf.write(f'{rows} {cols} {len(edges)}\n')
+    np.savetxt(buf, edges, fmt='%d')
+    payload = buf.getvalue().encode()
+    del buf
+    with tarfile.open(archive.with_suffix('.part'), 'w:gz') as tar:
+        info = tarfile.TarInfo(member_name)
+        info.size = len(payload)
+        tar.addfile(info, io.BytesIO(payload))
+    archive.with_suffix('.part').replace(archive)
+    mtx.write_bytes(payload)
+    source = dict(matrix=spec.key, role=spec.role, url=url, final_url=final_url,
+                  converted_from='snap_edgelist', edgelist=file,
+                  edgelist_sha256=file_sha256(edgelist), edgelist_first_id=base,
+                  archive=archive.name, archive_bytes=archive.stat().st_size,
+                  archive_sha256=file_sha256(archive), archive_members=[member_name],
+                  mtx_member=member_name, mtx_bytes=mtx.stat().st_size,
+                  mtx_sha256=file_sha256(mtx), download_s=download_s,
+                  downloaded_at=time.strftime('%Y-%m-%dT%H:%M:%S%z'))
+    _write_json(directory / 'source.json', source)
+    return source
+
+
 def download_stats(cache, url=STATS_URL, timeout=120):
     """SuiteSparse's index CSV, used only to cross-check shape/nnz after parsing."""
     path = Path(cache) / 'ssstats.csv'

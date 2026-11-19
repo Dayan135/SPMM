@@ -169,9 +169,21 @@ def _format_stats(csr):
 
 
 def download(root, cache, names=None):
+    import urllib.error
     for name in expand(names or ['all']):
-        if SPECS[name][0] is not None:
-            rm.download(rm.resolve([name])[0], cache)
+        group, rows, cols, nnz = SPECS[name]
+        if group is None:
+            continue
+        spec = rm.resolve([name])[0]
+        try:
+            rm.download(spec, cache)
+        except urllib.error.HTTPError as exc:
+            # The SuiteSparse file host has refused every file (403) since 2026-11-18.
+            # SNAP-group matrices fall back to the SNAP edge list; source.json records it.
+            if name not in rm.SNAP_EDGELISTS:
+                raise
+            print(f'{name}: SuiteSparse HTTP {exc.code}; using SNAP edge list', flush=True)
+            rm.download_snap(spec, cache, (rows, cols), nnz)
 
 
 def prepare(root, cache, names=None):
