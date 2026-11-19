@@ -150,3 +150,46 @@ def test_slurm_header_merge():
                            dry_run=True, config=config)['rendered']
     assert '--partition=rtx3090' in gpu and '--gres=gpu:rtx_3090:1' in gpu
     assert 'foo' not in gpu and 'gpu:2' not in gpu and '--qos=erant' in gpu
+
+
+def test_promote_gate(tmp_path, monkeypatch):
+    import contextlib, copy
+    from optimizer.agent_tools import bench
+    example = json.loads((state.ROOT/'reports/agent_loop/schemas/examples/bench.example.json').read_text())
+    cand, base = 'c'*40, 'b'*40
+    cfg = {'verified': base, 'tests_passed': {cand: True}}
+    calls = []
+    monkeypatch.setattr(bench.state, 'read', lambda *a, **k: dict(cfg))
+    monkeypatch.setattr(bench, 'head', lambda *a, **k: cand)
+
+    def fake_git(*args, **kwargs):
+        calls.append(args)
+        return type('R', (), {'stdout': base + '\n'})()
+    monkeypatch.setattr(bench, 'git', fake_git)
+
+    @contextlib.contextmanager
+    def fake_locked(*a, **k):
+        yield cfg
+    monkeypatch.setattr(bench.state, 'locked', fake_locked)
+
+    def run(**sums):
+        result = copy.deepcopy(example)
+        result.update(cand=cand, base=base)
+        for subset, values in sums.items():
+            result['sum'][subset].update(values)
+        path = tmp_path/'bench.json'
+        path.write_text(json.dumps(result))
+        return bench.promote_attempt(str(path))
+
+    good_tune = {'n': 20, 'geo_x_base': 1.05, 'W': 5, 'L': 0, 'T': 15}
+    good_held = {'n': 15, 'geo_x_base': 1.00, 'W': 1, 'L': 0, 'T': 14}
+    bad = run(tune={**good_tune, 'geo_x_base': 1.01}, held=good_held)
+    assert not bad['promoted'] and 'tune' in bad['reasons'][0]
+    bad = run(tune=good_tune, held={**good_held, 'L': 2, 'W': 1})
+    assert not bad['promoted'] and 'held' in bad['reasons'][0]
+    bad = run(tune=good_tune, held={**good_held, 'n': 0})
+    assert not bad['promoted'] and 'both tune and held' in bad['reasons'][0]
+    assert not any(c[0] == 'tag' for c in calls)
+    ok = run(tune=good_tune, held=good_held)
+    assert ok['promoted'] and cfg['verified'] == cand
+    assert ('tag', '-f', 'opt/verified', cand) in calls

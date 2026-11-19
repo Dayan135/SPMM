@@ -202,6 +202,8 @@ def aggregate(samples_path: Path, summary_path: Path, manifest: dict, *, fmt: st
 def run_benchmarks(kernel_name: str, matrix_datasets: list[str], *, features=None,
                    tail=False, baseline_ref=None, reps=30, warmup=5, rounds=3,
                    promote=False, time=None) -> dict:
+    if promote:
+        raise ArgumentError('promote is retired; call promote_attempt with the bench.json path')
     parsed = parse_kernel(kernel_name)
     matrices = expand(matrix_datasets)
     if features is None:
@@ -274,8 +276,52 @@ def run_benchmarks(kernel_name: str, matrix_datasets: list[str], *, features=Non
         raise RuntimeError(f'benchmark case coverage mismatch: missing={sorted(expected-reported)}, '
                            f'extra={sorted(reported-expected)}')
     (run_local/'bench.json').write_text(json.dumps(result, indent=2) + '\n')
-    if promote and result['ok'] and cfg['tests_passed'].get(cand):
-        with state.locked() as current:
-            current['verified'] = cand
-        git('tag', '-f', 'opt/verified', cand)
     return result
+
+
+# Promotion gate: fixed rules, no judgment. A promoted attempt becomes the baseline for
+# every later attempt, so a regression on `held` blocks promotion even if `tune` improved.
+PROMOTE_GATE = {'tune_geo_min': 1.02, 'held_geo_min': 0.99}
+
+
+def promote_attempt(bench_json: str) -> dict:
+    """Advance state.verified and tag opt/verified to the candidate if it passes the gate.
+
+    Requires: tests_passed for the candidate; the bench.1 result is ok, measured against
+    the current verified commit, and covers both `tune` and `held`; tune geo_x_base >=
+    1.02 with W > L; held geo_x_base >= 0.99 with L <= W.
+    """
+    path = Path(bench_json)
+    if not path.is_absolute():
+        path = state.ROOT / path
+    result = json.loads(path.read_text())
+    validate('bench', result)
+    cfg = state.read()
+    cand, base = result['cand'], result['base']
+    verified = git('rev-parse', f'{cfg["verified"]}^{{commit}}').stdout.strip()
+    tune, held = result['sum']['tune'], result['sum']['held']
+    reasons = []
+    if not cfg['tests_passed'].get(cand):
+        reasons.append('tests have not passed for the candidate')
+    if not result['ok']:
+        reasons.append('bench.ok is false (a correctness failure)')
+    if base != verified:
+        reasons.append(f'baseline {base[:7]} is not the current verified {verified[:7]}')
+    if cand != head():
+        reasons.append(f'candidate {cand[:7]} is not HEAD')
+    if not tune['n'] or not held['n']:
+        reasons.append('the run must cover both tune and held (use matrix_datasets ["all"])')
+    else:
+        if tune['geo_x_base'] < PROMOTE_GATE['tune_geo_min'] or tune['W'] <= tune['L']:
+            reasons.append(f"tune geo_x_base {tune['geo_x_base']} (W/L {tune['W']}/{tune['L']}) "
+                           f"below gate {PROMOTE_GATE['tune_geo_min']} with W > L")
+        if held['geo_x_base'] < PROMOTE_GATE['held_geo_min'] or held['L'] > held['W']:
+            reasons.append(f"held geo_x_base {held['geo_x_base']} (W/L {held['W']}/{held['L']}) "
+                           f"below gate {PROMOTE_GATE['held_geo_min']} or L > W")
+    if reasons:
+        return {'promoted': False, 'cand': cand, 'verified': verified, 'reasons': reasons}
+    with state.locked() as current:
+        current['verified'] = cand
+    git('tag', '-f', 'opt/verified', cand)
+    git('push', '-f', 'origin', 'refs/tags/opt/verified')
+    return {'promoted': True, 'cand': cand, 'previous_verified': verified, 'reasons': []}

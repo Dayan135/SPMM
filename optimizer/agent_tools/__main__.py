@@ -11,7 +11,8 @@ import traceback
 from .util import ArgumentError, InfrastructureError
 
 TOOLS = ('load_build_env', 'submit_slurm_job', 'commit_kernel_attempt',
-         'rollback_workspace', 'run_benchmarks', 'parse_ncu_profile', 'setup_suite')
+         'rollback_workspace', 'run_benchmarks', 'parse_ncu_profile', 'setup_suite',
+         'promote_attempt')
 
 
 class Parser(argparse.ArgumentParser):
@@ -38,6 +39,9 @@ def dispatch(tool: str, arguments: dict) -> dict:
     if tool == 'parse_ncu_profile':
         from .ncu import parse_ncu_profile
         return parse_ncu_profile(**arguments)
+    if tool == 'promote_attempt':
+        from .bench import promote_attempt
+        return promote_attempt(**arguments)
     from .suite import setup_suite
     return setup_suite(**arguments)
 

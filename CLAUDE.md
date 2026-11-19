@@ -120,7 +120,7 @@ works on `opt/loop`, with tag `opt/verified`. See README "Branching workflow".
 | `tests/torch_fast_spdmm/benchmark/profile_cusparse.py` | ncu profiling driver for the cuSPARSE baseline |
 | `tests/torch_fast_spdmm/benchmark/csr_kernel_sweep.py` | CSR-kernel-fast vs fallback head-to-head experiment |
 | `optimizer/quick.py` | Single-config fast path for live kernel-edit iteration — see "Quick kernel-edit iteration" above |
-| `optimizer/agent_tools/` | Six JSON CLI tools for isolated Slurm builds, tests, benchmarks, profiles and loop version control |
+| `optimizer/agent_tools/` | JSON CLI tools for isolated Slurm builds, tests, benchmarks, profiles, loop version control and the promotion gate (`promote_attempt`) |
 | `tests/torch_fast_spdmm/benchmark/universal_suite.py` | Canonical eleven-matrix suite, seeded X, manifest and CPU references |
 | `tests/torch_fast_spdmm/benchmark/agent_bench.py` | Same-node paired benchmark driver using the shared timing loop |
 | `tests/torch_fast_spdmm/benchmark/agent_profile.py` | Single-case Nsight Compute profiling driver |
