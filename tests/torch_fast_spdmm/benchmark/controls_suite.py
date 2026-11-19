@@ -322,7 +322,7 @@ def refs(root: Path, features: tuple[int, ...] = CONTROL_FEATURES) -> dict:
         csr_hash = manifest['matrices'][profile]['csr_hash']
         for f in features:
             stem = out / f'{profile}_F{f}'
-            meta_path = stem.with_suffix('.json')
+            meta_path = Path(f'{stem}.json')
             x = suite.make_x(csr.shape[1], f)
             xsha = suite.x_hash(x)
             if meta_path.exists():
@@ -422,7 +422,7 @@ def status(root: Path, *, check_labels: bool = True) -> dict:
         csr_hash = manifest['matrices'][profile]['csr_hash']
         for f in CONTROL_FEATURES:
             stem = root / 'refs' / f'{profile}_F{f}'
-            meta_path = stem.with_suffix('.json')
+            meta_path = Path(f'{stem}.json')
             if not meta_path.exists():
                 missing_refs.append(f'{profile}_F{f}')
                 continue

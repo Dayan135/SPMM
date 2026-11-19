@@ -483,6 +483,54 @@ def test_bench_runner_run_dir_placeholder_and_slurm_render(tmp_path, monkeypatch
         assert not re.search(r'\{(?:RUN_DIR|SRC_DIR|BUILD_DIR|BASE_BUILD_DIR|AGENT_ROOT|NCU|NCU_FLAGS|SHA)\}', rendered)
 
 
+def test_dotted_profile_reference_metadata_naming(tmp_path):
+    bench_root = str(state.ROOT / 'tests/torch_fast_spdmm')
+    if bench_root not in sys.path:
+        sys.path.insert(0, bench_root)
+    from benchmark import controls_suite as cs
+
+    root = tmp_path / 'dotted_refs'
+    orig_profiles = cs.CONTROL_PROFILES
+    orig_specs = copy.deepcopy(cs.CONTROL_SPECS)
+    orig_size = cs.CONTROL_SIZE
+    try:
+        cs.CONTROL_SIZE = 1024
+        cs.CONTROL_PROFILES = ('diag_b1.0',)
+        cs.CONTROL_SPECS['diag_b1.0']['size'] = 1024
+        cs.CONTROL_SPECS['diag_b1.0']['generator_params']['system_size'] = 1024
+
+        man = cs.prepare(root)
+        written = cs.refs(root)
+        assert set(written.keys()) == {'diag_b1.0_F128', 'diag_b1.0_F512'}
+        assert not (root / 'refs' / 'diag_b1.json').exists()
+
+        for f in (128, 512):
+            meta_path = root / 'refs' / f'diag_b1.0_F{f}.json'
+            assert meta_path.exists()
+            meta = json.loads(meta_path.read_text())
+            assert meta['features'] == f
+            assert meta['matrix_sha256'] == man['matrices']['diag_b1.0']['csr_hash']
+            for part in ('ref', 'absref', 'tol'):
+                part_path = root / 'refs' / f'diag_b1.0_F{f}.{part}.npy'
+                assert part_path.exists()
+                assert part in meta['sha256']
+
+        st = cs.status(root, check_labels=False)
+        assert st['ready'] is True
+        assert st['missing_matrices'] == []
+        assert st['missing_refs'] == []
+    finally:
+        cs.CONTROL_SIZE = orig_size
+        cs.CONTROL_PROFILES = orig_profiles
+        cs.CONTROL_SPECS.clear()
+        cs.CONTROL_SPECS.update(orig_specs)
+
+    # Direct regression assertion for every fixed (profile, F) reference metadata path
+    for prof in controls.CONTROLS_PROFILES:
+        for f in controls.CONTROLS_FEATURES:
+            assert Path(f"{root / 'refs' / f'{prof}_F{f}'}.json") == root / 'refs' / f'{prof}_F{f}.json'
+
+
 def test_runtime_build_binding_and_env_rejections(tmp_path):
     fp = _default_fp()
     job = _default_job()
@@ -544,6 +592,21 @@ def test_controls_setup_isolated_from_promotion_suite(tmp_path, monkeypatch):
     assert res['ready'] is True
     assert all('/suite/controls' in body for _, body in submitted_scripts)
     assert all('universal_suite' not in body for _, body in submitted_scripts)
+
+    # stage='all' raises InfrastructureError if final status is ready=false
+    class _NotReady:
+        stdout = json.dumps({
+            'panel': 'synthetic_controls', 'ready': False,
+            'missing_matrices': [], 'missing_refs': ['diag_b1.0_F128'], 'missing_labels': [],
+        })
+        returncode = 0
+
+    monkeypatch.setattr(controls, 'checked_ssh', lambda cmd, **kw: _NotReady())
+    with pytest.raises(InfrastructureError, match='not ready'):
+        controls.setup_controls('all')
+    # stage='status' returns structured ready=false without raising
+    st = controls.setup_controls('status')
+    assert st['ready'] is False and st['missing_refs'] == ['diag_b1.0_F128']
 
     class _Missing:
         returncode = 1

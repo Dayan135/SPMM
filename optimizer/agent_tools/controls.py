@@ -115,7 +115,16 @@ def setup_controls(stage: str = 'all') -> dict:
         f'python -m benchmark.controls_suite status --root {shlex.quote(controls_root)}'
     ))
     res = checked_ssh(cmd, timeout=300, config=cfg)
-    return json.loads(res.stdout)
+    status_data = json.loads(res.stdout)
+    if stage == 'all' and not status_data.get('ready'):
+        raise InfrastructureError(
+            'setup_controls(stage="all") finished but controls panel is not ready: '
+            f'missing_matrices={status_data.get("missing_matrices")}, '
+            f'missing_refs={status_data.get("missing_refs")}, '
+            f'missing_labels={status_data.get("missing_labels")}, '
+            f'reason={status_data.get("reason")!r}'
+        )
+    return status_data
 
 
 def _validate_manifest(manifest: dict) -> None:
