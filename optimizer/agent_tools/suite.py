@@ -1,10 +1,11 @@
 """One-time remote ingestion and reference preparation."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shlex
 
-from . import state
+from . import attempt_log, state
 from .build import ensure_build, load_build_env
 from .slurm import submit_slurm_job
 from .util import ArgumentError, checked_ssh, head
@@ -59,6 +60,7 @@ def setup_suite(stage: str, matrices: list[str] | None = None) -> dict:
                     'reason': job['err_tail'] or job['out_tail']}
     manifest = f'{suite}/manifest.json'
     result = checked_ssh(f'cat {shlex.quote(manifest)}', config=cfg)
+    attempt_log.record_suite_manifest_sha256(hashlib.sha256(result.stdout.encode('utf-8')).hexdigest())
     data = json.loads(result.stdout)
     matrices = {key: {'nnz': int(value['canonical_nnz']), 'ok': True}
                 for key, value in data['matrices'].items()}

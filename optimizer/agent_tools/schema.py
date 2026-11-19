@@ -8,7 +8,18 @@ from __future__ import annotations
 import re
 
 
+KEYWORDS = {'$schema', '$id', '$defs', '$ref', 'title', 'description', 'oneOf', 'type',
+            'const', 'enum', 'required', 'properties', 'additionalProperties', 'minItems',
+            'maxItems', 'uniqueItems', 'prefixItems', 'items', 'minLength', 'maxLength',
+            'pattern', 'minimum', 'exclusiveMinimum', 'maximum', 'exclusiveMaximum'}
+
+
 def validate(value, schema, *, root=None, path='$'):
+    if not isinstance(schema, dict):
+        raise TypeError(f'schema must be a dict, got {type(schema).__name__}')
+    unknown = set(schema) - KEYWORDS
+    if unknown:
+        raise TypeError(f'unsupported schema keywords {sorted(unknown)} at {path}')
     root = root or schema
     if '$ref' in schema:
         node = root
@@ -70,6 +81,8 @@ def validate(value, schema, *, root=None, path='$'):
     if isinstance(value, str):
         if len(value) < schema.get('minLength', 0):
             raise ValueError(f'{path}: string too short')
+        if len(value) > schema.get('maxLength', float('inf')):
+            raise ValueError(f'{path}: string too long')
         if 'pattern' in schema and not re.search(schema['pattern'], value):
             raise ValueError(f'{path}: does not match {schema["pattern"]}')
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -77,3 +90,7 @@ def validate(value, schema, *, root=None, path='$'):
             raise ValueError(f'{path}: below minimum')
         if 'exclusiveMinimum' in schema and value <= schema['exclusiveMinimum']:
             raise ValueError(f'{path}: below exclusive minimum')
+        if 'maximum' in schema and value > schema['maximum']:
+            raise ValueError(f'{path}: above maximum')
+        if 'exclusiveMaximum' in schema and value >= schema['exclusiveMaximum']:
+            raise ValueError(f'{path}: above exclusive maximum')

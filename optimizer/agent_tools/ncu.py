@@ -12,7 +12,7 @@ import shlex
 from .schema import validate
 from scripts.research_panel.nnzflat_profile_report import STALLS, STALL_FMT, num, rows_of
 
-from . import state
+from . import attempt_log, state
 from .util import ArgumentError, checked_ssh, transfer
 from optimizer import remote
 
@@ -324,4 +324,10 @@ def parse_ncu_profile(ncu_report_file: str, baseline_report: str | None = None) 
     stem = path.name[:-8] if path.name.endswith('_raw.csv') else path.stem
     out = path.with_name(stem + '.ncu.json')
     out.write_text(json.dumps(result, indent=2) + '\n')
+    attempt_log.attach_artifact(kind='ncu_json', local_path=out)
+    attempt_log.attach_artifact(
+        kind='ncu_report',
+        local_path=path if path.exists() else None,
+        remote_path=display if display != str(path) else None,
+    )
     return result
