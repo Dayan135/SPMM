@@ -56,7 +56,7 @@ Speedups always compare like with like: `cpp_only` against `cpp_only`.
 | `env.reps` / `env.warmup` / `env.rounds` | int | Timed calls per round, untimed warm-up calls, number of base/candidate process rounds. |
 | `noise` | fraction | This job's timing noise floor (see below). For example, `0.031` means differences under about 3.1% are indistinguishable from noise **in this job**. |
 | `sum` | object | Aggregates; see the next table. |
-| `prep_ms` | {matrix: ms} | Format-construction time for the candidate (`csr_to_pbr` / `csr_to_boo`, host side, plus upload). It is reported once per matrix because it does not depend on F. It is never included in `k_ms`. |
+| `prep_ms` | {matrix: ms} | Format-construction time for the candidate (`csr_to_pbr` / `csr_to_boo`, host side, plus upload). It is reported once per matrix because it does not depend on F. It is never included in `k_ms`. For BOO it excludes HEM clustering: `agent_bench` caches the labels per (matrix, params, `clustering.py` hash) under `suite/boo_labels/`. An attempt that edits clustering misses the cache. |
 | `cols` | fixed list | Column names for every row in `rows`, in order. They are listed once so each row doesn't repeat them, which saves context. |
 | `rows` | list of lists | One row per measured case; see "Per-case columns". |
 | `skipped` | list of `[mat, F, reason]` | Cases not measured: `unsupported: rectangular`, `skip:oom-budget` (predicted memory > 24 GB budget), `unsupported in base` (the baseline lacks an API the candidate uses), and so on. Skips are **not** failures. |

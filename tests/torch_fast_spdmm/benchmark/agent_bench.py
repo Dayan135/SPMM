@@ -63,6 +63,35 @@ def _boo_plan(core, boo, x, params, variant):
         params['csr_mode'], rowseg, False, n_fpt, reference, launch_mode)
 
 
+def _boo_labels(spmm, csr, mat, params, root, manifest):
+    """HEM clustering labels, cached per (matrix, params, clustering.py source).
+
+    Clustering is pure Python and dominates BOO preparation (about 11 minutes on
+    uniform16), yet kernel attempts never change it. The key includes the SHA-256 of
+    the clustering.py that this build imports, so an attempt that edits clustering
+    misses the cache and re-clusters.
+    """
+    import torch_fast_spdmm.clustering as clustering
+    src = rm.file_sha256(clustering.__file__)[:16]
+    key = f"{mat}_{params['cluster']}_{params['target_nr']}x{params['target_nc']}_{src}"
+    path = Path(root)/'boo_labels'/f'{key}.npz'
+    csr_hash = manifest['matrices'][mat]['csr_hash']
+    if path.exists():
+        cached = np.load(path)
+        if str(cached['csr_hash']) == csr_hash:
+            return cached['row_labels'], cached['col_labels'], True
+    row, col = clustering.cluster_axes(csr, method=params['cluster'],
+                                       target_nr=params['target_nr'], target_nc=params['target_nc'],
+                                       max_nr=params['target_nr'], max_nc=params['target_nc'],
+                                       max_block_nnz=None, seed=0, symmetric=None,
+                                       feasible_first=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f'{path.stem}.{os.getpid()}.tmp.npz')
+    np.savez(tmp, row_labels=row, col_labels=col, csr_hash=np.array(csr_hash))
+    os.replace(tmp, path)
+    return row, col, False
+
+
 def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest):
     mat, f = case['mat'], int(case['F'])
     base = dict(role=role, round=round_, mat=mat, F=f, node=socket.gethostname(),
@@ -89,8 +118,12 @@ def _case(torch, spmm, core, case, spec, role, round_, out, root, manifest):
             sparse = spmm.csr_to_pbr(csr, **params)
         else:
             params = spec['params']
+            # prep_ms excludes clustering on a cache hit; base and cand share the labels.
+            row_labels, col_labels, _ = _boo_labels(spmm, csr, mat, params, root, manifest)
+            start = time.perf_counter()
             sparse = spmm.csr_to_boo(csr, cluster=params['cluster'],
-                                      target_nr=params['target_nr'], target_nc=params['target_nc'])
+                                      target_nr=params['target_nr'], target_nc=params['target_nc'],
+                                      row_labels=row_labels, col_labels=col_labels)
         sparse.to('cuda')
         torch.cuda.synchronize()
         prep_ms = 1000*(time.perf_counter()-start)
