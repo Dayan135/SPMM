@@ -596,7 +596,46 @@ def summarize_result(tool_name: str, result) -> str:
     return _cap_json(redact_and_sanitize(summary, max_str_chars=512), MAX_SUMMARY_BYTES)
 
 
+WAL_RETRY_DEADLINE_S = 1.5
+WAL_RETRY_INITIAL_DELAY_S = 0.010
+WAL_RETRY_MAX_DELAY_S = 0.100
+_SQLITE_LOCK_TOKENS = (
+    'database is locked',
+    'database table is locked',
+    'database is busy',
+)
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    return isinstance(exc, sqlite3.OperationalError) and any(
+        tok in str(exc).lower() for tok in _SQLITE_LOCK_TOKENS
+    )
+
+
+def _enable_wal(conn: sqlite3.Connection, db_path: Path) -> None:
+    deadline = time.monotonic() + WAL_RETRY_DEADLINE_S
+    delay = WAL_RETRY_INITIAL_DELAY_S
+    while True:
+        try:
+            row = conn.execute('PRAGMA journal_mode = WAL').fetchone()
+            break
+        except sqlite3.OperationalError as exc:
+            if not _is_sqlite_lock_error(exc):
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            time.sleep(min(delay, remaining))
+            delay = min(delay * 2.0, WAL_RETRY_MAX_DELAY_S)
+    mode = str(row[0]).strip().lower() if row is not None and row[0] is not None else ''
+    if mode != 'wal':
+        raise InfrastructureError(
+            f'attempt database unavailable at {db_path}: expected journal_mode=wal, got {mode!r}'
+        )
+
+
 def _connect(db_path: Path) -> sqlite3.Connection:
+    conn = None
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _chmod_owner_only(db_path.parent, 0o700)
@@ -606,16 +645,28 @@ def _connect(db_path: Path) -> sqlite3.Connection:
             isolation_level=None,
         )
         conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA journal_mode = WAL')
+        conn.execute(f'PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}')
+        _enable_wal(conn, db_path)
         conn.execute('PRAGMA foreign_keys = ON')
         conn.execute('PRAGMA synchronous = FULL')
-        conn.execute(f'PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}')
         _ensure_schema(conn)
         _chmod_owner_only(db_path, 0o600)
         _chmod_owner_only(Path(f'{db_path}-wal'), 0o600)
         _chmod_owner_only(Path(f'{db_path}-shm'), 0o600)
         return conn
+    except InfrastructureError:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        raise
     except (sqlite3.Error, OSError) as exc:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
         raise InfrastructureError(f'attempt database unavailable at {db_path}: {exc}') from exc
 
 
@@ -1025,6 +1076,7 @@ def start_tool_call(
     pid = os.getpid()
 
     conn = _connect(target_db)
+    lock_file, lock_path = None, None
     try:
         recover_interrupted_calls(conn, target_db)
         with _write_tx(conn):
@@ -1057,10 +1109,12 @@ def start_tool_call(
                     remote_path=remote_path,
                     root=root,
                 )
-        lock_file, lock_path = _acquire_call_lock(target_db, call_id)
+            lock_file, lock_path = _acquire_call_lock(target_db, call_id)
     except InfrastructureError:
+        _release_call_lock(lock_file, lock_path)
         raise
     except (sqlite3.Error, OSError) as exc:
+        _release_call_lock(lock_file, lock_path)
         raise InfrastructureError(f'failed to write tool_call start record: {exc}') from exc
     finally:
         conn.close()

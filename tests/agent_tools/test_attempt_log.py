@@ -1247,3 +1247,107 @@ def test_embedded_script_secret_omitted_and_owner_only_permissions(tmp_path, mon
     assert (env['state_file'].stat().st_mode & 0o777) == 0o600
 
 
+class _FakeConn:
+    def __init__(self, wal_behavior):
+        self.row_factory = None
+        self.calls = []
+        self.closed = False
+        self._wal_behavior = wal_behavior
+        self._wal_attempts = 0
+
+    def execute(self, sql, *args):
+        self.calls.append(sql)
+        if sql == 'PRAGMA journal_mode = WAL':
+            self._wal_attempts += 1
+            return self._wal_behavior(self._wal_attempts)
+        cur = type('Cur', (), {'fetchone': lambda s: None, 'fetchall': lambda s: []})()
+        return cur
+
+    def close(self):
+        self.closed = True
+
+
+def test_connect_wal_retry_succeeds_after_transient_lock(tmp_path, monkeypatch):
+    db_path = tmp_path / 'wal_retry.sqlite3'
+    created = []
+
+    def wal_behavior(attempt):
+        if attempt <= 3:
+            raise sqlite3.OperationalError('database is locked')
+        return type('Cur', (), {'fetchone': lambda s: ('wal',)})()
+
+    def fake_connect(*args, **kwargs):
+        c = _FakeConn(wal_behavior)
+        created.append(c)
+        return c
+
+    monkeypatch.setattr(attempt_log.sqlite3, 'connect', fake_connect)
+    monkeypatch.setattr(attempt_log, '_ensure_schema', lambda conn: None)
+    monkeypatch.setattr(attempt_log.time, 'sleep', lambda s: None)
+
+    conn = attempt_log._connect(db_path)
+    assert conn is created[0]
+    assert not conn.closed
+    assert conn._wal_attempts == 4
+    # PRAGMA busy_timeout must be issued before PRAGMA journal_mode = WAL
+    assert conn.calls.index(f'PRAGMA busy_timeout = {attempt_log.BUSY_TIMEOUT_MS}') < conn.calls.index(
+        'PRAGMA journal_mode = WAL'
+    )
+
+
+def test_connect_wal_non_lock_error_not_retried_and_closes_conn(tmp_path, monkeypatch):
+    for msg in ('disk I/O error', 'database disk image is malformed'):
+        db_path = tmp_path / f'{msg[:4]}.sqlite3'
+        created = []
+
+        def wal_behavior(attempt, _msg=msg):
+            raise sqlite3.OperationalError(_msg)
+
+        monkeypatch.setattr(
+            attempt_log.sqlite3, 'connect',
+            lambda *a, **kw: created.append(_FakeConn(wal_behavior)) or created[-1],
+        )
+        with pytest.raises(InfrastructureError, match=msg):
+            attempt_log._connect(db_path)
+        assert len(created) == 1
+        assert created[0]._wal_attempts == 1
+        assert created[0].closed is True
+
+
+def test_connect_wal_persistent_lock_fails_and_closes_conn(tmp_path, monkeypatch):
+    db_path = tmp_path / 'persistent_lock.sqlite3'
+    created = []
+    clock = {'t': 0.0}
+
+    def fake_monotonic():
+        return clock['t']
+
+    def fake_sleep(dt):
+        clock['t'] += max(dt, 0.2)
+
+    monkeypatch.setattr(attempt_log.time, 'monotonic', fake_monotonic)
+    monkeypatch.setattr(attempt_log.time, 'sleep', fake_sleep)
+    monkeypatch.setattr(
+        attempt_log.sqlite3, 'connect',
+        lambda *a, **kw: created.append(_FakeConn(lambda a: (_ for _ in ()).throw(sqlite3.OperationalError('database is locked')))) or created[-1],
+    )
+    with pytest.raises(InfrastructureError, match='database is locked'):
+        attempt_log._connect(db_path)
+    assert len(created) == 1
+    assert created[0]._wal_attempts >= 2
+    assert created[0].closed is True
+
+
+def test_connect_wal_unexpected_mode_fails_closed_and_closes_conn(tmp_path, monkeypatch):
+    db_path = tmp_path / 'wrong_mode.sqlite3'
+    created = []
+    monkeypatch.setattr(
+        attempt_log.sqlite3, 'connect',
+        lambda *a, **kw: created.append(_FakeConn(lambda a: type('Cur', (), {'fetchone': lambda s: ('delete',)})())) or created[-1],
+    )
+    with pytest.raises(InfrastructureError, match='expected journal_mode=wal'):
+        attempt_log._connect(db_path)
+    assert len(created) == 1
+    assert created[0].closed is True
+
+
