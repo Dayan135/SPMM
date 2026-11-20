@@ -474,12 +474,11 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     const uint32_t col_mask = (1u << shift) - 1u;
 
     // --- LOAD, once per CTA -------------------------------------------------
+    // Only sh_nz_idx is needed by the binary search below; stage sh_nz_val,
+    // sh_col_ids, and sh_row_ids concurrently with the search before Barrier 2.
     for (uint32_t i = tx; i < n_nz; i += THREADS) {
-        sh_nz_val[i] = nz_val[nz_base + i];
         sh_nz_idx[i] = nz_idx[nz_base + i];
     }
-    for (uint32_t i = tx; i < n_c; i += THREADS) sh_col_ids[i] = col_ids[col_base + i];
-    for (uint32_t i = tx; i < n_r; i += THREADS) sh_row_ids[i] = row_ids[row_base + i];
     __syncthreads();
 
     // Row-start table by binary search. nz_idx is sorted by local_row (rowmajor)
@@ -500,6 +499,9 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
         }
         sh_row_start[r] = (int32_t)lo;
     }
+    for (uint32_t i = tx; i < n_nz; i += THREADS) sh_nz_val[i] = nz_val[nz_base + i];
+    for (uint32_t i = tx; i < n_c; i += THREADS) sh_col_ids[i] = col_ids[col_base + i];
+    for (uint32_t i = tx; i < n_r; i += THREADS) sh_row_ids[i] = row_ids[row_base + i];
     __syncthreads();
 
     const uint32_t feat_start = feat_slab * FEAT_BLOCK;
@@ -590,7 +592,9 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
                 }
             }
         }  // FPT == 1
-        __syncthreads();
+        if (base_f + P < feat_end) {
+            __syncthreads();
+        }
     }
 }
 
