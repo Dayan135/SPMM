@@ -423,7 +423,9 @@ def boo_arena_bytes(max_nr: int, max_nc: int, max_nnz_blk: int, p: int,
     data = max_nnz_blk * (scalar_bytes + 2)          # nz_val + nz_idx
     if row_seg:
         ids = 4 * (max_nr + max_nc) + 4 * (max_nr + 1)   # + row_start
-        tiles = 2 * scalar_bytes * p * max_nc            # double-buffered smem_X only
+        tile_1x = scalar_bytes * p * max_nc
+        use_double_buf = (data + ids + tile_1x + 16 + tile_1x) <= 32768
+        tiles = (2 * tile_1x) if use_double_buf else tile_1x
     else:
         ids = 4 * (max_nr + max_nc)
         tiles = scalar_bytes * p * (max_nr + max_nc)     # smem_X + smem_Y

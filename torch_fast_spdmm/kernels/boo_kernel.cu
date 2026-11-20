@@ -39,13 +39,33 @@ int boo_arena_bytes(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_b
     return data + ids + tiles + 16;                          // + alignment slack
 }
 
+// Single source of truth for 1x vs 2x smem_X sizing shared by host arena
+// calculation and boo_spmm_rowseg_kernel. Caps double-buffered arena at 32 KB
+// so large-tile/padded-arena configurations fall back to 1x smem_X cleanly
+// without exceeding SM86 dynamic shared memory or altering CTA/SM targets.
+__host__ __device__ __forceinline__ int boo_arena_bytes_rowseg_1x(
+    int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes) {
+    const int data = max_nnz_blk * (scalar_bytes + 2);
+    const int ids = 4 * (max_nr + max_nc) + 4 * (max_nr + 1);  // + sh_row_start
+    const int tiles = scalar_bytes * p * max_nc;               // 1x smem_X
+    return data + ids + tiles + 16;
+}
+
+__host__ __device__ __forceinline__ bool boo_rowseg_use_double_buf(
+    int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes) {
+    const int arena_1x = boo_arena_bytes_rowseg_1x(max_nr, max_nc, max_nnz_blk, p, scalar_bytes);
+    const int extra_x = scalar_bytes * p * max_nc;
+    return arena_1x + extra_x <= 32768;
+}
+
 // The row-segmented kernel needs no smem_Y at all -- each thread accumulates a
 // whole row in a register -- but does need a per-block row-start table.
 int boo_arena_bytes_rowseg(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes) {
-    const int data = max_nnz_blk * (scalar_bytes + 2);
-    const int ids = 4 * (max_nr + max_nc) + 4 * (max_nr + 1);  // + sh_row_start
-    const int tiles = 2 * scalar_bytes * p * max_nc;           // double-buffered smem_X
-    return data + ids + tiles + 16;
+    const int arena_1x = boo_arena_bytes_rowseg_1x(max_nr, max_nc, max_nnz_blk, p, scalar_bytes);
+    if (boo_rowseg_use_double_buf(max_nr, max_nc, max_nnz_blk, p, scalar_bytes)) {
+        return arena_1x + scalar_bytes * p * max_nc;
+    }
+    return arena_1x;
 }
 
 // Features per thread (FPT) for the row-segmented kernel. FPT=1 is the original
@@ -480,10 +500,15 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     // The padding (<= 12 bytes) comes out of the arena's 16-byte slack.
     constexpr uint32_t X_ALIGN = FPT > 1 ? 16u / sizeof(scalar_t) : 1u;
 
+    const bool double_buf = boo_rowseg_use_double_buf(
+        static_cast<int>(max_nr), static_cast<int>(max_nc), static_cast<int>(max_nnz_blk),
+        static_cast<int>(P), static_cast<int>(sizeof(scalar_t)));
+    const uint32_t x_bufs = double_buf ? 2u : 1u;
+
     extern __shared__ __align__(16) char boo_smem_raw[];
     scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);                // The Sparse Values
-    scalar_t* smem_X = sh_nz_val + (max_nnz_blk + X_ALIGN - 1) / X_ALIGN * X_ALIGN; // The Staged X Tile (2 buffers)
-    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + 2 * max_nc * P);      // Global Column IDs
+    scalar_t* smem_X = sh_nz_val + (max_nnz_blk + X_ALIGN - 1) / X_ALIGN * X_ALIGN; // The Staged X Tile
+    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + x_bufs * max_nc * P); // Global Column IDs
     int32_t* sh_row_ids = sh_col_ids + max_nc;                                      // Global Row IDs
     int32_t* sh_row_start = sh_row_ids + max_nr;                                    // Row-Start Table
     uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_start + max_nr + 1);   // The Sparse Indices (packed local_row, local_col)
@@ -555,14 +580,19 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     };
 
     uint32_t buf_idx = 0;
-    stage_x(feat_start, smem_X);
+    if (double_buf) {
+        stage_x(feat_start, smem_X);
+    }
 
     for (uint32_t base_f = feat_start; base_f < feat_end; base_f += P) {
+        if (!double_buf) {
+            stage_x(base_f, smem_X);
+        }
         boo_cp_async_wait<0>();
         __syncthreads();
 
         const scalar_t* smem_X_cur = smem_X + buf_idx * tile_stride;
-        if (base_f + P < feat_end) {
+        if (double_buf && (base_f + P < feat_end)) {
             stage_x(base_f + P, smem_X + (buf_idx ^ 1u) * tile_stride);
         }
 
@@ -635,7 +665,11 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
                 }
             }
         }  // FPT == 1
-        buf_idx ^= 1u;
+        if (double_buf) {
+            buf_idx ^= 1u;
+        } else if (base_f + P < feat_end) {
+            __syncthreads();
+        }
     }
 }
 
