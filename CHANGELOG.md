@@ -1,3 +1,11 @@
+### Final-tile trailing barrier elimination and LOAD-phase overlap with binary search
+- **Timestamp:** 2026-11-20T16:33:25+02:00
+- **Commit:** 209772f  (baseline 78f8a18)
+- **Change Type:** Kernel Logic
+- **Description:** Reordered `LOAD` in `boo_spmm_rowseg_kernel` (`boo_kernel.cu`) so `sh_nz_idx` loads before Barrier 1 while `sh_nz_val`, `sh_col_ids`, and `sh_row_ids` load concurrently with `sh_row_start` binary search before Barrier 2, and guarded the trailing `__syncthreads()` with `base_f + P < feat_end`. Hypothesis: expected `barrier` stalls (19.6–21.0%) to drop at zero smem/register cost. `load_build_env` failed with `ok: false`, `warnings: 0`, `err_tail: ""` (Slurm job 24345273) — same root cause as Attempt 2, triggering the §7 early stop rule.
+- **Outcome Summary:** FAIL (build) · tune n/a (0/0/0) · held n/a (0/0/0) · vs cuSPARSE tune n/a held n/a · peak BW n/a · noise n/a
+- **Reference:** Slurm job 24345273
+
 ### P/2-strided 2-feature register accumulation with coalesced atomics and final-tile barrier elimination
 - **Timestamp:** 2026-11-20T16:29:15+02:00
 - **Commit:** 67f5692  (baseline 78f8a18)
