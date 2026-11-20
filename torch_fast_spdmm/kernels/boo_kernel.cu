@@ -557,40 +557,58 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
                 }
             }
         } else {
-            // --- STEP B+C: one thread per (row, feature), register accumulate ---
-            for (uint32_t i = tx; i < n_r * P; i += THREADS) {
-                const uint32_t r = i >> P_LOG2;
-                const uint32_t f = i & P_MASK;
-                const uint32_t global_f = base_f + f;
+            // --- STEP B+C: one thread per (row, 2 P/2-strided features), register accumulate ---
+            constexpr uint32_t HALF_P = P >> 1;
+            constexpr uint32_t HALF_P_LOG2 = P_LOG2 - 1;
+            constexpr uint32_t HALF_P_MASK = HALF_P - 1u;
+
+            for (uint32_t i = tx; i < n_r * HALF_P; i += THREADS) {
+                const uint32_t r = i >> HALF_P_LOG2;
+                const uint32_t f0 = i & HALF_P_MASK;
+                const uint32_t f1 = f0 + HALF_P;
+                const uint32_t global_f0 = base_f + f0;
+                const uint32_t global_f1 = base_f + f1;
 
                 const uint32_t begin = sh_row_start[r];
                 const uint32_t end = sh_row_start[r + 1];
 
-                scalar_t acc = scalar_t(0);
+                scalar_t acc0 = scalar_t(0);
+                scalar_t acc1 = scalar_t(0);
                 for (uint32_t k = begin; k < end; ++k) {
-                    acc += sh_nz_val[k] * smem_X[(sh_nz_idx[k] & col_mask) * P + f];
+                    const scalar_t val = sh_nz_val[k];
+                    const uint32_t x_base = (sh_nz_idx[k] & col_mask) * P;
+                    acc0 += val * smem_X[x_base + f0];
+                    acc1 += val * smem_X[x_base + f1];
                 }
 
-                if (acc != scalar_t(0) && global_f < features) {
-                    const size_t y_idx = y_batch_base
-                        + static_cast<size_t>(sh_row_ids[r]) * features + global_f;
-                    // DIAG_RAW_STORE: diagnostic-only upper-bound timing variant.
-                    // Unlike PBR's, this atomicAdd is not purely a synchronization
-                    // tax -- a row's contribution is genuinely split across
-                    // multiple blocks in its row-group, so a plain store here
-                    // drops real cross-block accumulation, not just atomic
-                    // overhead. Output is incorrect by construction. Never used
-                    // outside BOOTimedSpMM(diagnostic_raw_store=True); see
-                    // bindings_boo_timed.cu.
+                const size_t y_row = y_batch_base + static_cast<size_t>(sh_row_ids[r]) * features;
+                // DIAG_RAW_STORE: diagnostic-only upper-bound timing variant.
+                // Unlike PBR's, this atomicAdd is not purely a synchronization
+                // tax -- a row's contribution is genuinely split across
+                // multiple blocks in its row-group, so a plain store here
+                // drops real cross-block accumulation, not just atomic
+                // overhead. Output is incorrect by construction. Never used
+                // outside BOOTimedSpMM(diagnostic_raw_store=True); see
+                // bindings_boo_timed.cu.
+                if (acc0 != scalar_t(0) && global_f0 < features) {
                     if constexpr (DIAG_RAW_STORE) {
-                        Y[y_idx] = acc;
+                        Y[y_row + global_f0] = acc0;
                     } else {
-                        atomicAdd(&Y[y_idx], acc);
+                        atomicAdd(&Y[y_row + global_f0], acc0);
+                    }
+                }
+                if (acc1 != scalar_t(0) && global_f1 < features) {
+                    if constexpr (DIAG_RAW_STORE) {
+                        Y[y_row + global_f1] = acc1;
+                    } else {
+                        atomicAdd(&Y[y_row + global_f1], acc1);
                     }
                 }
             }
         }  // FPT == 1
-        __syncthreads();
+        if (base_f + P < feat_end) {
+            __syncthreads();
+        }
     }
 }
 

@@ -422,3 +422,19 @@ def test_boo_cuda_batched(batch):
     expected = torch.stack([torch.from_numpy(mat.toarray()) @ x[b] for b in range(batch)])
     torch.testing.assert_close(boo_matmul(boo, x.cuda()).cpu(), expected,
                                rtol=1e-5, atol=1e-5)
+
+
+@CUDA
+@mark.parametrize('features', [3, 32, 64, 128, 200, 513, 520])
+@mark.parametrize('dtype', [torch.float32, torch.float64])
+def test_boo_cuda_strided_tile_boundaries(features, dtype):
+    """Covers F <= P/2 (F=3, 32), F <= P (F=64), and multi-tile F > P
+    (F=128, 200, 513, 520) at p=64, threads=256 for both float32 and float64."""
+    np_dtype = np.float32 if dtype == torch.float32 else np.float64
+    mat = _square(n=192, density=0.06, dtype=np_dtype)
+    boo = csr_to_boo(mat, cluster='hem', target_nr=32, target_nc=32).to('cuda')
+    x = torch.randn(mat.shape[1], features, dtype=dtype)
+    expected = torch.from_numpy(mat.toarray()).to(dtype) @ x
+    got = boo_matmul(boo, x.cuda(), threads=256, p=64, launch_mode='auto').cpu()
+    tol = 1e-5 if dtype == torch.float32 else 1e-10
+    torch.testing.assert_close(got, expected, rtol=tol, atol=tol)
