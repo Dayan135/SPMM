@@ -1,3 +1,11 @@
+### P/2-strided 2-feature register accumulation with coalesced atomics and final-tile barrier elimination
+- **Timestamp:** 2026-11-20T16:29:15+02:00
+- **Commit:** 67f5692  (baseline 78f8a18)
+- **Change Type:** Kernel Logic
+- **Description:** Modified `FPT == 1` path of `boo_spmm_rowseg_kernel` (`boo_kernel.cu`) to accumulate two `P/2`-strided features (`f0` and `f0 + P/2`) per thread and guard the trailing `__syncthreads()` with `base_f + P < feat_end`. Hypothesis: expected `smem_inst` and `mio_throttle` (50.1% on `blockdiag32_F128`) and `barrier` stalls to drop with zero arena increase. `load_build_env` failed 3 times (`ok: false`, `warnings: 0`, `err_tail: ""`, Slurm jobs 24345076, 24345144, 24345243).
+- **Outcome Summary:** FAIL (build) · tune n/a (0/0/0) · held n/a (0/0/0) · vs cuSPARSE tune n/a held n/a · peak BW n/a · noise n/a
+- **Reference:** Slurm jobs 24345076, 24345144, 24345243
+
 ### Double-buffered smem_X with Ampere cp.async and final-tile barrier elimination
 - **Timestamp:** 2026-11-20T16:19:00+02:00
 - **Commit:** 8e43f3e  (baseline 78f8a18)
