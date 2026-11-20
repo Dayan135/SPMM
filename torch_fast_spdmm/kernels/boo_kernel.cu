@@ -44,7 +44,7 @@ int boo_arena_bytes(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_b
 int boo_arena_bytes_rowseg(int max_nr, int max_nc, int max_nnz_blk, int p, int scalar_bytes) {
     const int data = max_nnz_blk * (scalar_bytes + 2);
     const int ids = 4 * (max_nr + max_nc) + 4 * (max_nr + 1);  // + sh_row_start
-    const int tiles = scalar_bytes * p * max_nc;               // smem_X only
+    const int tiles = 2 * scalar_bytes * p * max_nc;           // double-buffered smem_X
     return data + ids + tiles + 16;
 }
 
@@ -407,6 +407,35 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_nnzflat_fpt_
 // per-block row-start table can be recovered by binary search. The launcher
 // falls back to the nnzflat kernel for colmajor.
 
+template <typename scalar_t>
+__device__ __forceinline__ void boo_cp_async_elem(scalar_t* dst, const scalar_t* src) {
+#if __CUDA_ARCH__ >= 800
+    const uint32_t smem_addr = static_cast<uint32_t>(__cvta_generic_to_shared(dst));
+    if constexpr (sizeof(scalar_t) == 4) {
+        asm volatile("cp.async.ca.shared.global [%0], [%1], 4;\n"
+                     :: "r"(smem_addr), "l"(src));
+    } else {
+        asm volatile("cp.async.ca.shared.global [%0], [%1], 8;\n"
+                     :: "r"(smem_addr), "l"(src));
+    }
+#else
+    *dst = *src;
+#endif
+}
+
+__device__ __forceinline__ void boo_cp_async_commit() {
+#if __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.commit_group;\n" ::: "memory");
+#endif
+}
+
+template <int N>
+__device__ __forceinline__ void boo_cp_async_wait() {
+#if __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.wait_group %0;\n" :: "n"(N) : "memory");
+#endif
+}
+
 template <typename scalar_t, int THREADS, int P_LOG2, bool DIAG_RAW_STORE = false, int FPT = 1,
           int FEAT_BLOCK = BOO_FEAT_BLOCK>
 __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kernel(
@@ -453,8 +482,8 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
 
     extern __shared__ __align__(16) char boo_smem_raw[];
     scalar_t* sh_nz_val = reinterpret_cast<scalar_t*>(boo_smem_raw);                // The Sparse Values
-    scalar_t* smem_X = sh_nz_val + (max_nnz_blk + X_ALIGN - 1) / X_ALIGN * X_ALIGN; // The Staged X Tile
-    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + max_nc * P);          // Global Column IDs
+    scalar_t* smem_X = sh_nz_val + (max_nnz_blk + X_ALIGN - 1) / X_ALIGN * X_ALIGN; // The Staged X Tile (2 buffers)
+    int32_t* sh_col_ids = reinterpret_cast<int32_t*>(smem_X + 2 * max_nc * P);      // Global Column IDs
     int32_t* sh_row_ids = sh_col_ids + max_nc;                                      // Global Row IDs
     int32_t* sh_row_start = sh_row_ids + max_nr;                                    // Row-Start Table
     uint16_t* sh_nz_idx = reinterpret_cast<uint16_t*>(sh_row_start + max_nr + 1);   // The Sparse Indices (packed local_row, local_col)
@@ -509,17 +538,33 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
     const size_t x_batch_base = static_cast<size_t>(batch_idx) * cols * features;
     const size_t y_batch_base = static_cast<size_t>(batch_idx) * rows * features;
 
-    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += P) {
-
-        // --- STEP A: stage X (no smem_Y to zero) ---------------------------
+    const uint32_t tile_stride = max_nc * P;
+    auto stage_x = [&](uint32_t tile_f, scalar_t* buf) {
         for (uint32_t i = tx; i < n_c * P; i += THREADS) {
             const uint32_t c = i >> P_LOG2;
-            const uint32_t global_f = base_f + (i & P_MASK);
-            smem_X[i] = (global_f < features)
-                ? X[x_batch_base + static_cast<size_t>(sh_col_ids[c]) * features + global_f]
-                : scalar_t(0);
+            const uint32_t global_f = tile_f + (i & P_MASK);
+            if (global_f < features) {
+                boo_cp_async_elem(
+                    &buf[i],
+                    &X[x_batch_base + static_cast<size_t>(sh_col_ids[c]) * features + global_f]);
+            } else {
+                buf[i] = scalar_t(0);
+            }
         }
+        boo_cp_async_commit();
+    };
+
+    uint32_t buf_idx = 0;
+    stage_x(feat_start, smem_X);
+
+    for (uint32_t base_f = feat_start; base_f < feat_end; base_f += P) {
+        boo_cp_async_wait<0>();
         __syncthreads();
+
+        const scalar_t* smem_X_cur = smem_X + buf_idx * tile_stride;
+        if (base_f + P < feat_end) {
+            stage_x(base_f + P, smem_X + (buf_idx ^ 1u) * tile_stride);
+        }
 
         if constexpr (FPT > 1) {
             // --- STEP B+C, FPT>1: one thread per (row, FPT adjacent features) ---
@@ -538,7 +583,7 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
 
                 for (uint32_t k = begin; k < end; ++k) {
                     const vec_t x = *reinterpret_cast<const vec_t*>(
-                        smem_X + (sh_nz_idx[k] & col_mask) * P + f0);
+                        smem_X_cur + (sh_nz_idx[k] & col_mask) * P + f0);
                     boo_fma(acc, sh_nz_val[k], x); // acc[0..FPT-1] += sh_nz_val[k] * x[0..FPT-1]
                 }
 
@@ -568,7 +613,7 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
 
                 scalar_t acc = scalar_t(0);
                 for (uint32_t k = begin; k < end; ++k) {
-                    acc += sh_nz_val[k] * smem_X[(sh_nz_idx[k] & col_mask) * P + f];
+                    acc += sh_nz_val[k] * smem_X_cur[(sh_nz_idx[k] & col_mask) * P + f];
                 }
 
                 if (acc != scalar_t(0) && global_f < features) {
@@ -590,7 +635,7 @@ __global__ void __launch_bounds__(THREADS, 1536 / THREADS) boo_spmm_rowseg_kerne
                 }
             }
         }  // FPT == 1
-        __syncthreads();
+        buf_idx ^= 1u;
     }
 }
 
